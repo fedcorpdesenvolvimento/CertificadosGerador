@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, 7 de 10 lacunas fechadas
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 9 lacunas fechadas, 3 novas (`GAP-16`..`GAP-18`)
 
 ### Fontes analisados
 
@@ -1626,7 +1626,35 @@ Estado após a análise do legado: **7 fechadas, 3 remanescentes, 5 novas**.
 | `GAP-14` | Os produtos `0003` e `0005` devem ser emissíveis no sistema novo? | `RN-03.2` | Decisão de negócio |
 | `GAP-15` | `LINHA_BRANCA` é `VARCHAR` no banco ou é erro de persistência do `TField`? | `DEF-11`, `RN-01` | Depende de `GAP-03` |
 
-**Próximo passo imediato:** `GAP-03`. O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
+### Fechadas em 03/09/2026, com acesso ao banco
+
+DDL das seis tabelas extraído para `docs/legado/schema.sql` (somente leitura de `rdb$*`). Firebird 2.5 em `192.168.0.6`, `FATURA.GDB`. **Todas as colunas são `CHARACTER SET NONE`**: a decodificação depende do charset do cliente, por isso `FB_CHARSET=WIN1252` é obrigatório para acentos.
+
+| ID | Resposta |
+|---|---|
+| `GAP-03` | DDL em `docs/legado/schema.sql`. Tipos reais: `FATURA INTEGER`, `SEQ INTEGER`, `CODIGO_PEDIDO_PORT INTEGER`, `CERTIFICADO VARCHAR(30)`, `ENDOSSO VARCHAR(11)`, `CPF_CNPJ VARCHAR(14)`, `INICIO_VIG`/`FINAL_VIG DATE`, monetários `DECIMAL(16,2)`. Confirma `RD-05` e a tabela 4.2. **PK de `segurados_inc` e de `segurados_inc_cob_aux` é `(ENDOSSO, CERTIFICADO)`.** `apolice_seguradora` tem PK `CODIGO`, não `(apolice, cod_seguradora)`. |
+| `GAP-15` | `LINHA_BRANCA` é **`VARCHAR(1) DEFAULT 'N'`** no banco, com valores `N` (365.800), `S` (10.994) e `0` (25.905). **Não é importância segurada, é um flag.** O `TStringField` do `.dfm` estava certo; `DEF-11` deixa de ser defeito do legado e passa a ser erro da v0.1 desta especificação. Ver `GAP-16`. |
+
+Verificações empíricas que alteram requisitos:
+
+- **`RD-22` confirmado em escala:** 3.061 pares `(fatura, certificado)` repetidos em `segurados_inc` não cancelados. `certificado` não é único por fatura.
+- **`RD-09` — o fan-out existe:** há 1 par `(fatura, certificado)` duplicado em `segurados_inc_cob_aux` e 1 par `(apolice, cod_seguradora)` duplicado em `apolice_seguradora`. Ver `GAP-17` e `GAP-18`.
+- **Os PDFs de referência `..._15008_381066` são da administradora `0000000019`.** Logo `RN-03.1` se aplica a eles: o produto correto é **`0001` RESIDENCIAL**, não `0004`, e a emissão registra `PRODUTO_POR_EXCECAO`. No legado o fluxo manual saiu vazio (`DEF-09`) e o fluxo em massa teria saído `0001`. Os dois registros têm `final_vig = 30/12/1899` (`DEF-06` confirmado) e `codigo_pedido_port` nulo (`GAP-11` confirmado).
+- **`endosso` ≠ `fatura`.** Nos registros acima `endosso = '01112381066'` e `fatura = 381066`. O exemplo canônico da seção 9.1 traz `"endosso": "380819"`, igual à fatura; está errado e **DEVE** ser corrigido quando o certificado real for lido.
+- `ENDOSSOS.COD_CAT` assume `1`..`7`; `RN-04` (`{3,4}`) continua válida. `CODIGO_ASSIST_MONDIAL` assume `NULL`, `''`, `0`, `1000`, `1001`, `1002`, `1003`; `RN-18` continua válida.
+- `GAP-12`: só 70 de 6.902 pessoas ativas têm `possui_portal = 'S'`. O filtro, se aplicado, reduz drasticamente o fluxo em massa. Decisão de negócio continua pendente.
+
+### Novas em 03/09/2026
+
+| ID | Lacuna | Bloqueia | Como fechar |
+|---|---|---|---|
+| `GAP-16` | `LINHA_BRANCA` é flag `S`/`N`/`0`, não valor. O que o certificado imprime quando `S`? Qual é a IS? Deve sair do catálogo `RN-01` ou virar cobertura sem valor? | `RN-01`, `RD-11`, Fase 2 | Abrir o `.fr3` ou perguntar ao negócio. Até lá o domínio **falha alto** ao receber `S`/`N` como dinheiro (comportamento atual de `para_dinheiro`). |
+| `GAP-17` | O `JOIN` com `segurados_inc_cob_aux` deve passar a usar `(endosso, certificado)`, que é a PK das duas tabelas, em vez de `(fatura, certificado)`? | `QRY canônica`, `RD-09` | Confirmar que `segurados_inc.endosso = segurados_inc_cob_aux.endosso` para os pares existentes. Proposta: sim, e manter `RD-09` como rede de segurança. |
+| `GAP-18` | `apolice_seguradora` tem um par `(apolice, cod_seguradora)` duplicado; o `JOIN` do legado pode dobrar linhas para essa apólice | `QRY canônica`, `RD-09` | Identificar o par, decidir qual `CODIGO` vale ou corrigir o dado. |
+
+**Próximo passo imediato:** `GAP-16` e `GAP-17`, ambos decidíveis em minutos com o negócio, e desbloqueiam a consulta canônica em `queries.sql`.
+
+~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 
 ---
 

@@ -63,23 +63,27 @@ def test_rn_11_portal_nulo_vira_zero():
 def test_rn_11_referencias_da_secao_7_2_com_produto_resolvido(arquivos_referencia):
     """Os tres arquivos de referencia, agora com o produto que RN-03 resolve.
 
-    Os dois `15008` saiam sem produto (DEF-09); no sistema novo saem como 0004.
+    Os dois `15008` saiam sem produto (DEF-09). Sao da administradora 0000000019
+    (confirmado no banco em 03/09/2026), entao RN-03.1 se aplica: saem como 0001
+    RESIDENCIAL, com aviso PRODUTO_POR_EXCECAO.
     """
     catalogo = CatalogoProdutos.carregar()
     esperados = {
         "0_33016330725_0004_13008_380819.pdf": "0_33016330725_0004_13008_CF1DI-AP602_380819.pdf",
-        "0_05554363733__15008_381066.pdf": "0_05554363733_0004_15008_3082-01-AP1302_381066.pdf",
-        "0_14529138704__15008_381066.pdf": "0_14529138704_0004_15008_3082-01-AP1101_381066.pdf",
+        "0_05554363733__15008_381066.pdf": "0_05554363733_0001_15008_3082-01-AP1302_381066.pdf",
+        "0_14529138704__15008_381066.pdf": "0_14529138704_0001_15008_3082-01-AP1101_381066.pdf",
     }
-    for legado, portal, cpf, _prod_legado, apolice, cert, fatura in arquivos_referencia:
-        produto = catalogo.resolver(apolice).produto.codigo
+    for legado, portal, cpf, _prod_legado, apolice, cert, fatura, adm in arquivos_referencia:
+        resolucao = catalogo.resolver(apolice, administradora=adm)
+        produto = resolucao.produto.codigo
         nome = nome_arquivo_certificado(portal, cpf, produto, apolice, cert, fatura)
         assert nome == esperados[legado]
+        assert (resolucao.aviso is not None) == (apolice == "15008")
 
 
 def test_def_09_produto_vazio_passa_a_falhar_explicitamente(arquivos_referencia):
     """0_05554363733__15008_381066.pdf: o campo vazio do legado e erro no sistema novo."""
-    legado, portal, cpf, prod_vazio, apolice, cert, fatura = arquivos_referencia[1]
+    legado, portal, cpf, prod_vazio, apolice, cert, fatura, _adm = arquivos_referencia[1]
     assert prod_vazio == ""
     with pytest.raises(NomeArquivoInvalido, match="DEF-09"):
         nome_arquivo_certificado(portal, cpf, prod_vazio, apolice, cert, fatura)

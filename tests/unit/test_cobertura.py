@@ -11,6 +11,7 @@ from certgen.domain.cobertura import (
     calcular_cob_incendio,
     montar_coberturas,
 )
+from certgen.domain.dinheiro import DinheiroInvalido
 
 # Valores do PDF de referencia 0_33016330725_0004_13008_380819 (secao 9.1)
 REF_13008 = {
@@ -79,11 +80,18 @@ def test_rn_02_banco_igual_nao_gera_aviso():
     assert avisos == []
 
 
-def test_def_11_linha_branca_como_string_e_aceita():
-    cobs, _ = montar_coberturas({"LINHA_BRANCA": "1500.5"})
-    lb = next(c for c in cobs if c.codigo == "LINHA_BRANCA")
-    assert lb.importancia_segurada == Decimal("1500.50")
-    assert lb.contratada is True
+def test_gap_16_linha_branca_flag_s_n_falha_alto_ate_decisao():
+    """No banco LINHA_BRANCA e VARCHAR(1) com 'S'/'N'/'0' (03/09/2026), nao valor.
+
+    Enquanto GAP-16 estiver aberto, receber o flag como dinheiro e erro explicito
+    (ADR-04), nunca silenciosamente zero ou nulo.
+    """
+    for flag in ("S", "N"):
+        with pytest.raises(DinheiroInvalido):
+            montar_coberturas({"LINHA_BRANCA": flag})
+    # '0' e numerico e passa como IS zero, nao contratada — comportamento a rever em GAP-16
+    cobs, _ = montar_coberturas({"LINHA_BRANCA": "0"})
+    assert next(c for c in cobs if c.codigo == "LINHA_BRANCA").contratada is False
 
 
 def test_rn_01_codigo_fora_do_catalogo_falha_alto():
