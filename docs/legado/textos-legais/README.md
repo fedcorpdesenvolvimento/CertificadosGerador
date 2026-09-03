@@ -10,8 +10,10 @@ tabela superior aparecem agrupados e separados dos valores.
 | `0_05554363733__15008_381066.txt` | `incendio` (`frxReportIncendio`) | Incêndio/Raio/Explosão/Perda de Aluguel (redações A **e** B, sobrepostas — DEF-18), Assistência 24h, rodapé, link das condições gerais |
 | `0_14529138704__15008_381066.txt` | idem | idem (mesma fatura, outro segurado) |
 
-Faltam PDFs dos templates `incendio_faz_tudo_24h`, `locacao_simples` e
-`locacao_faz_tudo`.
+**ADR-06 (03/09/2026):** o layout do sistema novo é **exclusivamente** o do
+`0_33016330725_0004_13008_380819.pdf`, com o bloco Faz Tudo Lar opcional. Os
+outros templates do legado não serão reproduzidos; os textos deste PDF são os
+do template. Os arquivos `15008` ficam apenas como referência de dados.
 
 **Estes textos têm efeito jurídico.** Devem ser conferidos por quem responde pela
 conformidade antes de irem ao template (`certificado.html.j2`). Erros de digitação

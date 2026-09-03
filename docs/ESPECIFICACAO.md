@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 12 lacunas fechadas; abertos: `GAP-09` (3 templates), `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação nos textos legais)
 
 ### Fontes analisados
 
@@ -1551,9 +1551,9 @@ Estrutura de pastas, `pyproject.toml`, `.env.example`, `git init`, `CLAUDE.md`, 
 
 > Esta fase entrega valor isolado antes de qualquer pixel de PDF, e é deliberado: o JSON é o requisito novo e o mais fácil de validar objetivamente. Rodando contra os três certificados de referência, ela já produz o dado estruturado que hoje não existe.
 
-### Fase 3 — PDF *(pré-requisito: `GAP-09`, `GAP-13`)*
+### Fase 3 — PDF *(pré-requisitos `GAP-09` e `GAP-13` fechados em 03/09/2026; layout único por `ADR-06`)*
 Template único condicional (`ADR-05`); filtros de formatação (`RN-14`); `render/pdf.py`; modo consolidado; testes de fidelidade (`RNF-01`) e espelhamento (`RNF-04`).
-**Aceitação:** as 5 combinações da matriz de `7.3` renderizam; o diff contra os PDFs de referência fica na tolerância, com as divergências declaradas cobertas por teste próprio.
+**Aceitação:** o layout único renderiza com e sem o bloco Faz Tudo Lar; o diff contra `0_33016330725_0004_13008_380819.pdf` fica na tolerância, com as divergências declaradas (`DEF-06`, `DEF-08`, `RN-23`..`RN-26`) cobertas por teste próprio.
 
 ### Fase 4 — Tela web *(pré-requisito: Fases 1-3)*
 FastAPI com os endpoints da cascata; página única com a máquina de estados de `5.2`; destino, opções, progresso e relatório final.
@@ -1600,6 +1600,12 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 
 ### `ADR-05` — Um template condicional em vez de cinco arquivos
 Registrado na seção `7.3`.
+
+### `ADR-06` — Um único layout de referência: o PDF `0_33016330725_0004_13008_380819.pdf`
+**Contexto.** A matriz `7.3` tem cinco `.fr3` e só dois têm PDF de referência (`GAP-09`). Os `.fr3` estão embutidos no `.dfm` ou em um form não entregue.
+**Decisão (usuário, 03/09/2026).** O layout do sistema novo é o do PDF `0_33016330725_0004_13008_380819.pdf` (`frxReportCntRupturaFT`), para **todos** os produtos e apólices. A única variação é o bloco **Assistência Faz Tudo Lar**, que é **opcional**: hoje governado por `RN-18` (`codigo_assist_mondial = '1003'`), e a regra definitiva de opcionalidade será definida pelo negócio depois — por isso a flag `faz_tudo_lar` do `ContextoTemplate` fica isolada e trocar a regra não toca o template. Ajustes de layout serão tratados conforme surgirem.
+**Consequências.** `GAP-09` fecha com os textos legais deste PDF (redação A de Incêndio/Raio/Explosão/Perda de Aluguel, Assistência 24h, Faz Tudo Lar, rodapé). Os textos vão ao template **como estão** no PDF, inclusive erros de digitação, até compliance decidir (`GAP-19`). Os PDFs `..._15008_381066` deixam de ser referência de layout e ficam como casos de teste de dados (`RN-03.1`, `DEF-06`, `RD-22`). Os cinco nomes da matriz `7.3` viram apenas rastreabilidade: `_meta.template` passa a ser `"demonstrativo_v1"`, com `_meta.faz_tudo_lar: true|false`. `RNF-01` (fidelidade visual) passa a comparar apenas contra este PDF.
+**Rejeitada.** Reproduzir os cinco `.fr3` — exigiria exportá-los do FastReport e triplicaria o esforço de fidelidade sem valor de negócio declarado.
 
 ---
 
@@ -1678,7 +1684,7 @@ Verificações empíricas que alteram requisitos:
 
 Blocos identificados nos dois textos: (a) definição de Incêndio/Raio/Explosão/Perda de Aluguel — **duas redações diferentes** entre os templates, e o `15008` imprime as duas (é o `DEF-18`); (b) Assistência Residencial Emergencial 24h (Eletricista, Chaveiro, Bombeiro), idêntico nos dois; (c) Faz Tudo Lar, só no `13008`; (d) rodapé com Central 0800 770 4362, Central FedCorp 0800 251 6001, `sac@grupofedcorp.com.br` e o link das condições gerais. Erros de digitação preservados no `.txt` (`dentruindo-o`, `extremamemnte`, `recepientes`, `Assitência`, `DESINTETIZAÇÃO`).
 
-Para fechar: **(1)** um PDF emitido pelo legado para cada um dos três templates que faltam; **(2)** decisão de compliance sobre corrigir ou preservar os erros de digitação e sobre qual das duas redações de Incêndio/Raio/Explosão vale; **(3)** confirmação de que os textos podem ir ao template novo.
+**`GAP-09` fechado em 03/09/2026 por `ADR-06`:** há um único layout, o do PDF `..._13008_380819`, e seus textos são os do template. Não é mais necessário obter os outros três PDFs. Fica aberto apenas **`GAP-19`**: compliance decidir se os erros de digitação do legado (`dentruindo-o`, `extremamemnte`, `recepientes`, `Assitência`, `DESINTETIZAÇÃO`) são corrigidos ou preservados. Até lá, preservados.
 
 **`GAP-13` — campos sem origem.** Busca nos metadados e nos dados do banco:
 
@@ -1698,7 +1704,7 @@ Regras derivadas das decisões de 03/09/2026:
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
 - **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
 
-**`GAP-13` fechado.** **Próximo passo imediato:** os três PDFs que faltam para `GAP-09` e a revisão de compliance dos textos. A Fase 2 (JSON) não depende disso.
+**`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** A Fase 3 está destravada. **Próximo passo imediato:** Fase 2 (JSON), depois Fase 3 sobre o layout único.
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 
