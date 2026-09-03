@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 11 lacunas fechadas, 1 nova aberta (`GAP-18`)
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 12 lacunas fechadas; abertos: `GAP-09` (3 templates), `GAP-10`, `GAP-11`, `GAP-12`, `GAP-13` (PLANO, GARANTIA, SUSEP), `GAP-14`
 
 ### Fontes analisados
 
@@ -1108,6 +1108,16 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 
 **`RD-12`** — `documento.tipo` **DEVE** ser derivado do comprimento de `cpf_cnpj` após remoção de não-dígitos: 11 → `"CPF"`, 14 → `"CNPJ"`, outro → `"INDEFINIDO"` com aviso em `_meta.avisos`. Necessário porque os templates gravam o campo com e sem máscara (`DEF-08`).
 
+**`RD-25`** — *(decisão de 03/09/2026)* O JSON **é** a replicação dos dados impressos no certificado (`RD-10`) acrescida de **um** bloco de guarda, `arquivo`, com a pasta de destino e o link onde o certificado ficará disponível:
+```json
+"arquivo": {
+  "pdf": "0_33016330725_0004_13008_CF1DI-AP602_380819.pdf",
+  "pasta_destino": "0000001192/072026",
+  "link": null
+}
+```
+`pasta_destino` segue `RN-19` (`{administradora}/{competência}`); `link` é `null` na emissão local e recebe a URL do S3 na Fase 7 (`RD-20`), quando o JSON é regravado após upload confirmado (`RF-16`). Substitui `_meta.arquivo_pdf` do exemplo 9.1.
+
 **`RD-13`** — Campos nulos no banco **DEVEM** aparecer como `null`. **NÃO DEVEM** ser omitidos nem convertidos em string vazia — a distinção entre *ausente* e *vazio* tem valor de auditoria, e é exatamente ela que revela casos como `abrev` nula (`RN-20`) e `final_vig` zerada (`DEF-06`).
 
 **`RD-23`** — `_meta.avisos` **DEVE** registrar toda anomalia detectada na emissão daquele certificado, com código estável. Vocabulário mínimo:
@@ -1651,9 +1661,36 @@ Verificações empíricas que alteram requisitos:
 |---|---|---|---|
 | `GAP-16` | ~~`LINHA_BRANCA` é flag `S`/`N`/`0`, não valor.~~ **Fechado em 03/09/2026 (decisão do negócio):** o campo não é necessário nesta fase. Sai do catálogo `RN-01` (11 coberturas), da projeção da consulta canônica e do JSON. Reabrir se o layout precisar dele. | — | — |
 | `GAP-17` | ~~O `JOIN` com `segurados_inc_cob_aux` deve usar `(endosso, certificado)`?~~ **Fechado em 03/09/2026 (aprovado):** a consulta canônica passa a fazer o `JOIN` pela PK `(endosso, certificado)`. `RD-09` permanece como rede de segurança. | — | — |
-| `GAP-18` | `apolice_seguradora` tem um par `(apolice, cod_seguradora)` duplicado; o `JOIN` do legado pode dobrar linhas para essa apólice | `QRY canônica`, `RD-09` | Identificar o par, decidir qual `CODIGO` vale ou corrigir o dado. |
+| `GAP-18` | ~~`apolice_seguradora` tem um par duplicado~~ **Fechado em 03/09/2026:** o par é a apólice `236` / seguradora `0000000003` (`CODIGO` 18 e 19, mesmos valores). Não é apólice de certificado (`RN-03.2`); `RD-09` cobre o caso se aparecer. Sem ação. | — | — |
 
-**Próximo passo imediato:** `GAP-18` (par duplicado em `apolice_seguradora`) e `GAP-09`/`GAP-13`, que bloqueiam a Fase 3.
+### Estado de `GAP-09` e `GAP-13` em 03/09/2026
+
+**`GAP-09` — textos legais.** Extraídos com `pypdf` para `docs/legado/textos-legais/*.txt`, um arquivo por PDF de referência. Cobrem **2 dos 5 templates** da matriz `7.3`:
+
+| Template (`ContextoTemplate.nome`) | `.fr3` legado | PDF de referência | Texto |
+|---|---|---|---|
+| `incendio_ruptura_faz_tudo` | `frxReportCntRupturaFT` | `..._13008_380819` | ✓ extraído |
+| `incendio` | `frxReportIncendio` | `..._15008_381066` (2) | ✓ extraído |
+| `incendio_faz_tudo_24h` | `frxReportIncW24h` | — | **falta** |
+| `locacao_simples` | `frxReportLocaSimples` | — | **falta** |
+| `locacao_faz_tudo` | `frxReportIncIncLocaCFT` | — | **falta** |
+
+Blocos identificados nos dois textos: (a) definição de Incêndio/Raio/Explosão/Perda de Aluguel — **duas redações diferentes** entre os templates, e o `15008` imprime as duas (é o `DEF-18`); (b) Assistência Residencial Emergencial 24h (Eletricista, Chaveiro, Bombeiro), idêntico nos dois; (c) Faz Tudo Lar, só no `13008`; (d) rodapé com Central 0800 770 4362, Central FedCorp 0800 251 6001, `sac@grupofedcorp.com.br` e o link das condições gerais. Erros de digitação preservados no `.txt` (`dentruindo-o`, `extremamemnte`, `recepientes`, `Assitência`, `DESINTETIZAÇÃO`).
+
+Para fechar: **(1)** um PDF emitido pelo legado para cada um dos três templates que faltam; **(2)** decisão de compliance sobre corrigir ou preservar os erros de digitação e sobre qual das duas redações de Incêndio/Raio/Explosão vale; **(3)** confirmação de que os textos podem ir ao template novo.
+
+**`GAP-13` — campos sem origem.** Busca nos metadados e nos dados do banco:
+
+| Campo no PDF | Valor visto | Origem encontrada | Situação |
+|---|---|---|---|
+| `SUC.` | `RJ` | **`apolices.sucursal`** — `RJ` nas apólices `13008`/`0000001192` e `15008`/`0000000019`; 21.004 de 22.584 apólices são `RJ`, 1.573 `SP` (mais `sp`, `RK`, `.`, vazio — dado sujo) | **Fechado.** Projetar via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, que é a FK já existente. Normalizar para maiúsculas; valor fora de UF válida gera aviso `SUCURSAL_INVALIDA`. |
+| `PLANO` | `RES` no `13008`, vazio no `15008` | Nenhuma coluna `%PLANO%` no banco | **Aberto.** Provavelmente constante do `.fr3` (`RES` = residencial). Hipótese: derivar do produto (`0001`/`0004` → `RES`, `0002` → `COM`). **Confirmar com o negócio.** |
+| `GARANTIA` | vazio nos dois | Nenhuma coluna `%GARANTIA%` | **Aberto.** Rótulo sem valor no `.fr3`; relacionado ao produto `0003` (`GAP-14`). Proposta: omitir até haver regra. |
+| `CÓDIGO SUSEP DA CORRETORA` | `00000202049583` | Não existe no banco: `corretores.cod_susep` está vazio para todos; `faturas.corretor` das faturas de referência é `''` ou `0000000019` | **Aberto.** É constante do `.fr3`, provavelmente o código SUSEP da própria FedCorp. Proposta: configuração `CERTGEN_SUSEP_CORRETORA`, não literal no template. **Confirmar o valor.** |
+
+Os `.fr3` não estão na pasta `Delphi/` como arquivos: `frxReportIncendio` e `frxReportIncW24h` estão **embutidos no `.dfm`** deste form (70 MB), e os outros três no form `FrmRepositorioRel`, cujo fonte não foi entregue. Abrir os `.fr3` exige exportá-los do Delphi/FastReport ou permissão para vasculhar o `.dfm`.
+
+**Próximo passo imediato:** obter os três PDFs que faltam e as três confirmações de negócio acima (`PLANO`, `GARANTIA`, `CÓDIGO SUSEP`). Com isso a Fase 3 destrava. A Fase 2 (JSON) não depende de nada disso.
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 
