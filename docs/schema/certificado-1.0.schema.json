@@ -32,7 +32,7 @@
           "enum": [
             "ABREV_ADM_AUSENTE", "FINAL_VIG_AUSENTE", "COB_INCENDIO_DIVERGENTE",
             "DOCUMENTO_INDEFINIDO", "PORTAL_AUSENTE", "PRODUTO_POR_EXCECAO", "SUCURSAL_INVALIDA",
-            "FAZ_TUDO_LAR_MANUAL"
+            "FAZ_TUDO_LAR_MANUAL", "RUPTURA_INCONSISTENTE"
           ]
         },
         "detalhe": { "type": "string" }

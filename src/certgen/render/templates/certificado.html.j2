@@ -99,13 +99,13 @@
       <p>Raio – É a descarga elétrica da atmosfera, acompanhada de explosão (trovão) e de luz (relâmpago) que se produz entre nuvens eletrizadas ou entre terra e as nuvens;</p>
       <p>Explosão – Explosão é o resultado de uma reação físico-química, na qual a velocidade extremamemnte alta é acompanhada por brusca elevação de pressão, tornando-se superior a força de resistência dos recepientes contenedores;</p>
       <p>Perda de Aluguel - Cobertura destinada as despesas relativas a perda de ou pagamento de aluguel decorrente de sinistro coberto pela cobertura básica.</p>
-      {% if cob.RUP_ENCANAMENTO.contratada %}
+      {# RN-27 — bloco do produto RUPTURA (0004): as tres linhas so aparecem quando a
+         Cobertura Ruptura de Encanamento e maior que zero (decisao do usuario, 03/09/2026). #}
+      {% if ctx.exibe_bloco_ruptura %}
       <p>RUPTURA DE TUBULAÇÕES HIDRÁULICAS: Cobertura destinada aos danos materiais causados aos bens segurados decorrentes de ruptura acidental de qualquer tubulação ou canalização de esgoto, gás, água ou caixa d'água existente no endereço. <span class="valor-cob">{{ cob.RUP_ENCANAMENTO.importancia_segurada | moeda }}</span></p>
-      {% endif %}
-      {% if cob.RC.contratada %}
-      <p>RESPONSABILIDADE CIVIL TERCEIROS - Cobertura destinada ao reembolso de quantias que o segurado vier a ser responsável civilmente em sentença judicial ou autorizado de modo expresso pela seguradora a terceiros. <span class="valor-cob">{{ cob.RC.importancia_segurada | moeda }}</span></p>
-      {% endif %}
+      <p>RESPONSABILIDADE CIVIL TERCEIROS - Cobertura destinada ao reembolso de quantias que o segurado vier a ser responsável civilmente em sentença judicial ou autorizado de modo expresso pela seguradora a terceiros. <span class="valor-cob">{% if cob.RC.contratada %}{{ cob.RC.importancia_segurada | moeda }}{% endif %}</span></p>
       <p>Para maiores informações sobre como funcionam as coberturas acesse: {{ link_condicoes }}</p>
+      {% endif %}
     </div>
   </div>
 </section>

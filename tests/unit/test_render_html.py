@@ -80,8 +80,37 @@ def test_def_06_vigencia_ausente_sai_como_travessao(repo):
 def test_rn_01_cobertura_nao_contratada_nao_imprime_valor(repo):
     h = renderizar_html(repo._montar({**LINHA_13008, "rc": None, "resp_civil": None}), DADOS)
     assert "R$ 20.000,00" not in h
-    assert "RESPONSABILIDADE CIVIL TERCEIROS" not in h
     assert "Cobertura RC" in h  # a caixa continua, vazia
+
+
+LINHAS_RUPTURA = (
+    "RUPTURA DE TUBULAÇÕES HIDRÁULICAS",
+    "RESPONSABILIDADE CIVIL TERCEIROS",
+    "Para maiores informações sobre como funcionam as coberturas",
+)
+
+
+def test_rn_27_bloco_ruptura_aparece_quando_rup_encanamento_maior_que_zero(html):
+    for linha in LINHAS_RUPTURA:
+        assert linha in html, linha
+    assert "R$ 5.000,00" in html and "R$ 20.000,00" in html
+
+
+@pytest.mark.parametrize("valor", [None, "0", "0.00"])
+def test_rn_27_bloco_ruptura_inibido_sem_valor(repo, valor):
+    h = renderizar_html(repo._montar({**LINHA_13008, "rup_encanamento": valor}), DADOS)
+    for linha in LINHAS_RUPTURA:
+        assert linha not in h, linha
+    assert "O Seguro cobre danos causados por Incêndio" in h  # o texto basico permanece
+
+
+def test_rn_27_aviso_quando_produto_0004_sem_ruptura_ou_vice_versa(repo):
+    c = repo._montar({**LINHA_13008, "rup_encanamento": None})  # 13008 -> 0004 sem valor
+    assert "RUPTURA_INCONSISTENTE" in {str(a.codigo) for a in c.todos_avisos()}
+    c2 = repo._montar({**LINHA_13008, "apolice": "4008"})  # 0001 com ruptura 5.000
+    assert "RUPTURA_INCONSISTENTE" in {str(a.codigo) for a in c2.todos_avisos()}
+    c3 = repo._montar(LINHA_13008)  # 0004 com ruptura: coerente
+    assert "RUPTURA_INCONSISTENTE" not in {str(a.codigo) for a in c3.todos_avisos()}
 
 
 def test_rn_23_rn_25_rn_26_campos_decididos(html):

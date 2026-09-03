@@ -1132,6 +1132,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `PRODUTO_POR_EXCECAO` | produto resolvido por `RN-03.1` |
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
 | `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18` (`ADR-06`, `RF-13a`) |
+| `RUPTURA_INCONSISTENTE` | produto `0004` sem `rup_encanamento > 0`, ou vice-versa (`RN-27`) |
 
 Este campo é o que torna visível, em dado estruturado e agregável, tudo o que hoje passa silenciosamente pelo legado. É a contrapartida operacional de `ADR-04`.
 
@@ -1717,6 +1718,7 @@ Regras derivadas das decisões de 03/09/2026:
 - **`RN-23` — PLANO.** Campo impresso **vazio** nesta fase; rótulo mantido. JSON: `contrato.plano: null`. Reabrir quando o negócio definir a regra.
 - **`RN-24` — GARANTIA.** Espaço reservado no layout para uma **imagem** a ser fornecida; nesta fase, vazio. Não entra no JSON até existir.
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
+- **`RN-27` — Bloco de texto do produto RUPTURA** *(decisão do usuário, 03/09/2026)*. As três linhas *RUPTURA DE TUBULAÇÕES HIDRÁULICAS … R$ x*, *RESPONSABILIDADE CIVIL TERCEIROS … R$ y* e *Para maiores informações … condicao_geral_fedcorp.pdf* do texto legal **só são impressas quando a Cobertura Ruptura de Encanamento é maior que zero** — o sinal confiável do produto `0004`. Caso contrário são inibidas. Produto `0004` sem valor de ruptura, ou ruptura com valor em outro produto, gera o aviso `RUPTURA_INCONSISTENTE` (`RD-23`), sem impedir a emissão.
 - **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
 
 **`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** Fases 2, 3 e 4 entregues em 03/09/2026 (`certgen emitir`, `certgen web`). **Próximo passo imediato:** testes de uso pelo operador na tela, a regra definitiva de opcionalidade do Faz Tudo Lar (`ADR-06`) e as especificações dos módulos Prestamista e Vida (`GAP-21`, `GAP-22`).

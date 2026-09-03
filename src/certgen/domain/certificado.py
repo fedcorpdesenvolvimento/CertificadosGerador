@@ -200,10 +200,11 @@ class ContextoTemplate:
     """ADR-05 — objeto explicito que governa os blocos condicionais."""
 
     locacao: bool  # RN-04
-    faz_tudo_lar: bool  # RN-18
+    faz_tudo_lar: bool  # RN-18 / RF-13a
     produto: Produto  # RN-03
     exibe_premio: bool  # RF-10
     marca: Marca
+    exibe_bloco_ruptura: bool = False  # RN-27 — rup_encanamento > 0
 
     @property
     def nome(self) -> str:
@@ -272,14 +273,35 @@ class Certificado:
             produto=self.produto,
             exibe_premio=exibe_premio,
             marca=marca_para_apolice(self.chave.apolice),
+            exibe_bloco_ruptura=self.exibe_bloco_ruptura,
+        )
+
+    @property
+    def exibe_bloco_ruptura(self) -> bool:
+        """RN-27 — as linhas de Ruptura de Tubulacoes, Responsabilidade Civil e o link das
+        condicoes gerais so saem quando a Cobertura Ruptura de Encanamento e > 0, o sinal
+        confiavel do produto 0004 RUPTURA (decisao do usuario, 03/09/2026)."""
+        return any(c.codigo == "RUP_ENCANAMENTO" and c.contratada for c in self.coberturas)
+
+    def aviso_ruptura(self) -> Aviso | None:
+        """RD-23 — produto 0004 sem valor de ruptura, ou ruptura com valor em outro produto."""
+        eh_ruptura = self.produto.codigo == "0004"
+        if eh_ruptura == self.exibe_bloco_ruptura:
+            return None
+        return Aviso(
+            CodigoAviso.RUPTURA_INCONSISTENTE,
+            f"produto {self.produto.codigo} e rup_encanamento "
+            f"{'> 0' if self.exibe_bloco_ruptura else 'nulo/zero'} (RN-27)",
         )
 
     def todos_avisos(self) -> list[Aviso]:
         """Avisos das partes + avisos registrados na montagem (produto por excecao, RN-02)."""
+        extra = self.aviso_ruptura()
         return [
             *self.administradora.avisos(),
             *self.vigencia.avisos(),
             *self.documento.avisos(),
             *self.contrato.avisos(),
             *self.avisos,
+            *([extra] if extra else []),
         ]

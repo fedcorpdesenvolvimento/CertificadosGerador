@@ -19,6 +19,7 @@ class CodigoAviso(StrEnum):
     PRODUTO_POR_EXCECAO = "PRODUTO_POR_EXCECAO"  # RN-03.1 — regra por administradora
     SUCURSAL_INVALIDA = "SUCURSAL_INVALIDA"  # RN-26 — apolices.sucursal nao e UF
     FAZ_TUDO_LAR_MANUAL = "FAZ_TUDO_LAR_MANUAL"  # ADR-06 — operador divergiu da derivacao RN-18
+    RUPTURA_INCONSISTENTE = "RUPTURA_INCONSISTENTE"  # RN-27 — produto 0004 x rup_encanamento
 
 
 @dataclass(frozen=True, slots=True)
