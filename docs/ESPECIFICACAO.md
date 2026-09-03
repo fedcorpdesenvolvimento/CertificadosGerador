@@ -1781,7 +1781,26 @@ npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
-### A.3 Onde colocar o projeto
+### A.3 Onde colocar o projeto *(revisado em 03/09/2026)*
+
+**Decisão do usuário:** o desenvolvimento acontece **diretamente na pasta de rede** `U:\--2021\05-Gerador Certificados` (`\\192.168.0.2\Controle\--2021\05-Gerador Certificados`), com a `.venv` nessa pasta. O repositório remoto é o **GitHub da organização**: `https://github.com/fedcorpdesenvolvimento/CertificadosGerador.git`, branch `main`. A recomendação original de *bare repo* em `U:\` + clone em `C:\dev` **não se aplica mais**.
+
+Fluxo de trabalho:
+```powershell
+cd "U:\--2021\05-Gerador Certificados"
+git status                      # o que mudou
+git add -A                      # ou arquivos especificos
+git commit -m "RN-xx: descricao curta citando o ID"
+git pull --rebase origin main   # traz o que houver no GitHub antes de enviar
+git push                        # envia
+```
+Primeiro envio: `git remote add origin <url>` e `git push -u origin main`. O Git para Windows pede login no GitHub pelo navegador na primeira vez e guarda a credencial.
+
+**`RNF-06a` — Dados pessoais no repositório.** `docs/legado/referencia/*.pdf` e `docs/legado/textos-legais/*.txt` contêm nomes, CPFs e endereços de segurados reais e estão versionados como referência de layout e de teste. O repositório do GitHub **DEVE** ser privado. Se a política da empresa exigir, esses arquivos **DEVEM** ser removidos do histórico antes do primeiro `push` (`git filter-repo`) e mantidos apenas na pasta de rede; os testes que os usam pulam quando eles não existem. O `.env` nunca é versionado (`.gitignore`: `.env`, `.env.*`).
+
+*Texto original da v0.2, mantido para histórico:*
+
+
 
 O `stage` de arquivos falhou em **todo** arquivo de `U:\` durante esta análise, e funcionou de primeira em `C:\Delphi` — o problema é a unidade de rede mapeada, não o conteúdo. A `.venv` e o cache do Chromium em `U:\` também ficam lentos e podem falhar por permissão ou caminho longo.
 

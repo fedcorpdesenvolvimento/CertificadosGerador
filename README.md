@@ -8,6 +8,12 @@ A especificação completa está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.m
 Ela é a fonte da verdade: cada módulo cita os IDs (`RF`, `RN`, `RD`, `QRY`)
 que implementa.
 
+## Repositório
+
+- Remoto: `https://github.com/fedcorpdesenvolvimento/CertificadosGerador.git` (privado — contém PDFs de referência com dados pessoais, ver RNF-06a).
+- Trabalho direto na pasta de rede `U:\--2021\05-Gerador Certificados`.
+- Fluxo: `git add -A` → `git commit -m "..."` → `git pull --rebase origin main` → `git push`.
+
 ## Instalação
 
 ```powershell
