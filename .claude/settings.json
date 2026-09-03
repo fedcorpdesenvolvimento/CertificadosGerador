@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest*)",
+      "Bash(python*)",
+      "Bash(pip*)",
+      "Bash(ruff*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)"
+    ],
+    "deny": [
+      "Bash(rm*)",
+      "Read(./.env)",
+      "Read(./Delphi/**)"
+    ]
+  }
+}

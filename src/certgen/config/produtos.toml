@@ -1,0 +1,114 @@
+# RN-03 / RN-03.1 / RN-03.2 — derivacao do produto a partir da apolice
+#
+# Fonte: UfrmImprimeCertInc.pas linhas 776-812 (fluxo em massa, mapa completo)
+#        e 1221-1233 (fluxo manual, mapa incompleto — origem de DEF-09).
+# Este arquivo adota a UNIAO dos dois mapas: o fluxo manual do legado nao
+# conhecia 9008, 10008, 14008 nem 15008, e emitia com produto vazio ou
+# herdado da selecao anterior.
+#
+# Catalogo autoritativo: comentario das linhas 1202-1208 do .pas.
+
+[[produto]]
+codigo          = "0001"
+descricao       = "Incendio Conteudo Residencial"
+descricao_curta = "RESIDENCIAL"
+locacao         = false
+
+[[produto]]
+codigo          = "0002"
+descricao       = "Incendio Conteudo Comercial"
+descricao_curta = "COMERCIAL"
+locacao         = false
+
+# GAP-14 — existe no dominio, nao era emissivel pela tela legada.
+# O rotulo GARANTIA no template da apolice 15008 sugere que tem lugar no
+# layout. Decidir se o sistema novo contempla.
+[[produto]]
+codigo          = "0003"
+descricao       = "Garantia do Condominio"
+descricao_curta = "GARANTIA"
+locacao         = false
+emissivel       = false
+
+[[produto]]
+codigo          = "0004"
+descricao       = "Ruptura de Encanamento + Incendio Conteudo"
+descricao_curta = "RUPTURA"
+locacao         = false
+
+# GAP-14 — idem 0003.
+[[produto]]
+codigo          = "0005"
+descricao       = "Aluguel"
+descricao_curta = "ALUGUEL"
+locacao         = false
+emissivel       = false
+
+[[produto]]
+codigo          = "0006"
+descricao       = "Locacao Residencial"
+descricao_curta = "LOC-RES"
+locacao         = true
+
+[[produto]]
+codigo          = "0007"
+descricao       = "Locacao Comercial"
+descricao_curta = "LOC-COM"
+locacao         = true
+
+
+# ---------------------------------------------------------------------------
+# Mapa apolice -> produto.
+#
+# Resolucao: a regra MAIS ESPECIFICA vence. Uma regra com `administradora`
+# preenchida tem precedencia sobre a regra so por `apolice` (RN-03.2).
+# Apolice sem regra correspondente DEVE abortar a emissao nomeando a apolice
+# (RN-03.3). Nao herdar produto da selecao anterior, nao deixar vazio.
+# ---------------------------------------------------------------------------
+
+[[regra]]
+apolice = "4008"
+produto = "0001"
+
+[[regra]]
+apolice = "9008"
+produto = "0001"
+
+[[regra]]
+apolice = "10008"
+produto = "0001"
+
+[[regra]]
+apolice = "5008"
+produto = "0002"
+
+[[regra]]
+apolice = "13008"
+produto = "0004"
+
+[[regra]]
+apolice = "14008"
+produto = "0004"
+
+[[regra]]
+apolice = "15008"
+produto = "0004"
+
+# RN-03.1 — excecao real de negocio, linha 785 do .pas:
+#   if ((Edit1.Text = '0000000019') and (apol = '15008')) then
+#      ComboBox4.ItemIndex := 0 ;
+# Preservada como dado. Emissoes por esta regra DEVEM registrar o aviso
+# PRODUTO_POR_EXCECAO em _meta.avisos (RD-23).
+[[regra]]
+apolice        = "15008"
+administradora = "0000000019"
+produto        = "0001"
+motivo         = "RN-03.1 — excecao especifica desta administradora"
+
+[[regra]]
+apolice = "6008"
+produto = "0006"
+
+[[regra]]
+apolice = "7008"
+produto = "0007"

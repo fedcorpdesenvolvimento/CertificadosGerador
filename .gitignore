@@ -1,0 +1,26 @@
+# RNF-06 — credenciais e dados pessoais nunca versionados
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Pasta de saida (RNF-06): certificado emitido e dado pessoal
+saida/
+certificados/
+*.pdf
+*.json
+!docs/legado/referencia/*.pdf
+!docs/schema/*.json
+!.claude/settings.json
+
+# Legado (70 MB de .dfm) — fica no compartilhamento, nao no historico
+Delphi/
+
+# Editor
+.vscode/
+*.swp

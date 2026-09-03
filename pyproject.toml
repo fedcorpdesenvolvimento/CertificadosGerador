@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "certgen"
+version = "0.1.0"
+description = "Gerador de Certificados de Seguro Incendio / Conteudo - PDF + JSON espelhado, lendo Firebird"
+readme = "README.md"
+requires-python = ">=3.12"
+# Secao 10.4 da especificacao
+dependencies = [
+    "firebird-driver>=1.10",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "playwright>=1.45",
+    "pydantic>=2.8",
+    "jsonschema>=4.23",
+    "pypdf>=4.3",
+    "boto3>=1.35",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.6",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+certgen = "certgen.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"certgen.config" = ["*.toml"]
+"certgen.adapters.firebird" = ["*.sql"]
+"certgen.render.templates" = ["*.j2", "*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "integration: exige Firebird acessivel (.env preenchido)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
