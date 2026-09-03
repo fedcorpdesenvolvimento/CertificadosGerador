@@ -162,8 +162,13 @@ def test_adr_05_certificado_de_referencia_usa_incendio_ruptura_faz_tudo():
 # ---------------------------------------------------------------- avisos
 def test_rd_23_todos_avisos_agrega_as_partes():
     codigos = {a.codigo for a in _certificado_13008().todos_avisos()}
-    # referencia 13008: abrev nula (RN-20) e portal nulo (GAP-11)
-    assert codigos == {CodigoAviso.ABREV_ADM_AUSENTE, CodigoAviso.PORTAL_AUSENTE}
+    # referencia 13008: abrev nula (RN-20), portal nulo (GAP-11); o fixture nao resolve a
+    # seguradora (cod "1" fora de seguradoras.toml), logo RN-28 tambem avisa
+    assert codigos == {
+        CodigoAviso.ABREV_ADM_AUSENTE,
+        CodigoAviso.PORTAL_AUSENTE,
+        CodigoAviso.LOGO_SEGURADORA_AUSENTE,
+    }
 
 
 def test_gap_11_portal_presente_nao_avisa():

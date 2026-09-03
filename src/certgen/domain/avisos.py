@@ -20,6 +20,7 @@ class CodigoAviso(StrEnum):
     SUCURSAL_INVALIDA = "SUCURSAL_INVALIDA"  # RN-26 — apolices.sucursal nao e UF
     FAZ_TUDO_LAR_MANUAL = "FAZ_TUDO_LAR_MANUAL"  # ADR-06 — operador divergiu da derivacao RN-18
     RUPTURA_INCONSISTENTE = "RUPTURA_INCONSISTENTE"  # RN-27 — produto 0004 x rup_encanamento
+    LOGO_SEGURADORA_AUSENTE = "LOGO_SEGURADORA_AUSENTE"  # RN-28 — cod_seguradora sem logo
 
 
 @dataclass(frozen=True, slots=True)

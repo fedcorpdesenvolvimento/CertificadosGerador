@@ -61,7 +61,7 @@
       <div class="caixa"><div class="rotulo">SUC.</div><div class="valor">{{ cert.contrato.sucursal | texto }}</div></div>
       <div class="caixa"><div class="rotulo">Plano</div><div class="valor">{{ cert.contrato.plano | texto }}</div></div>
       <div class="caixa"><div class="rotulo">Certificado</div><div class="valor">{{ cert.numero }}</div></div>
-      <div class="caixa seguradora">{% if logo_seguradora %}<img src="{{ logo_seguradora }}" alt="Seguradora">{% endif %}</div>
+      <div class="caixa seguradora">{% if logo_seguradora %}<img src="{{ logo_seguradora }}" alt="{{ nome_seguradora or 'Seguradora' }}">{% endif %}</div>
 
       {# linha 2 — a 5a coluna e ocupada pelo logotipo (row span 2) #}
       <div class="caixa"><div class="rotulo">Data de Emissão</div><div class="valor">{{ data_emissao | data_br }}</div></div>

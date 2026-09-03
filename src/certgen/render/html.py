@@ -27,11 +27,7 @@ CENTRAL_FEDCORP = "0800 251 6001"
 EMAIL_SAC = "sac@grupofedcorp.com.br"
 LINK_CONDICOES = "http://fedcorp.com.br/suporte/condicao-doc/condicao_geral_fedcorp.pdf"
 
-# Logotipo da seguradora por cod_seguradora. So a Bradesco aparece no PDF de referencia.
-# Outras seguradoras: caixa vazia ate o negocio fornecer a imagem (GAP-20).
-LOGOS_SEGURADORA: dict[str, str] = {
-    "0000000104": "logo_bradesco",
-}
+PASTA_LOGOS_SEGURADORAS = PASTA_IMAGENS / "seguradoras"  # RN-28 — arquivos de seguradoras.toml
 
 
 @dataclass(frozen=True)
@@ -56,6 +52,21 @@ def imagens_base64() -> dict[str, str]:
     return saida
 
 
+def _data_uri(arq: Path) -> str:
+    mime = mimetypes.guess_type(arq.name)[0] or "application/octet-stream"
+    return f"data:{mime};base64,{base64.b64encode(arq.read_bytes()).decode('ascii')}"
+
+
+@lru_cache(maxsize=32)
+def logo_seguradora_base64(arquivo: str | None) -> str | None:
+    """RN-28 — data URI do logotipo, ou None se a seguradora nao tem entrada ou o
+    arquivo ainda nao foi colocado em img/seguradoras/ (a caixa sai vazia)."""
+    if not arquivo:
+        return None
+    caminho = PASTA_LOGOS_SEGURADORAS / Path(arquivo).name
+    return _data_uri(caminho) if caminho.is_file() else None
+
+
 @lru_cache(maxsize=1)
 def ambiente() -> Environment:
     env = Environment(
@@ -74,7 +85,8 @@ def renderizar_html(cert: Certificado, dados: DadosRender) -> str:
         exibe_premio=dados.exibe_premio, faz_tudo_lar=dados.faz_tudo_lar
     )
     imagens = imagens_base64()
-    logo_seg = LOGOS_SEGURADORA.get(cert.contrato.cod_seguradora or "")
+    seg = cert.contrato.seguradora
+    logo_seg = logo_seguradora_base64(seg.logo if seg else None)
     por_codigo = {c.codigo: c for c in cert.coberturas}
     return ambiente().get_template("certificado.html.j2").render(
         cert=cert,
@@ -82,7 +94,8 @@ def renderizar_html(cert: Certificado, dados: DadosRender) -> str:
         cob=por_codigo,
         data_emissao=dados.data_emissao,
         imagens=imagens,
-        logo_seguradora=imagens.get(logo_seg) if logo_seg else None,
+        logo_seguradora=logo_seg,
+        nome_seguradora=seg.nome if seg else "",
         css=(PASTA_TEMPLATES / "certificado.css").read_text(encoding="utf-8"),
         titulo_produto=TITULO_PRODUTO,
         estipulante=ESTIPULANTE,

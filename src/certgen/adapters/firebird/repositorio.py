@@ -33,6 +33,7 @@ from certgen.domain.cobertura import montar_coberturas
 from certgen.domain.dinheiro import para_dinheiro
 from certgen.domain.documento import Documento
 from certgen.domain.produto import CatalogoProdutos
+from certgen.domain.seguradora import CatalogoSeguradoras
 
 # coluna da consulta canonica -> codigo de cobertura (RN-01)
 _COLUNAS_COBERTURA = {
@@ -77,9 +78,11 @@ class RepositorioFirebird:
         self,
         catalogo: CatalogoProdutos | None = None,
         susep_corretora: str = SUSEP_CORRETORA_PADRAO,
+        seguradoras: CatalogoSeguradoras | None = None,
     ) -> None:
         self._catalogo = catalogo or CatalogoProdutos.carregar()
         self._susep_corretora = susep_corretora  # RN-25
+        self._seguradoras = seguradoras or CatalogoSeguradoras.carregar()  # RN-28
 
     # ------------------------------------------------------------ infra
     def _executar(self, nome: str, filtros: Filtros | None = None) -> list[dict[str, Any]]:
@@ -218,6 +221,7 @@ class RepositorioFirebird:
                 sucursal=(_txt(r.get("sucursal")) or "").upper() or None,  # RN-26
                 plano=None,  # RN-23
                 susep_corretora=self._susep_corretora,  # RN-25
+                seguradora=self._seguradoras.resolver(_txt(r["cod_seguradora"])),  # RN-28
             ),
             produto=resolucao.produto,
             segurado_nome=_txt(r["beneficiario"]) or "",

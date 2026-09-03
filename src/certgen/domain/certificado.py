@@ -19,6 +19,7 @@ from certgen.domain.avisos import Aviso, CodigoAviso
 from certgen.domain.cobertura import Cobertura
 from certgen.domain.documento import Documento
 from certgen.domain.produto import Produto
+from certgen.domain.seguradora import Seguradora
 
 DATA_ZERO_DELPHI = date(1899, 12, 30)
 ESTIPULANTE = "FEDCORP ADMINISTRADORA DE BENEFICIOS LTDA"  # constante do layout, 7.4
@@ -167,6 +168,7 @@ class Contrato:
     sucursal: str | None = None  # RN-26 — apolices.sucursal, rotulo SUC.
     plano: str | None = None  # RN-23 — vazio nesta fase
     susep_corretora: str = SUSEP_CORRETORA_PADRAO  # RN-25
+    seguradora: Seguradora | None = None  # RN-28 — resolvida por cod_seguradora; None = sem logo
 
     @property
     def sucursal_valida(self) -> bool:
@@ -179,6 +181,14 @@ class Contrato:
         if not self.sucursal_valida:
             avisos.append(
                 Aviso(CodigoAviso.SUCURSAL_INVALIDA, f"apolices.sucursal={self.sucursal!r} (RN-26)")
+            )
+        if self.seguradora is None:
+            avisos.append(
+                Aviso(
+                    CodigoAviso.LOGO_SEGURADORA_AUSENTE,
+                    f"cod_seguradora={self.cod_seguradora!r} sem entrada em "
+                    "seguradoras.toml (RN-28)",
+                )
             )
         return avisos
 

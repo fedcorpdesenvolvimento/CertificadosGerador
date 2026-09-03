@@ -98,6 +98,7 @@ def certificado_para_dict(cert: Certificado, meta: MetaEmissao) -> dict:
                 "seq": cert.contrato.seq,
                 "numero_seguradora": cert.contrato.apolice_seguradora,
                 "cod_seguradora": cert.contrato.cod_seguradora,
+                "seguradora": cert.contrato.seguradora.nome if cert.contrato.seguradora else None,
             },
             "fatura": cert.contrato.fatura,
             "endosso": cert.contrato.endosso,

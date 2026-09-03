@@ -23,10 +23,7 @@ def html(repo):
 
 def test_imagens_do_pdf_de_referencia_estao_embutidas():
     imgs = imagens_base64()
-    esperadas = {
-        "logo_fedcorp", "cartao_virtual", "selo_lider",
-        "logo_bradesco", "selo_clube", "faixa_rodape",
-    }  # fmt: skip
+    esperadas = {"logo_fedcorp", "cartao_virtual", "selo_lider", "selo_clube", "faixa_rodape"}
     assert esperadas <= set(imgs)
     assert all(v.startswith("data:image/") for v in imgs.values())
 
@@ -119,11 +116,11 @@ def test_rn_23_rn_25_rn_26_campos_decididos(html):
     assert ">SUC.</div><div class=\"valor\">RJ</div>" in html  # RN-26
 
 
-def test_logo_da_seguradora_bradesco_e_caixa_vazia_para_desconhecida(repo):
-    com = renderizar_html(repo._montar({**LINHA_13008, "cod_seguradora": "0000000104"}), DADOS)
-    sem = renderizar_html(repo._montar({**LINHA_13008, "cod_seguradora": "0000000109"}), DADOS)
-    assert 'alt="Seguradora"' in com
-    assert 'alt="Seguradora"' not in sem
+def test_rn_28_logo_bradesco_e_caixa_vazia_para_desconhecida(repo):
+    com = renderizar_html(repo._montar({**LINHA_13008, "cod_seguradora": "0000000109"}), DADOS)
+    sem = renderizar_html(repo._montar({**LINHA_13008, "cod_seguradora": "0000000004"}), DADOS)
+    assert 'alt="Bradesco Seguros"' in com
+    assert "<img" not in sem.split('class="caixa seguradora"')[1].split("</div>")[0]
 
 
 def test_nunca_imprime_none(html):

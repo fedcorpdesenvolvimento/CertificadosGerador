@@ -32,7 +32,7 @@
           "enum": [
             "ABREV_ADM_AUSENTE", "FINAL_VIG_AUSENTE", "COB_INCENDIO_DIVERGENTE",
             "DOCUMENTO_INDEFINIDO", "PORTAL_AUSENTE", "PRODUTO_POR_EXCECAO", "SUCURSAL_INVALIDA",
-            "FAZ_TUDO_LAR_MANUAL", "RUPTURA_INCONSISTENTE"
+            "FAZ_TUDO_LAR_MANUAL", "RUPTURA_INCONSISTENTE", "LOGO_SEGURADORA_AUSENTE"
           ]
         },
         "detalhe": { "type": "string" }
@@ -116,12 +116,13 @@
         "apolice": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["codigo", "seq", "numero_seguradora", "cod_seguradora"],
+          "required": ["codigo", "seq", "numero_seguradora", "cod_seguradora", "seguradora"],
           "properties": {
             "codigo": { "type": "string", "minLength": 1 },
             "seq": { "type": "integer", "minimum": 0 },
             "numero_seguradora": { "$ref": "#/$defs/texto_opcional" },
-            "cod_seguradora": { "$ref": "#/$defs/texto_opcional" }
+            "cod_seguradora": { "$ref": "#/$defs/texto_opcional" },
+            "seguradora": { "$ref": "#/$defs/texto_opcional" }
           }
         },
         "fatura": { "type": "integer" },

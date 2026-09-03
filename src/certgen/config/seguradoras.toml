@@ -1,0 +1,40 @@
+# RN-28 — Logotipo da seguradora no bloco "Seguro Incendio" (GAP-20 fechado em 03/09/2026).
+#
+# A escolha e pelo `segurados_inc.cod_seguradora` (tabela SEGURADORA do banco).
+# `logo` e o nome do arquivo em src/certgen/render/templates/img/seguradoras/.
+# Codigo sem entrada aqui, ou arquivo de logo ausente, imprime a caixa vazia e
+# registra o aviso LOGO_SEGURADORA_AUSENTE no JSON (RD-23). Nunca imprime o
+# logo errado em silencio.
+#
+# Decisoes do negocio (03/09/2026):
+#   - tudo que for Sompo imprime HDI;
+#   - tudo que for Alfa imprime Bradesco (e o caso do PDF de referencia);
+#   - FedCorp Assistance (0000000004) nao entra em certificado — sem entrada;
+#   - Porto Seguro entrara em duas administradoras; a apolice ainda nao foi alterada.
+
+[[seguradora]]
+codigo = "0000000109"
+nome   = "Bradesco Seguros"
+logo   = "bradesco.jpg"
+
+[[seguradora]]
+codigo = "0000000104"
+nome   = "Alfa Seguradora"
+logo   = "bradesco.jpg"
+motivo = "decisao 03/09/2026: tudo que for Alfa imprime Bradesco"
+
+[[seguradora]]
+codigo = "0000000108"
+nome   = "HDI Seguros"
+logo   = "hdi.png"
+
+[[seguradora]]
+codigo = "0000000003"
+nome   = "Sompo Seguros"
+logo   = "hdi.png"
+motivo = "decisao 03/09/2026: tudo que for Sompo imprime HDI"
+
+[[seguradora]]
+codigo = "0000000006"
+nome   = "Porto Seguro"
+logo   = "porto.png"

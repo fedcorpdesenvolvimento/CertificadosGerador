@@ -39,7 +39,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "certgen.config" = ["*.toml"]
 "certgen.adapters.firebird" = ["*.sql"]
-"certgen.render.templates" = ["*.j2", "*.css", "img/*"]
+"certgen.render.templates" = ["*.j2", "*.css", "img/*", "img/seguradoras/*"]
 "certgen.web" = ["templates/*.html", "static/*"]
 
 [tool.pytest.ini_options]

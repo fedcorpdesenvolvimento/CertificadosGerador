@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-20` (logotipos de seguradoras), `GAP-21`/`GAP-22` (módulos Prestamista e Vida)
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
 
 ### Fontes analisados
 
@@ -1133,6 +1133,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
 | `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18` (`ADR-06`, `RF-13a`) |
 | `RUPTURA_INCONSISTENTE` | produto `0004` sem `rup_encanamento > 0`, ou vice-versa (`RN-27`) |
+| `LOGO_SEGURADORA_AUSENTE` | `cod_seguradora` sem entrada em `seguradoras.toml` ou arquivo de logotipo ausente (`RN-28`) |
 
 Este campo é o que torna visível, em dado estruturado e agregável, tudo o que hoje passa silenciosamente pelo legado. É a contrapartida operacional de `ADR-04`.
 
@@ -1683,7 +1684,7 @@ Verificações empíricas que alteram requisitos:
 | `GAP-17` | ~~O `JOIN` com `segurados_inc_cob_aux` deve usar `(endosso, certificado)`?~~ **Fechado em 03/09/2026 (aprovado):** a consulta canônica passa a fazer o `JOIN` pela PK `(endosso, certificado)`. `RD-09` permanece como rede de segurança. | — | — |
 | `GAP-21` | **CERTIFICADO PRESTAMISTA/ALUG** — módulo do menu (`ADR-07`) sem especificação. | Módulo Prestamista | Fonte/tela do sistema atual, PDFs de referência e consultas, como foi feito para o Incêndio. |
 | `GAP-22` | **CERTIFICADO VIDA** — idem. | Módulo Vida | idem |
-| `GAP-20` | **Logotipo da seguradora** na caixa do bloco Seguro Incêndio: só o da Bradesco (`cod_seguradora = 0000000104`) existe, extraído do PDF de referência. A `15008` é da seguradora `0000000109` e sairia com a caixa vazia. | Fase 3, apólices de outras seguradoras | O negócio fornece a imagem de cada seguradora; o mapa é `LOGOS_SEGURADORA` em `render/html.py`. |
+| `GAP-20` | ~~Logotipo da seguradora~~ **Fechado em 03/09/2026 por `RN-28`** (mapa em `config/seguradoras.toml`). Pendentes apenas os **arquivos** `hdi.png` e `porto.png` em `render/templates/img/seguradoras/`; até chegarem, Sompo/HDI e Porto saem com caixa vazia e aviso. | — | Usuário entrega os dois PNG. |
 | `GAP-18` | ~~`apolice_seguradora` tem um par duplicado~~ **Fechado em 03/09/2026:** o par é a apólice `236` / seguradora `0000000003` (`CODIGO` 18 e 19, mesmos valores). Não é apólice de certificado (`RN-03.2`); `RD-09` cobre o caso se aparecer. Sem ação. | — | — |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
@@ -1719,6 +1720,7 @@ Regras derivadas das decisões de 03/09/2026:
 - **`RN-24` — GARANTIA.** Espaço reservado no layout para uma **imagem** a ser fornecida; nesta fase, vazio. Não entra no JSON até existir.
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
 - **`RN-27` — Bloco de texto do produto RUPTURA** *(decisão do usuário, 03/09/2026)*. As três linhas *RUPTURA DE TUBULAÇÕES HIDRÁULICAS … R$ x*, *RESPONSABILIDADE CIVIL TERCEIROS … R$ y* e *Para maiores informações … condicao_geral_fedcorp.pdf* do texto legal **só são impressas quando a Cobertura Ruptura de Encanamento é maior que zero** — o sinal confiável do produto `0004`. Caso contrário são inibidas. Produto `0004` sem valor de ruptura, ou ruptura com valor em outro produto, gera o aviso `RUPTURA_INCONSISTENTE` (`RD-23`), sem impedir a emissão.
+- **`RN-28` — Logotipo da seguradora** *(decisão do usuário, 03/09/2026; fecha `GAP-20`)*. A caixa do bloco *Seguro Incêndio* imprime o logotipo escolhido por `segurados_inc.cod_seguradora` através do mapa de configuração `config/seguradoras.toml` (`codigo`, `nome`, `logo`), como o mapa de produtos (`RN-03.2`). Mapa vigente: Bradesco `0000000109` → Bradesco; **Alfa `0000000104` → Bradesco**; HDI `0000000108` → HDI; **Sompo `0000000003` → HDI**; Porto Seguro `0000000006` → Porto (entrará em duas administradoras; apólice ainda não alterada). FedCorp Assistance `0000000004` não entra em certificado. Código sem entrada, ou arquivo de logotipo ausente, imprime a caixa **vazia** e registra `LOGO_SEGURADORA_AUSENTE` (`RD-23`): nunca o logotipo errado em silêncio. O nome da seguradora vai ao JSON em `contrato.apolice.seguradora`. **Achado:** o PDF de referência (`cod_seguradora 0000000104`, Alfa) imprimia Bradesco porque o `.fr3` tinha a imagem fixa; a regra acima preserva esse resultado por decisão, não por acidente.
 - **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
 
 **`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** Fases 2, 3 e 4 entregues em 03/09/2026 (`certgen emitir`, `certgen web`). **Próximo passo imediato:** testes de uso pelo operador na tela, a regra definitiva de opcionalidade do Faz Tudo Lar (`ADR-06`) e as especificações dos módulos Prestamista e Vida (`GAP-21`, `GAP-22`).
