@@ -24,3 +24,7 @@ Delphi/
 # Editor
 .vscode/
 *.swp
+
+# backups de editor do .env (credenciais)
+.env.*
+!.env.example

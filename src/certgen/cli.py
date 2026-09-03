@@ -27,8 +27,8 @@ def _cmd_check_conexao(_: argparse.Namespace) -> int:
         return 1
 
 
-def _cmd_emitir_json(args: argparse.Namespace) -> int:
-    """Fase 2 — emite o JSON de todos os certificados de uma fatura (UC-01, UC-05)."""
+def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
+    """UC-01/UC-05 — emite JSON (Fase 2) e, com `com_pdf`, tambem o PDF (Fase 3)."""
     from datetime import date
     from pathlib import Path
 
@@ -45,9 +45,68 @@ def _cmd_emitir_json(args: argparse.Namespace) -> int:
         modo_conexao="firebird-local",
     )
     repo = RepositorioFirebird(susep_corretora=cfg.susep_corretora)
-    relatorio = emitir_lote(repo, lote, opcoes)
+
+    if not com_pdf:
+        relatorio = emitir_lote(repo, lote, opcoes)
+    else:
+        from certgen.render.html import DadosRender
+        from certgen.render.pdf import ErroRenderizacao, RenderizadorPdf
+
+        try:
+            with RenderizadorPdf() as render:
+
+                def renderizar(cert, meta, destino):
+                    dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio)
+                    return render.renderizar_certificado(cert, dados, destino)
+
+                relatorio = emitir_lote(repo, lote, opcoes, renderizar_pdf=renderizar)
+        except ErroRenderizacao as exc:
+            print("FALHA:", exc, file=sys.stderr)
+            return 1
     print(relatorio.resumo())
     return 0 if not relatorio.falhas else 2
+
+
+def _cmd_emitir_json(args: argparse.Namespace) -> int:
+    return _emitir(args, com_pdf=False)
+
+
+def _cmd_emitir(args: argparse.Namespace) -> int:
+    return _emitir(args, com_pdf=True)
+
+
+def _cmd_html(args: argparse.Namespace) -> int:
+    """Fase 3, apoio ao layout: grava o HTML de um certificado para abrir no navegador."""
+    from datetime import date
+    from pathlib import Path
+
+    from certgen.adapters.firebird.repositorio import RepositorioFirebird
+    from certgen.domain.certificado import ChaveLote
+    from certgen.render.html import DadosRender, renderizar_html
+
+    cfg = Config.do_ambiente()
+    repo = RepositorioFirebird(susep_corretora=cfg.susep_corretora)
+    lote = ChaveLote(args.administradora, args.apolice, args.seq, args.fatura)
+    certs = repo.listar_segurados(lote)
+    if args.certificado:
+        certs = [c for c in certs if c.chave.certificado == args.certificado]
+    if not certs:
+        print("FALHA: nenhum certificado encontrado", file=sys.stderr)
+        return 1
+    destino = Path(args.saida)
+    destino.write_text(
+        renderizar_html(certs[0], DadosRender(date.today(), not args.sem_premio)), encoding="utf-8"
+    )
+    print("OK:", destino)
+    return 0
+
+
+def _args_lote(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--administradora", required=True, help="codigo pessoas.pessoa, ex. 0000001192")
+    p.add_argument("--apolice", required=True, help="ex. 13008")
+    p.add_argument("--seq", required=True, type=int)
+    p.add_argument("--fatura", required=True, type=int)
+    p.add_argument("--sem-premio", action="store_true", help="RF-10: premio nao impresso")
 
 
 def construir_parser() -> argparse.ArgumentParser:
@@ -58,15 +117,23 @@ def construir_parser() -> argparse.ArgumentParser:
     chk = sub.add_parser("check-conexao", help="Prova a conexao Firebird com SELECT 1 (Fase 0)")
     chk.set_defaults(func=_cmd_check_conexao)
 
-    em = sub.add_parser("emitir-json", help="Emite o JSON de cada certificado de uma fatura")
-    em.add_argument("--administradora", required=True, help="codigo pessoas.pessoa, ex. 0000001192")
-    em.add_argument("--apolice", required=True, help="ex. 13008")
-    em.add_argument("--seq", required=True, type=int)
-    em.add_argument("--fatura", required=True, type=int)
-    em.add_argument("--saida", help="pasta raiz de saida (padrao: CERTGEN_PASTA_SAIDA)")
-    em.add_argument("--competencia", help="data ISO para a pasta {adm}/{MMYYYY}; padrao inicio_vig")
-    em.add_argument("--sem-premio", action="store_true", help="RF-10: premio nao impresso")
-    em.set_defaults(func=_cmd_emitir_json)
+    for nome, func, ajuda in (
+        ("emitir-json", _cmd_emitir_json, "Emite so o JSON de cada certificado de uma fatura"),
+        ("emitir", _cmd_emitir, "Emite PDF + JSON de cada certificado de uma fatura"),
+    ):
+        em = sub.add_parser(nome, help=ajuda)
+        _args_lote(em)
+        em.add_argument("--saida", help="pasta raiz de saida (padrao: CERTGEN_PASTA_SAIDA)")
+        em.add_argument(
+            "--competencia", help="data ISO para a pasta {adm}/{MMYYYY}; padrao inicio_vig"
+        )
+        em.set_defaults(func=func)
+
+    ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")
+    _args_lote(ht)
+    ht.add_argument("--certificado", help="numero do certificado; padrao: o primeiro do lote")
+    ht.add_argument("--saida", required=True, help="arquivo .html de destino")
+    ht.set_defaults(func=_cmd_html)
     return p
 
 

@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação nos textos legais)
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-20` (logotipos de seguradoras)
 
 ### Fontes analisados
 
@@ -1555,6 +1555,8 @@ Estrutura de pastas, `pyproject.toml`, `.env.example`, `git init`, `CLAUDE.md`, 
 Template único condicional (`ADR-05`); filtros de formatação (`RN-14`); `render/pdf.py`; modo consolidado; testes de fidelidade (`RNF-01`) e espelhamento (`RNF-04`).
 **Aceitação:** o layout único renderiza com e sem o bloco Faz Tudo Lar; o diff contra `0_33016330725_0004_13008_380819.pdf` fica na tolerância, com as divergências declaradas (`DEF-06`, `DEF-08`, `RN-23`..`RN-26`) cobertas por teste próprio.
 
+> **Estado em 03/09/2026:** entregue. `render/templates/certificado.html.j2` + `certificado.css` (página única 210 × 650 mm, medida do PDF de referência; imagens extraídas do próprio PDF e embutidas como data URI), `render/filtros.py` (`RN-14`), `render/pdf.py` (Chromium via Playwright, navegador reaproveitado no lote), comando `certgen emitir` (PDF + JSON) e `certgen html` (apoio ao ajuste de layout). Testes: espelhamento PDF↔JSON (`RNF-04`), tamanho de página, texto selecionável (`RNF-02`), Faz Tudo Lar opcional. **Pendente:** o diff de imagem automatizado de `RNF-01` — a conferência visual foi manual, lado a lado com o PDF de referência.
+
 ### Fase 4 — Tela web *(pré-requisito: Fases 1-3)*
 FastAPI com os endpoints da cascata; página única com a máquina de estados de `5.2`; destino, opções, progresso e relatório final.
 **Aceitação:** um operador emite uma fatura completa sem linha de comando, e a cascata invalida corretamente (`RF-01`).
@@ -1668,6 +1670,7 @@ Verificações empíricas que alteram requisitos:
 |---|---|---|---|
 | `GAP-16` | ~~`LINHA_BRANCA` é flag `S`/`N`/`0`, não valor.~~ **Fechado em 03/09/2026 (decisão do negócio):** o campo não é necessário nesta fase. Sai do catálogo `RN-01` (11 coberturas), da projeção da consulta canônica e do JSON. Reabrir se o layout precisar dele. | — | — |
 | `GAP-17` | ~~O `JOIN` com `segurados_inc_cob_aux` deve usar `(endosso, certificado)`?~~ **Fechado em 03/09/2026 (aprovado):** a consulta canônica passa a fazer o `JOIN` pela PK `(endosso, certificado)`. `RD-09` permanece como rede de segurança. | — | — |
+| `GAP-20` | **Logotipo da seguradora** na caixa do bloco Seguro Incêndio: só o da Bradesco (`cod_seguradora = 0000000104`) existe, extraído do PDF de referência. A `15008` é da seguradora `0000000109` e sairia com a caixa vazia. | Fase 3, apólices de outras seguradoras | O negócio fornece a imagem de cada seguradora; o mapa é `LOGOS_SEGURADORA` em `render/html.py`. |
 | `GAP-18` | ~~`apolice_seguradora` tem um par duplicado~~ **Fechado em 03/09/2026:** o par é a apólice `236` / seguradora `0000000003` (`CODIGO` 18 e 19, mesmos valores). Não é apólice de certificado (`RN-03.2`); `RD-09` cobre o caso se aparecer. Sem ação. | — | — |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
@@ -1704,7 +1707,7 @@ Regras derivadas das decisões de 03/09/2026:
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
 - **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
 
-**`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** A Fase 3 está destravada. **Próximo passo imediato:** Fase 2 (JSON), depois Fase 3 sobre o layout único.
+**`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** Fases 2 e 3 entregues em 03/09/2026 (`certgen emitir`). **Próximo passo imediato:** Fase 4 (tela web) e a regra definitiva de opcionalidade do Faz Tudo Lar (`ADR-06`).
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 

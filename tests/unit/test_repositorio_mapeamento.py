@@ -18,7 +18,7 @@ LINHA_13008 = {
     "seq": 0,
     "fatura": 380819,
     "endosso": "01112380819",
-    "cod_seguradora": "1",
+    "cod_seguradora": "0000000104",  # Bradesco — valor real da referencia
     "beneficiario": "JORGE EDUARDO MONT SERRAT",
     "codigo_pedido_port": None,
     "documento_seg": "33016330725",

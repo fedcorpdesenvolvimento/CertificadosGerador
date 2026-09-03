@@ -1,0 +1,150 @@
+/* Layout do PDF de referencia 0_33016330725_0004_13008_380819 (ADR-06).
+   Pagina unica 210 x 650 mm. Fontes do original: Arial, Arial Narrow, Arial Bold. */
+
+@page { size: 210mm 650mm; margin: 0; }
+
+:root {
+  --azul: #2f4b9e;
+  --azul-escuro: #1e3577;
+  --azul-claro: #3a7bd5;
+  --borda: #8fc3d9;
+  --cinza: #333;
+  --cinza-claro: #666;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  width: 210mm;
+  height: 650mm;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--cinza);
+  font-size: 8pt;
+  position: relative;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- cabecalho */
+.cabecalho {
+  height: 17mm;
+  background: var(--azul);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12mm 0 8mm;
+}
+.cabecalho img { height: 13mm; }
+.cabecalho .titulo { color: #fff; font-weight: bold; font-size: 20pt; letter-spacing: 0.5pt; }
+
+.produto {
+  text-align: center;
+  margin-top: 5mm;
+}
+.produto .traco { width: 34mm; height: 0.8mm; background: var(--azul); margin: 0 auto 2mm; }
+.produto .nome { font-size: 19pt; color: var(--azul-claro); }
+.produto .nome b { font-weight: bold; }
+.produto .parabens { margin-top: 3mm; font-size: 8.5pt; line-height: 1.35; }
+.produto .parabens b { font-weight: bold; }
+
+/* ------------------------------------------------------------------- secoes */
+.secao { position: relative; margin: 0 8mm; padding-top: 6mm; }
+.secao .aba {
+  position: absolute; top: 0; left: 4mm;
+  background: linear-gradient(var(--azul), var(--azul-escuro));
+  color: #fff; font-weight: bold;
+  padding: 1.6mm 8mm 1.8mm 6mm;
+  border-radius: 0 0 4mm 4mm;
+  box-shadow: 0 1.2mm 1.5mm rgba(0,0,0,.35);
+  white-space: nowrap;
+}
+.secao .aba.g { font-size: 13pt; }
+.secao .aba.m { font-size: 11.5pt; }
+.secao .sombra {
+  position: absolute; top: 0; left: 0; right: 0; height: 1.2mm;
+  background: linear-gradient(to bottom, rgba(0,0,0,.28), rgba(0,0,0,0));
+}
+.corpo { padding-top: 7mm; }
+
+.caixa {
+  border: 0.25mm solid var(--borda);
+  border-radius: 1.6mm;
+  padding: 1.6mm 2mm;
+  background: #fff;
+  min-height: 8.5mm;
+}
+.caixa .rotulo {
+  font-size: 5.5pt; font-weight: bold; color: var(--azul); text-transform: uppercase;
+  letter-spacing: 0.1pt; margin-bottom: 0.8mm;
+}
+.caixa .valor { font-size: 7pt; font-weight: bold; color: #222; line-height: 1.25; }
+.caixa .valor.grande { font-size: 8pt; }
+
+/* ------------------------------------------------------------- beneficiario */
+.beneficiario .corpo { display: grid; grid-template-columns: 64mm 1fr; gap: 6mm; align-items: start; padding-top: 9mm; }
+.beneficiario .texto { font-size: 8.5pt; line-height: 1.35; padding-top: 4mm; }
+.cartao {
+  position: relative;
+  width: 108mm; height: 66mm;
+  background: url("CARTAO") no-repeat center / 100% 100%;
+  border-radius: 3mm;
+  padding: 5mm 6mm;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 10.2mm;
+  column-gap: 5mm;
+}
+.cartao .campo .rotulo { font-size: 6.5pt; font-weight: bold; color: var(--azul-claro); }
+.cartao .campo .valor { font-size: 5.5pt; font-weight: bold; color: #111; line-height: 1.2; }
+.cartao .campo.vig .valor span + span { margin-left: 3mm; }
+
+/* ----------------------------------------------------------- seguro incendio */
+.incendio .grade {
+  display: grid;
+  grid-template-columns: 34mm 14mm 28mm 34mm 1fr;
+  gap: 2.4mm;
+}
+.incendio .grade .c2 { grid-column: span 2; }
+.incendio .grade .seguradora { grid-column: 5; grid-row: 1 / span 2; display: flex; align-items: center; justify-content: center; }
+.incendio .grade .seguradora img { max-height: 12mm; max-width: 28mm; }
+.incendio .grade .cod0800 { display: flex; align-items: center; gap: 2mm; }
+.incendio .grade .cod0800 .rotulo { margin: 0; font-size: 7pt; text-transform: none; }
+.incendio .grade .cod0800 .valor { font-size: 7pt; }
+.incendio .legal {
+  margin-top: 2.4mm;
+  border: 0.25mm solid var(--borda); border-radius: 1.6mm;
+  padding: 2.5mm 3mm; font-size: 5.6pt; line-height: 1.35; min-height: 40mm;
+}
+.incendio .legal p { margin: 0 0 0.6mm; }
+.incendio .legal .valor-cob { font-weight: bold; }
+
+/* ------------------------------------------------------------ assistencias */
+.duas-colunas { display: grid; grid-template-columns: 1fr 44mm; gap: 3mm; align-items: start; }
+.bloco-texto { font-size: 6.4pt; line-height: 1.3; padding: 3mm 3.5mm; }
+.bloco-texto h4 { margin: 2.2mm 0 0.3mm; font-size: 6.4pt; font-weight: bold; }
+.bloco-texto p { margin: 0 0 0.5mm; }
+.bloco-texto .intro { font-weight: bold; }
+.lateral { display: grid; gap: 3mm; }
+.lateral .garantia { min-height: 27mm; }
+.lateral .garantia .rotulo { color: var(--azul); }
+.lateral .garantia img { display: block; margin: 5mm auto 0; height: 9mm; }
+.lateral .central { text-align: center; padding: 3mm 2mm; }
+.lateral .central .rotulo { font-size: 8pt; text-transform: none; }
+.lateral .central .valor { font-size: 9pt; color: var(--azul); }
+.lateral .limitacao .valor { font-weight: bold; font-size: 6.4pt; line-height: 1.3; }
+
+/* ------------------------------------------------------------------- clube */
+.clube .duas-colunas { grid-template-columns: 1fr 44mm; }
+.clube .selo { display: flex; align-items: center; justify-content: center; min-height: 28mm; }
+.clube .selo img { height: 16mm; }
+
+/* ------------------------------------------------------------------ rodape */
+.rodape {
+  position: absolute; left: 0; right: 0; bottom: 12mm;
+  height: 22mm;
+  background: url("FAIXA") no-repeat center / 100% 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10mm 0 12mm;
+}
+.rodape .premio { font-weight: bold; font-size: 8pt; color: var(--cinza); }
+.rodape .central { color: #fff; font-weight: bold; text-align: right; font-size: 8.5pt; line-height: 1.4; padding-left: 40mm; }

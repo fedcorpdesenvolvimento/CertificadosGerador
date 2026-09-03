@@ -113,7 +113,8 @@ def test_rn_25_rn_26_contrato_com_susep_e_sucursal(doc):
     assert doc["contrato"]["sucursal"] == "RJ"
     assert doc["contrato"]["estipulante"] == "FEDCORP ADMINISTRADORA DE BENEFICIOS LTDA"
     assert doc["contrato"]["apolice"] == {
-        "codigo": "13008", "seq": 0, "numero_seguradora": "40150116/R-ESP", "cod_seguradora": "1",
+        "codigo": "13008", "seq": 0, "numero_seguradora": "40150116/R-ESP",
+        "cod_seguradora": "0000000104",
     }  # fmt: skip
 
 
