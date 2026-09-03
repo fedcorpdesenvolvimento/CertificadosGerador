@@ -15,7 +15,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -e .[dev]
-copy .env.example .env      # preencher credenciais
+copy .env.example .env      # ou copiar o .env do U:\--2021\04-EnvioPorto (mesmas variaveis FB_*)
 ```
 
 Para a Fase 3 (PDF) será necessário `playwright install chromium`.

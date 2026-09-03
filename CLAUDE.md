@@ -37,6 +37,16 @@ adaptador de API. Nunca chame o driver de dentro do dominio.
 - O banco recebe UPDATE apenas em link_certificado_aws, dt_cria_link e
   id_controle_envio_portal (RNF-05).
 
+## Conexao Firebird
+
+Modelo copiado de `U:\--2021\04-EnvioPorto` (db.py + config.py), que segue o
+FedHub-Backend: driver `fdb` (servidor e Firebird 2.5 em 192.168.0.6,
+FATURA.GDB), credenciais no `.env` com os nomes `FB_HOST`, `FB_PORT`,
+`FB_DATABASE`, `FB_USER`, `FB_PASSWORD`, `FB_CHARSET`, `FB_POOL_SIZE`,
+pool por charset em `adapters/firebird/conexao.py`. Sempre via
+`conexao.conectar()`, nunca `fdb.connect` direto. O `.env` do EnvioPorto
+serve aqui sem alteracao.
+
 ## Ambiente
 
 O projeto vive e roda direto na pasta de rede

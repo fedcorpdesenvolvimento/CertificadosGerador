@@ -1177,7 +1177,7 @@ Arquitetura hexagonal, com um objetivo único: a troca *Firebird local → API* 
 ┌─────┴──────────────────┐                ┌────────────┴───────────┐
 │ ADAPTADOR FASE 1       │                │ ADAPTADOR FASE 5       │
 │ adapters/firebird/     │                │ adapters/api/          │
-│ firebird-driver        │                │ httpx                  │
+│ fdb (Firebird 2.5)     │                │ httpx                  │
 │ queries.sql (RD-17)    │                │ mesmos métodos da porta│
 └────────────────────────┘                └────────────────────────┘
 
@@ -1279,7 +1279,8 @@ U:\--2021\05-Gerador Certificados\
 
 | Pacote | Papel | Justificativa |
 |---|---|---|
-| `firebird-driver` | Firebird 3+/4+ | Driver oficial mantido |
+| `fdb` | Firebird **2.5** | O servidor (`192.168.0.6`, `FATURA.GDB`) e 2.5; `firebird-driver` exige 3+. Modelo de conexao copiado de `U:\--2021\04-EnvioPorto` (pool por charset, padrao FedHub-Backend). *Revisado em 03/09/2026.* |
+| `python-dotenv` | `.env` | Mesmo mecanismo do EnvioPorto/FedHub |
 | `fastapi` + `uvicorn` | API e tela | Assíncrono, tipado |
 | `jinja2` | Template | Layout em HTML/CSS, diffável |
 | `playwright` | HTML → PDF | Chromium: fidelidade e CSS de impressão real |
@@ -1702,20 +1703,22 @@ Assim o versionamento fica no servidor, o trabalho roda local e o problema de le
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install firebird-driver fastapi uvicorn jinja2 playwright pydantic jsonschema pypdf pytest boto3
+pip install -e .[dev]     # fdb, python-dotenv, fastapi, jinja2, playwright, pydantic, jsonschema, pypdf, boto3, pytest
 playwright install chromium
 ```
 
 ### A.5 `.env.example`
 
 ```ini
-# Firebird - fase 1
-FIREBIRD_HOST=192.168.0.2
-FIREBIRD_PORT=3050
-FIREBIRD_DATABASE=
-FIREBIRD_USER=
-FIREBIRD_PASSWORD=
-FIREBIRD_CHARSET=WIN1252
+# Firebird 2.5 - fase 1. Nomes FB_* iguais aos do EnvioPorto / FedHub-Backend,
+# para o mesmo .env servir nos dois projetos (revisado em 03/09/2026).
+FB_HOST=192.168.0.6
+FB_PORT=3050
+FB_DATABASE=E:\SISTEMA\BASE_CHEQUE\BASE\FATURA.GDB
+FB_USER=
+FB_PASSWORD=
+FB_CHARSET=WIN1252
+FB_POOL_SIZE=5
 
 # Adaptador: firebird | api
 CERTGEN_REPOSITORIO=firebird

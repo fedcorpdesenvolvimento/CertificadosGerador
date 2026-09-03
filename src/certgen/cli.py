@@ -10,17 +10,19 @@ import argparse
 import sys
 
 from certgen import __version__
-from certgen.config.settings import Config
+from certgen.config.settings import Config, ConfiguracaoAusente
 
 
 def _cmd_check_conexao(_: argparse.Namespace) -> int:
     from certgen.adapters.firebird.conexao import ErroConexao, verificar_conexao
 
-    cfg = Config.do_ambiente()
     try:
+        cfg = Config.do_ambiente()
+        if cfg.firebird is None:
+            raise ErroConexao("CERTGEN_REPOSITORIO nao e 'firebird'")
         print("OK:", verificar_conexao(cfg.firebird))
         return 0
-    except ErroConexao as exc:
+    except (ErroConexao, ConfiguracaoAusente) as exc:
         print("FALHA:", exc, file=sys.stderr)
         return 1
 
