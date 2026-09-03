@@ -75,6 +75,7 @@ def test_fase_1_referencia_13008_completa(repo):
     assert c.produto.codigo == "0004"
     assert c.segurado_nome.startswith("JORGE EDUARDO")
     assert c.endosso.faz_tudo_lar is True
+    assert c.contrato.sucursal == "RJ"  # RN-26 — SUC. do PDF de referencia
     assert c.contexto_template(True).nome == "incendio_ruptura_faz_tudo"
     assert len(c.coberturas) == 11
     codigos = {a.codigo for a in c.todos_avisos()}

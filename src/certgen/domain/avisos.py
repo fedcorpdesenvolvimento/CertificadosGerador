@@ -17,6 +17,7 @@ class CodigoAviso(StrEnum):
     DOCUMENTO_INDEFINIDO = "DOCUMENTO_INDEFINIDO"  # RD-12 — nem 11 nem 14 digitos
     PORTAL_AUSENTE = "PORTAL_AUSENTE"  # GAP-11 — codigo_pedido_port nulo
     PRODUTO_POR_EXCECAO = "PRODUTO_POR_EXCECAO"  # RN-03.1 — regra por administradora
+    SUCURSAL_INVALIDA = "SUCURSAL_INVALIDA"  # RN-26 — apolices.sucursal nao e UF
 
 
 @dataclass(frozen=True, slots=True)

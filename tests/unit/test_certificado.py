@@ -3,6 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from certgen.domain.avisos import CodigoAviso
 from certgen.domain.certificado import (
     DATA_ZERO_DELPHI,
@@ -48,6 +50,7 @@ def _certificado_13008(**sobrescreve) -> Certificado:
             apolice_seguradora="40150116/R-ESP",
             processo_susep="15.414.901282/2014-83",
             codigo_pedido_porto=None,
+            sucursal="RJ",
         ),
         produto=CATALOGO.resolver("13008").produto,
         segurado_nome="JORGE EDUARDO MONT SERRAT",
@@ -165,6 +168,30 @@ def test_rd_23_todos_avisos_agrega_as_partes():
 
 def test_gap_11_portal_presente_nao_avisa():
     c = _certificado_13008(
-        contrato=Contrato("13008", 0, 380819, "380819", "1", "x", "y", codigo_pedido_porto=123)
+        contrato=Contrato(
+            "13008", 0, 380819, "380819", "1", "x", "y", codigo_pedido_porto=123, sucursal="RJ"
+        )
     )
     assert CodigoAviso.PORTAL_AUSENTE not in {a.codigo for a in c.todos_avisos()}
+
+
+# ------------------------------------------------------- GAP-13 fechado
+def test_rn_25_susep_corretora_fixo_por_padrao():
+    assert _certificado_13008().contrato.susep_corretora == "00000202049583"
+
+
+def test_rn_23_plano_vazio_nesta_fase():
+    assert _certificado_13008().contrato.plano is None
+
+
+@pytest.mark.parametrize("ruim", [None, "", ".", "RK", "sp "])
+def test_rn_26_sucursal_fora_de_uf_gera_aviso(ruim):
+    c = _certificado_13008(
+        contrato=Contrato("13008", 0, 380819, "380819", "1", "x", "y", None, sucursal=ruim)
+    )
+    assert CodigoAviso.SUCURSAL_INVALIDA in {a.codigo for a in c.todos_avisos()}
+
+
+def test_rn_26_sucursal_rj_nao_gera_aviso():
+    codigos = {a.codigo for a in _certificado_13008().todos_avisos()}
+    assert CodigoAviso.SUCURSAL_INVALIDA not in codigos

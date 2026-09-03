@@ -33,6 +33,7 @@ LINHA_13008 = {
     "nome_cond": "DIRETORIA IMODATA",
     "apolice_seguradora": "40150116/R-ESP",
     "proc_susep": "15.414.901282/2014-83",
+    "sucursal": "RJ",
     "certificado": "CF1DI/AP.602",
     "inc_conteudo": None,
     "inc_predio": Decimal("100000.00"),
@@ -123,6 +124,24 @@ def test_rn_03_3_apolice_sem_produto_aborta_o_certificado(repo):
 def test_rn_02_divergencia_do_banco_vira_aviso(repo):
     c = repo._montar({**LINHA_13008, "cob_incendio": Decimal("0.00")})
     assert CodigoAviso.COB_INCENDIO_DIVERGENTE in {a.codigo for a in c.todos_avisos()}
+
+
+def test_rn_26_sucursal_normalizada_e_sem_aviso_quando_uf(repo):
+    c = repo._montar({**LINHA_13008, "sucursal": " rj "})
+    assert c.contrato.sucursal == "RJ"
+    assert CodigoAviso.SUCURSAL_INVALIDA not in {a.codigo for a in c.todos_avisos()}
+
+
+def test_rn_26_sucursal_suja_gera_aviso_e_e_preservada(repo):
+    c = repo._montar({**LINHA_13008, "sucursal": "RK"})
+    assert c.contrato.sucursal == "RK"
+    assert CodigoAviso.SUCURSAL_INVALIDA in {a.codigo for a in c.todos_avisos()}
+
+
+def test_rn_25_susep_corretora_vem_da_configuracao(repo):
+    assert repo._montar(LINHA_13008).contrato.susep_corretora == "00000202049583"
+    outro = RepositorioFirebird(susep_corretora="123")
+    assert outro._montar(LINHA_13008).contrato.susep_corretora == "123"
 
 
 def test_rd_12_documento_com_mascara_e_normalizado_na_chave(repo):

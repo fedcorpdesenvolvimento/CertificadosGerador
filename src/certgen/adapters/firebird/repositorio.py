@@ -18,6 +18,7 @@ from certgen.adapters.firebird.consultas import Filtros, montar
 from certgen.application.ports import CertificadoAmbiguo, CertificadoNaoEncontrado
 from certgen.domain.avisos import Aviso
 from certgen.domain.certificado import (
+    SUSEP_CORRETORA_PADRAO,
     Administradora,
     ApoliceRef,
     Certificado,
@@ -72,8 +73,13 @@ def _linhas_como_dicts(cur: Any) -> Iterator[dict[str, Any]]:
 class RepositorioFirebird:
     """Implementa `RepositorioCertificados` lendo o FATURA.GDB."""
 
-    def __init__(self, catalogo: CatalogoProdutos | None = None) -> None:
+    def __init__(
+        self,
+        catalogo: CatalogoProdutos | None = None,
+        susep_corretora: str = SUSEP_CORRETORA_PADRAO,
+    ) -> None:
         self._catalogo = catalogo or CatalogoProdutos.carregar()
+        self._susep_corretora = susep_corretora  # RN-25
 
     # ------------------------------------------------------------ infra
     def _executar(self, nome: str, filtros: Filtros | None = None) -> list[dict[str, Any]]:
@@ -209,6 +215,9 @@ class RepositorioFirebird:
                 apolice_seguradora=_txt(r["apolice_seguradora"]),
                 processo_susep=_txt(r["proc_susep"]),
                 codigo_pedido_porto=_inteiro(r["codigo_pedido_port"]),
+                sucursal=(_txt(r.get("sucursal")) or "").upper() or None,  # RN-26
+                plano=None,  # RN-23
+                susep_corretora=self._susep_corretora,  # RN-25
             ),
             produto=resolucao.produto,
             segurado_nome=_txt(r["beneficiario"]) or "",

@@ -22,6 +22,10 @@ from certgen.domain.produto import Produto
 
 DATA_ZERO_DELPHI = date(1899, 12, 30)
 ESTIPULANTE = "FEDCORP ADMINISTRADORA DE BENEFICIOS LTDA"  # constante do layout, 7.4
+SUSEP_CORRETORA_PADRAO = "00000202049583"  # RN-25 — fixo nesta fase; sobreponivel por config
+UFS = frozenset(
+    "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split()
+)
 CODIGO_ASSIST_FAZ_TUDO = "1003"  # RN-18
 COD_CAT_LOCACAO = frozenset({"3", "4"})  # RN-04
 APOLICE_MARCA_ALTERNATIVA = "15008"  # 7.3, linhas 889 e 907 do .pas
@@ -160,11 +164,23 @@ class Contrato:
     apolice_seguradora: str | None  # rotulo APOLICE no PDF
     processo_susep: str | None
     codigo_pedido_porto: int | None  # portal; nulo gera PORTAL_AUSENTE
+    sucursal: str | None = None  # RN-26 — apolices.sucursal, rotulo SUC.
+    plano: str | None = None  # RN-23 — vazio nesta fase
+    susep_corretora: str = SUSEP_CORRETORA_PADRAO  # RN-25
+
+    @property
+    def sucursal_valida(self) -> bool:
+        return self.sucursal is not None and self.sucursal in UFS
 
     def avisos(self) -> list[Aviso]:
+        avisos: list[Aviso] = []
         if self.codigo_pedido_porto is None:
-            return [Aviso(CodigoAviso.PORTAL_AUSENTE, "codigo_pedido_port nulo (GAP-11)")]
-        return []
+            avisos.append(Aviso(CodigoAviso.PORTAL_AUSENTE, "codigo_pedido_port nulo (GAP-11)"))
+        if not self.sucursal_valida:
+            avisos.append(
+                Aviso(CodigoAviso.SUCURSAL_INVALIDA, f"apolices.sucursal={self.sucursal!r} (RN-26)")
+            )
+        return avisos
 
 
 # ------------------------------------------------------------- template

@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 12 lacunas fechadas; abertos: `GAP-09` (3 templates), `GAP-10`, `GAP-11`, `GAP-12`, `GAP-13` (PLANO, GARANTIA, SUSEP), `GAP-14`
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 12 lacunas fechadas; abertos: `GAP-09` (3 templates), `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`
 
 ### Fontes analisados
 
@@ -1130,6 +1130,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `DOCUMENTO_INDEFINIDO` | `cpf_cnpj` sem 11 nem 14 dígitos (`RD-12`) |
 | `PORTAL_AUSENTE` | `codigo_pedido_port` nulo (`GAP-11`) |
 | `PRODUTO_POR_EXCECAO` | produto resolvido por `RN-03.1` |
+| `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
 
 Este campo é o que torna visível, em dado estruturado e agregável, tudo o que hoje passa silenciosamente pelo legado. É a contrapartida operacional de `ADR-04`.
 
@@ -1684,13 +1685,20 @@ Para fechar: **(1)** um PDF emitido pelo legado para cada um dos três templates
 | Campo no PDF | Valor visto | Origem encontrada | Situação |
 |---|---|---|---|
 | `SUC.` | `RJ` | **`apolices.sucursal`** — `RJ` nas apólices `13008`/`0000001192` e `15008`/`0000000019`; 21.004 de 22.584 apólices são `RJ`, 1.573 `SP` (mais `sp`, `RK`, `.`, vazio — dado sujo) | **Fechado.** Projetar via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, que é a FK já existente. Normalizar para maiúsculas; valor fora de UF válida gera aviso `SUCURSAL_INVALIDA`. |
-| `PLANO` | `RES` no `13008`, vazio no `15008` | Nenhuma coluna `%PLANO%` no banco | **Aberto.** Provavelmente constante do `.fr3` (`RES` = residencial). Hipótese: derivar do produto (`0001`/`0004` → `RES`, `0002` → `COM`). **Confirmar com o negócio.** |
-| `GARANTIA` | vazio nos dois | Nenhuma coluna `%GARANTIA%` | **Aberto.** Rótulo sem valor no `.fr3`; relacionado ao produto `0003` (`GAP-14`). Proposta: omitir até haver regra. |
-| `CÓDIGO SUSEP DA CORRETORA` | `00000202049583` | Não existe no banco: `corretores.cod_susep` está vazio para todos; `faturas.corretor` das faturas de referência é `''` ou `0000000019` | **Aberto.** É constante do `.fr3`, provavelmente o código SUSEP da própria FedCorp. Proposta: configuração `CERTGEN_SUSEP_CORRETORA`, não literal no template. **Confirmar o valor.** |
+| `PLANO` | `RES` no `13008`, vazio no `15008` | Nenhuma coluna `%PLANO%` no banco | **Fechado em 03/09/2026 (decisão):** o campo sai **vazio** nesta fase. O rótulo permanece no layout; o tratamento será definido depois (`RN-23`). |
+| `GARANTIA` | vazio nos dois | Nenhuma coluna `%GARANTIA%` | **Fechado em 03/09/2026 (decisão):** não é texto, é uma **imagem** (selo) que o negócio fornecerá em um segundo momento. Nesta fase o espaço fica reservado e vazio (`RN-24`). |
+| `CÓDIGO SUSEP DA CORRETORA` | `00000202049583` | Não existe no banco: `corretores.cod_susep` está vazio para todos | **Fechado em 03/09/2026 (decisão):** valor **fixo** nesta fase. Vive na configuração `CERTGEN_SUSEP_CORRETORA` com esse padrão, e vai ao JSON em `contrato.susep_corretora` (`RN-25`). |
 
 Os `.fr3` não estão na pasta `Delphi/` como arquivos: `frxReportIncendio` e `frxReportIncW24h` estão **embutidos no `.dfm`** deste form (70 MB), e os outros três no form `FrmRepositorioRel`, cujo fonte não foi entregue. Abrir os `.fr3` exige exportá-los do Delphi/FastReport ou permissão para vasculhar o `.dfm`.
 
-**Próximo passo imediato:** obter os três PDFs que faltam e as três confirmações de negócio acima (`PLANO`, `GARANTIA`, `CÓDIGO SUSEP`). Com isso a Fase 3 destrava. A Fase 2 (JSON) não depende de nada disso.
+Regras derivadas das decisões de 03/09/2026:
+
+- **`RN-23` — PLANO.** Campo impresso **vazio** nesta fase; rótulo mantido. JSON: `contrato.plano: null`. Reabrir quando o negócio definir a regra.
+- **`RN-24` — GARANTIA.** Espaço reservado no layout para uma **imagem** a ser fornecida; nesta fase, vazio. Não entra no JSON até existir.
+- **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
+- **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
+
+**`GAP-13` fechado.** **Próximo passo imediato:** os três PDFs que faltam para `GAP-09` e a revisão de compliance dos textos. A Fase 2 (JSON) não depende disso.
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 

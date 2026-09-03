@@ -49,6 +49,12 @@ def test_rn_20_cod_0800_com_coalesce_no_abrev():
     assert "COALESCE(pes.abrev, '')" in consulta("certificado_base")
 
 
+def test_rn_26_projeta_sucursal_pela_fk_de_apolices():
+    sql = consulta("certificado_base")
+    assert "apo.sucursal" in sql
+    assert "apo.cod_seguradora = ss.cod_seguradora" in sql
+
+
 def test_rd_04_rd_08_projeta_cod_seguradora_abrev_e_cod_cat():
     sql = consulta("certificado_base")
     assert "ss.cod_seguradora" in sql

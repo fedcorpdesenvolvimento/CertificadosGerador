@@ -37,7 +37,8 @@ ORDER BY 1
 -- RN-20: COALESCE(pes.abrev,'') no cod_0800.
 -- GAP-17: JOIN com segurados_inc_cob_aux pela PK (endosso, certificado).
 -- GAP-16: linha_branca nao e projetada.
-SELECT pes.nome                                                  AS nome_adm,
+-- RN-26: apolices.sucursal (rotulo SUC.) pela FK (apolice, seq, administradora, cod_seguradora).
+SELECT pes.nome                                                 AS nome_adm,
        pes.abrev                                                 AS abrev_adm,
        ss.administradora, ss.apolice, ss.seq, ss.fatura,
        ss.endosso, ss.cod_seguradora,
@@ -48,6 +49,7 @@ SELECT pes.nome                                                  AS nome_adm,
        ss.endereco, ss.unidade, ss.cep, ss.uf, ss.cidade, ss.bairro,
        ss.nome_cond,
        aps.apolice_seguradora, aps.proc_susep,
+       apo.sucursal,
        ss.certificado,
        ss.inc_conteudo, ss.inc_predio, ss.aluguel,
        (COALESCE(ss.inc_conteudo, 0) + COALESCE(ss.inc_predio, 0)) AS cob_incendio,
@@ -62,6 +64,10 @@ LEFT JOIN pessoas               pes  ON pes.pessoa = ss.administradora
 LEFT JOIN apolice_seguradora    aps  ON aps.apolice = ss.apolice
                                     AND aps.cod_seguradora = ss.cod_seguradora
 LEFT JOIN endossos              en   ON en.endosso = ss.endosso
+LEFT JOIN apolices              apo  ON apo.apolice = ss.apolice            -- RN-26: FK_SEGURADOS_APOLICES
+                                    AND apo.seq = ss.seq
+                                    AND apo.administradora = ss.administradora
+                                    AND apo.cod_seguradora = ss.cod_seguradora
 LEFT JOIN segurados_inc_cob_aux sicb ON sicb.endosso = ss.endosso
                                     AND sicb.certificado = ss.certificado
 WHERE ss.status_seg <> 'C'

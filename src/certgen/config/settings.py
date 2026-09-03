@@ -99,6 +99,7 @@ class Config:
     api_token: str
     pasta_saida: Path
     apolices_massa: tuple[str, ...] = field(default_factory=tuple)
+    susep_corretora: str = "00000202049583"  # RN-25 — fixo nesta fase
 
     @classmethod
     def do_ambiente(cls) -> Config:
@@ -115,4 +116,5 @@ class Config:
             api_token=os.getenv("CERTGEN_API_TOKEN", ""),
             pasta_saida=Path(os.getenv("CERTGEN_PASTA_SAIDA", "saida")),
             apolices_massa=apolices,
+            susep_corretora=os.getenv("CERTGEN_SUSEP_CORRETORA", "00000202049583").strip(),
         )
