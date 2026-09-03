@@ -37,9 +37,9 @@ def _certificado_13008(**sobrescreve) -> Certificado:
         }
     )
     base = dict(
-        chave=ChaveCertificado("0000004691", "13008", 0, 380819, "CF1DI/AP.602", "33016330725"),
+        chave=ChaveCertificado("0000001192", "13008", 0, 380819, "CF1DI/AP.602", "33016330725"),
         administradora=Administradora(
-            "0000004691", "IMODATA ADM DE IMOVEIS E SERVICOS EMPRESARIAIS", None
+            "0000001192", "IMODATA ADM DE IMOVEIS E SERVICOS EMPRESARIAIS", None
         ),
         contrato=Contrato(
             apolice="13008",

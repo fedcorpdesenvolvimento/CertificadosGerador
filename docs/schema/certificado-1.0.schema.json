@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grupofedcorp.com.br/schema/certificado-1.0.schema.json",
+  "title": "Certificado de Seguro Incendio / Conteudo",
+  "description": "RD-10: todo campo impresso no PDF e nada alem, exceto _meta, _origem e arquivo (RD-25). RD-15: validado antes da escrita.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "_meta", "arquivo", "certificado", "produto", "contrato", "administradora",
+    "segurado", "vigencia", "local_risco", "coberturas", "premio", "assistencia", "_origem"
+  ],
+  "$defs": {
+    "dinheiro": {
+      "description": "RD-05: string decimal com 2 casas, nunca float",
+      "type": ["string", "null"],
+      "pattern": "^-?\\d+\\.\\d{2}$"
+    },
+    "data": {
+      "description": "RD-06: ISO 8601",
+      "type": ["string", "null"],
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "texto_opcional": { "type": ["string", "null"] },
+    "aviso": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codigo", "detalhe"],
+      "properties": {
+        "codigo": {
+          "type": "string",
+          "enum": [
+            "ABREV_ADM_AUSENTE", "FINAL_VIG_AUSENTE", "COB_INCENDIO_DIVERGENTE",
+            "DOCUMENTO_INDEFINIDO", "PORTAL_AUSENTE", "PRODUTO_POR_EXCECAO", "SUCURSAL_INVALIDA"
+          ]
+        },
+        "detalhe": { "type": "string" }
+      }
+    },
+    "cobertura": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codigo", "nome", "importancia_segurada", "contratada"],
+      "properties": {
+        "codigo": {
+          "type": "string",
+          "enum": [
+            "INC_PREDIO", "INC_CONTEUDO", "COB_INCENDIO", "ALUGUEL", "RUP_ENCANAMENTO", "RC",
+            "RUP_ENC_TER", "RESP_CIVIL", "DANOS_ELETRICOS", "QUEBRA_VIDRO", "ACIDENTE_PESSOAL"
+          ]
+        },
+        "nome": { "type": "string" },
+        "importancia_segurada": { "$ref": "#/$defs/dinheiro" },
+        "contratada": { "type": "boolean" },
+        "derivada": { "type": "boolean" }
+      }
+    }
+  },
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versao_schema", "gerado_em", "gerado_por", "template", "faz_tudo_lar", "modo_conexao", "avisos"],
+      "properties": {
+        "versao_schema": { "const": "1.0" },
+        "gerado_em": { "type": "string", "format": "date-time" },
+        "gerado_por": { "type": "string" },
+        "template": { "const": "demonstrativo_v1" },
+        "faz_tudo_lar": { "type": "boolean" },
+        "modo_conexao": { "type": "string", "enum": ["firebird-local", "api"] },
+        "avisos": { "type": "array", "items": { "$ref": "#/$defs/aviso" } }
+      }
+    },
+    "arquivo": {
+      "description": "RD-25: guarda do certificado",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf", "pasta_destino", "link"],
+      "properties": {
+        "pdf": { "type": "string", "pattern": "^\\d+_\\d+_\\d{4}_\\d+_[^/\\\\|:*?\"<>]+_\\d+\\.pdf$" },
+        "pasta_destino": { "type": "string" },
+        "link": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "certificado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numero", "cod_0800", "data_emissao"],
+      "properties": {
+        "numero": { "type": "string", "minLength": 1 },
+        "cod_0800": { "type": "string", "minLength": 1 },
+        "data_emissao": { "$ref": "#/$defs/data" }
+      }
+    },
+    "produto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codigo", "descricao", "descricao_curta", "locacao", "faz_tudo_lar"],
+      "properties": {
+        "codigo": { "type": "string", "pattern": "^\\d{4}$" },
+        "descricao": { "type": "string" },
+        "descricao_curta": { "type": "string" },
+        "locacao": { "type": "boolean" },
+        "faz_tudo_lar": { "type": "boolean" }
+      }
+    },
+    "contrato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apolice", "fatura", "endosso", "processo_susep", "codigo_pedido_porto",
+        "estipulante", "sucursal", "plano", "susep_corretora"
+      ],
+      "properties": {
+        "apolice": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["codigo", "seq", "numero_seguradora", "cod_seguradora"],
+          "properties": {
+            "codigo": { "type": "string", "minLength": 1 },
+            "seq": { "type": "integer", "minimum": 0 },
+            "numero_seguradora": { "$ref": "#/$defs/texto_opcional" },
+            "cod_seguradora": { "$ref": "#/$defs/texto_opcional" }
+          }
+        },
+        "fatura": { "type": "integer" },
+        "endosso": { "$ref": "#/$defs/texto_opcional" },
+        "processo_susep": { "$ref": "#/$defs/texto_opcional" },
+        "codigo_pedido_porto": { "type": ["integer", "null"] },
+        "estipulante": { "const": "FEDCORP ADMINISTRADORA DE BENEFICIOS LTDA" },
+        "sucursal": { "$ref": "#/$defs/texto_opcional" },
+        "plano": { "$ref": "#/$defs/texto_opcional" },
+        "susep_corretora": { "type": "string", "pattern": "^\\d+$" }
+      }
+    },
+    "administradora": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codigo", "nome", "abreviacao", "papel"],
+      "properties": {
+        "codigo": { "type": "string", "minLength": 1 },
+        "nome": { "type": "string" },
+        "abreviacao": { "$ref": "#/$defs/texto_opcional" },
+        "papel": { "const": "CO-ESTIPULANTE" }
+      }
+    },
+    "segurado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nome", "documento"],
+      "properties": {
+        "nome": { "type": "string" },
+        "documento": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tipo", "numero", "formatado"],
+          "properties": {
+            "tipo": { "type": "string", "enum": ["CPF", "CNPJ", "INDEFINIDO"] },
+            "numero": { "type": "string", "pattern": "^\\d*$" },
+            "formatado": { "type": "string" }
+          }
+        }
+      }
+    },
+    "vigencia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inicio", "fim"],
+      "properties": {
+        "inicio": { "$ref": "#/$defs/data" },
+        "fim": { "$ref": "#/$defs/data" }
+      }
+    },
+    "local_risco": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endereco", "unidade", "condominio", "bairro", "cidade", "uf", "cep"],
+      "properties": {
+        "endereco": { "$ref": "#/$defs/texto_opcional" },
+        "unidade": { "$ref": "#/$defs/texto_opcional" },
+        "condominio": { "$ref": "#/$defs/texto_opcional" },
+        "bairro": { "$ref": "#/$defs/texto_opcional" },
+        "cidade": { "$ref": "#/$defs/texto_opcional" },
+        "uf": { "$ref": "#/$defs/texto_opcional" },
+        "cep": { "$ref": "#/$defs/texto_opcional" }
+      }
+    },
+    "coberturas": {
+      "description": "RD-11: sempre as 11 de RN-01, nesta ordem",
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": { "$ref": "#/$defs/cobertura" }
+    },
+    "premio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valor_total", "moeda", "impresso_no_pdf"],
+      "properties": {
+        "valor_total": { "$ref": "#/$defs/dinheiro" },
+        "moeda": { "const": "BRL" },
+        "impresso_no_pdf": { "type": "boolean" }
+      }
+    },
+    "assistencia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codigo_mondial", "faz_tudo_lar", "central_atendimento", "central_fedcorp"],
+      "properties": {
+        "codigo_mondial": { "$ref": "#/$defs/texto_opcional" },
+        "faz_tudo_lar": { "type": "boolean" },
+        "central_atendimento": { "type": "string" },
+        "central_fedcorp": { "type": "string" }
+      }
+    },
+    "_origem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["banco", "consulta", "chave"],
+      "properties": {
+        "banco": { "type": "string" },
+        "consulta": { "type": "string" },
+        "chave": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["administradora", "apolice", "seq", "fatura", "certificado", "cpf_cnpj"],
+          "properties": {
+            "administradora": { "type": "string" },
+            "apolice": { "type": "string" },
+            "seq": { "type": "integer" },
+            "fatura": { "type": "integer" },
+            "certificado": { "type": "string" },
+            "cpf_cnpj": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

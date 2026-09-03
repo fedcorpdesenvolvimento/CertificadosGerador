@@ -13,7 +13,7 @@ from certgen.domain.produto import ProdutoIndeterminado
 LINHA_13008 = {
     "nome_adm": "IMODATA ADM DE IMOVEIS E SERVICOS EMPRESARIAIS",
     "abrev_adm": None,
-    "administradora": "0000004691",
+    "administradora": "0000001192",  # IMODATA — chave real confirmada no banco em 03/09/2026
     "apolice": "13008",
     "seq": 0,
     "fatura": 380819,
