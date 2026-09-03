@@ -1118,6 +1118,8 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 ```
 `pasta_destino` segue `RN-19` (`{administradora}/{competência}`); `link` é `null` na emissão local e recebe a URL do S3 na Fase 7 (`RD-20`), quando o JSON é regravado após upload confirmado (`RF-16`). Substitui `_meta.arquivo_pdf` do exemplo 9.1.
 
+**`RD-26`** — *(decisão de 03/09/2026)* Opção **JSON único**, independente de *Individuais*: os PDFs continuam um por segurado, mas o lote grava **um só** arquivo JSON, `certificados_{apolice}_{seq}_{fatura}_{YYYYMMDD-HHMMSS}.json` (`RN-12`), na mesma pasta dos PDFs. Estrutura: `_meta` (`formato: "json_unico"`, `chave: "cpf_cnpj|certificado"`, `quantidade`), `lote` e `certificados`, um **objeto indexado por `cpf_cnpj|certificado`** (`RD-22`: o certificado sozinho não é único na fatura), onde cada valor é o documento completo do certificado, com `_meta` próprio e `arquivo.pdf`, validado individualmente antes do PDF (`RD-15`, `RF-16`). Chave duplicada no lote é erro. Tela: checkbox *JSON único*; CLI: `--json-unico`.
+
 **`RD-13`** — Campos nulos no banco **DEVEM** aparecer como `null`. **NÃO DEVEM** ser omitidos nem convertidos em string vazia — a distinção entre *ausente* e *vazio* tem valor de auditoria, e é exatamente ela que revela casos como `abrev` nula (`RN-20`) e `final_vig` zerada (`DEF-06`).
 
 **`RD-23`** — `_meta.avisos` **DEVE** registrar toda anomalia detectada na emissão daquele certificado, com código estável. Vocabulário mínimo:

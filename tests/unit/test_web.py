@@ -195,6 +195,19 @@ def test_rf_07_modo_consolidado_so_json(cliente, tmp_path):
     assert [p.name for p in pasta.iterdir()] == [d["consolidado_json"].rsplit("\\", 1)[-1].rsplit("/", 1)[-1]]
 
 
+def test_rd_26_json_unico_pela_api(cliente, tmp_path):
+    import json
+
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True, "json_unico": True}  # fmt: skip
+    d = cliente.post("/api/incendio/emitir", json=corpo).json()
+    assert d["json_unico"] and d["json_unico"].endswith(".json")
+    assert all(e["json"] is None for e in d["emitidos"])
+    env = json.loads(open(d["json_unico"], encoding="utf-8").read())
+    assert env["_meta"]["quantidade"] == 2
+    assert 'id="json_unico"' in cliente.get("/incendio").text
+
+
 def test_saude(cliente):
     assert cliente.get("/api/saude").json()["ok"] is True
 

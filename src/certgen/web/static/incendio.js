@@ -11,7 +11,7 @@
     listaPainel: $("lista-painel"), todos: $("todos"), contador: $("contador"),
     segurados: $("segurados"), erroLista: $("erro-lista"),
     emissaoPainel: $("emissao-painel"), pasta: $("pasta"), procurar: $("procurar"), imprimePremio: $("imprime_premio"),
-    individuais: $("individuais"), soXml: $("so_xml"), imprime: $("imprime"), progresso: $("progresso"),
+    individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), imprime: $("imprime"), progresso: $("progresso"),
     relPainel: $("relatorio-painel"), relResumo: $("relatorio-resumo"), rel: $("relatorio"), relErro: $("relatorio-erro"),
   };
   let segurados = [];
@@ -162,14 +162,16 @@
         ...lote(), pasta: el.pasta.value,
         selecionados: sel.length === segurados.length ? null : sel.map((s) => s.chave),
         imprime_premio: el.imprimePremio.checked, individuais: el.individuais.checked, so_xml: el.soXml.checked,
+        json_unico: el.jsonUnico.checked,  // RD-26
         faz_tudo_lar: el.fazTudo.checked,  // ADR-06: escolha do operador (pre-marcada pela RN-18)
       };
       const r = await api("/api/incendio/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       el.relResumo.textContent = `${r.emitidos.length} emitidos, ${r.falhas.length} falhas — pasta ${r.pasta}` +
-        (r.consolidado_pdf ? ` — consolidado: ${r.consolidado_pdf}` : "");
+        (r.consolidado_pdf ? ` — consolidado: ${r.consolidado_pdf}` : "") +
+        (r.json_unico ? ` — JSON único: ${r.json_unico}` : "");
       for (const e of r.emitidos) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.pdf || e.json)}${e.colisao ? " (sufixo)" : ""}</td>
+        tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
           <td>${e.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.rel.appendChild(tr);
       }

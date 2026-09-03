@@ -169,6 +169,46 @@ def lote_para_dict(
     }
 
 
+def chave_json_unico(doc: dict) -> str:
+    """RD-26 — chave do certificado no JSON unico: `cpf_cnpj|certificado`."""
+    ch = doc["_origem"]["chave"]
+    return f"{ch['cpf_cnpj']}|{ch['certificado']}"
+
+
+def lote_json_unico(docs: Sequence[dict], lote: ChaveLote, gerado_em: datetime) -> dict:
+    """RD-26 — um JSON para o lote inteiro, PDFs individuais.
+
+    `certificados` e um objeto indexado por `cpf_cnpj|certificado` (RD-22: certificado
+    sozinho nao e unico por fatura). Cada item e o documento completo do certificado,
+    inclusive `_meta` (avisos, faz_tudo_lar) e `arquivo.pdf`, ja validado (RD-15).
+    """
+    if gerado_em.tzinfo is None:
+        raise ValueError("gerado_em deve ter fuso horario (RN-21)")
+    indexados: dict[str, dict] = {}
+    for d in docs:
+        k = chave_json_unico(d)
+        if k in indexados:
+            raise JsonInvalido([f"chave duplicada no lote: {k}"])
+        indexados[k] = d
+    return {
+        "_meta": {
+            "versao_schema": VERSAO_SCHEMA,
+            "gerado_em": gerado_em.isoformat(timespec="seconds"),
+            "gerado_por": f"gerador-certificados/{__version__}",
+            "formato": "json_unico",
+            "chave": "cpf_cnpj|certificado",
+            "quantidade": len(indexados),
+        },
+        "lote": {
+            "administradora": lote.administradora,
+            "apolice": lote.apolice,
+            "seq": lote.seq,
+            "fatura": lote.fatura,
+        },
+        "certificados": indexados,
+    }
+
+
 # ------------------------------------------------------------------ RD-15
 @lru_cache(maxsize=1)
 def _validador() -> Draft202012Validator:

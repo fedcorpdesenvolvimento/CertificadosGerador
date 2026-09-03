@@ -43,6 +43,7 @@ def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
         pasta_saida=Path(args.saida) if args.saida else cfg.pasta_saida,
         exibe_premio=not args.sem_premio,
         faz_tudo_lar=faz_tudo,
+        json_unico=args.json_unico,
         data_competencia=date.fromisoformat(args.competencia) if args.competencia else None,
         modo_conexao="firebird-local",
     )
@@ -124,6 +125,10 @@ def _args_lote(p: argparse.ArgumentParser) -> None:
     p.add_argument("--seq", required=True, type=int)
     p.add_argument("--fatura", required=True, type=int)
     p.add_argument("--sem-premio", action="store_true", help="RF-10: premio nao impresso")
+    p.add_argument(
+        "--json-unico", action="store_true",
+        help="RD-26: um JSON para o lote (chave cpf|certificado); PDFs continuam individuais",
+    )  # fmt: skip
     p.add_argument(
         "--faz-tudo-lar", choices=["sim", "nao"], default=None,
         help="ADR-06: forca o bloco Faz Tudo Lar; sem a opcao vale a derivacao RN-18",

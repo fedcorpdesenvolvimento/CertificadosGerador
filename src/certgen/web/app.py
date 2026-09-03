@@ -197,6 +197,7 @@ class EmissaoIn(BaseModel):
     imprime_premio: bool = False  # CheckBox1 — RF-10
     faz_tudo_lar: bool | None = None  # CheckBox4 — ADR-06: escolha do operador; None = RN-18
     individuais: bool = True  # CheckBox2 — RF-07
+    json_unico: bool = False  # RD-26 — um JSON do lote (chave cpf|certificado), PDFs individuais
     so_xml: bool = False  # CheckBox6 'So XML de Cert.' — aqui: so JSON, sem PDF
     competencia: date | None = None  # RN-19
 
@@ -220,6 +221,7 @@ def api_emitir(
         exibe_premio=req.imprime_premio,
         faz_tudo_lar=req.faz_tudo_lar,
         individuais=req.individuais,
+        json_unico=req.json_unico,
         data_competencia=req.competencia,
         apenas=[c.dominio() for c in req.selecionados] if req.selecionados is not None else None,
         modo_conexao="firebird-local",

@@ -12,7 +12,6 @@ e escrito depois de validar.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 from collections.abc import Callable, Sequence
@@ -34,10 +33,12 @@ from certgen.serialize.json_certificado import (
     JsonInvalido,
     MetaEmissao,
     certificado_para_dict,
-    gravar_json,
+    lote_json_unico,
     lote_para_dict,
     serializar,
+    validar,
 )
+from certgen.serialize.json_certificado import gravar_json as gravar_json_arquivo
 
 RenderizadorPdf = Callable[[Certificado, MetaEmissao, Path], Path]
 
@@ -45,7 +46,7 @@ RenderizadorPdf = Callable[[Certificado, MetaEmissao, Path], Path]
 @dataclass(frozen=True)
 class Emitido:
     chave: ChaveCertificado
-    json_path: Path
+    json_path: Path | None  # None quando o JSON e unico para o lote (RD-26)
     pdf_path: Path | None
     avisos: tuple[str, ...]
     colisao: bool = False
@@ -66,6 +67,7 @@ class Relatorio:
     falhas: list[Falha] = field(default_factory=list)
     consolidado_pdf: Path | None = None  # RF-07 modo consolidado (RN-12)
     consolidado_json: Path | None = None
+    json_unico: Path | None = None  # RD-26 — um JSON para o lote, PDFs individuais
 
     @property
     def total(self) -> int:
@@ -83,7 +85,7 @@ class Relatorio:
             "emitidos": [
                 {
                     "chave": e.chave.para_dict(),
-                    "json": str(e.json_path),
+                    "json": str(e.json_path) if e.json_path else None,
                     "pdf": str(e.pdf_path) if e.pdf_path else None,
                     "avisos": list(e.avisos),
                     "colisao": e.colisao,
@@ -100,6 +102,7 @@ class Relatorio:
             ],
             "consolidado_pdf": str(self.consolidado_pdf) if self.consolidado_pdf else None,
             "consolidado_json": str(self.consolidado_json) if self.consolidado_json else None,
+            "json_unico": str(self.json_unico) if self.json_unico else None,
         }
 
     def resumo(self) -> str:
@@ -111,7 +114,11 @@ class Relatorio:
         for e in self.emitidos:
             av = f"  avisos: {', '.join(e.avisos)}" if e.avisos else ""
             col = "  (colisao: sufixo aplicado)" if e.colisao else ""
-            linhas.append(f"  OK    {e.json_path.name}{col}{av}")
+            caminho = e.pdf_path or e.json_path
+            arquivo = caminho.name if caminho else e.chave.certificado
+            linhas.append(f"  OK    {arquivo}{col}{av}")
+        if self.json_unico:
+            linhas.append(f"  JSON UNICO {self.json_unico}")
         for f in self.falhas:
             cert = f.chave.certificado if f.chave else "?"
             linhas.append(f"  FALHA {cert}: [{f.tipo}] {f.motivo}")
@@ -127,6 +134,7 @@ class OpcoesEmissao:
     exibe_premio: bool = True  # RF-10
     faz_tudo_lar: bool | None = None  # ADR-06 — escolha do operador; None = derivacao RN-18
     individuais: bool = True  # RF-07 — False: um PDF consolidado + um JSON com o array
+    json_unico: bool = False  # RD-26 — PDFs individuais, UM JSON do lote (cpf|certificado)
     data_competencia: date | None = None  # RN-19; padrao: inicio_vig do certificado
     apenas: Sequence[ChaveCertificado] | None = None  # UC-02 selecao parcial
     modo_conexao: str = "firebird-local"
@@ -180,15 +188,39 @@ def emitir_lote(
     ]
 
     if opcoes.individuais:
+        docs: list[dict] = []
         for cert in escolhidos:
             try:
-                relatorio.emitidos.append(_emitir_um(cert, opcoes, renderizar_pdf))
+                emitido, doc = _emitir_um(
+                    cert, opcoes, renderizar_pdf, gravar_json=not opcoes.json_unico
+                )
+                relatorio.emitidos.append(emitido)
+                docs.append(doc)
             except (JsonInvalido, NomeArquivoInvalido, ProdutoIndeterminado, OSError) as exc:
                 relatorio.falhas.append(Falha(cert.chave, str(exc), type(exc).__name__))
+        if opcoes.json_unico and docs:
+            relatorio.json_unico = _gravar_json_unico(docs, escolhidos[0], opcoes)
         return relatorio
 
     _emitir_consolidado(escolhidos, opcoes, renderizar_pdf, relatorio)
     return relatorio
+
+
+def _gravar_json_unico(docs: list[dict], primeiro: Certificado, opcoes: OpcoesEmissao) -> Path:
+    """RD-26 — um JSON para o lote, indexado por `cpf_cnpj|certificado`.
+
+    Cada item ja foi validado contra o schema (RD-15) antes do PDF ser gerado. O
+    arquivo segue o nome RN-12 e vai para a mesma pasta dos PDFs (RN-19).
+    """
+    pasta = opcoes.pasta_saida / _pasta_destino(primeiro, opcoes)
+    lote = primeiro.chave.lote
+    instante = opcoes.agora()
+    nome = nome_consolidado(lote.apolice, lote.seq, lote.fatura, instante, "json")
+    envelope = lote_json_unico(docs, lote, instante)
+    pasta.mkdir(parents=True, exist_ok=True)
+    destino, _ = resolver_colisao(pasta / nome)
+    destino.write_text(serializar(envelope), encoding="utf-8")
+    return destino
 
 
 def _emitir_consolidado(
@@ -226,8 +258,8 @@ def _emitir_consolidado(
                     modo_conexao=opcoes.modo_conexao,
                     agora=lambda: instante,
                 )
-                emitido = _emitir_um(cert, sub, renderizar_pdf)
-                docs.append(json.loads(emitido.json_path.read_text(encoding="utf-8")))
+                emitido, doc = _emitir_um(cert, sub, renderizar_pdf)
+                docs.append(doc)
                 if emitido.pdf_path:
                     pdfs.append(emitido.pdf_path)
                 relatorio.emitidos.append(emitido)
@@ -257,8 +289,16 @@ def _emitir_consolidado(
 
 
 def _emitir_um(
-    cert: Certificado, opcoes: OpcoesEmissao, renderizar_pdf: RenderizadorPdf | None
-) -> Emitido:
+    cert: Certificado,
+    opcoes: OpcoesEmissao,
+    renderizar_pdf: RenderizadorPdf | None,
+    gravar_json: bool = True,
+) -> tuple[Emitido, dict]:
+    """Emite um certificado. Devolve o registro e o documento JSON (ja validado).
+
+    `gravar_json=False` (RD-26): valida mas nao grava o JSON individual — o lote grava
+    um unico arquivo depois. A validacao continua acontecendo ANTES do PDF (RF-16).
+    """
     pasta_rel = _pasta_destino(cert, opcoes)
     pasta = opcoes.pasta_saida / pasta_rel
     base = nome_base_certificado(
@@ -279,12 +319,18 @@ def _emitir_um(
     )
     doc = certificado_para_dict(cert, meta)
     # RD-15 valida antes de qualquer escrita; RF-16: PDF so depois do JSON valido
-    json_path, colidiu = gravar_json(doc, pasta / f"{base}.json")
+    if gravar_json:
+        json_path, colidiu = gravar_json_arquivo(doc, pasta / f"{base}.json")
+    else:
+        validar(doc)
+        json_path, colidiu = None, False
+        pasta.mkdir(parents=True, exist_ok=True)  # o JSON individual e quem criava a pasta
     pdf_path = renderizar_pdf(cert, meta, pasta / meta.nome_pdf) if renderizar_pdf else None
-    return Emitido(
+    emitido = Emitido(
         chave=cert.chave,
         json_path=json_path,
         pdf_path=pdf_path,
-        avisos=tuple(str(a.codigo) for a in cert.todos_avisos()),
+        avisos=tuple(a["codigo"] for a in doc["_meta"]["avisos"]),
         colisao=colidiu,
     )
+    return emitido, doc
