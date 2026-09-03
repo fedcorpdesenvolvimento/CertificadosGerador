@@ -56,6 +56,7 @@ class MetaEmissao:
     exibe_premio: bool  # RF-10
     modo_conexao: str = "firebird-local"  # ADR-01
     link: str | None = None  # RD-25 — preenchido na Fase 7
+    faz_tudo_lar: bool | None = None  # ADR-06 — escolha do operador; None = derivacao RN-18
 
 
 def _data(valor) -> str | None:
@@ -66,7 +67,10 @@ def certificado_para_dict(cert: Certificado, meta: MetaEmissao) -> dict:
     """RD-10 — projecao completa do certificado."""
     if meta.gerado_em.tzinfo is None:
         raise ValueError("gerado_em deve ter fuso horario (RN-21 / RNF-08)")
-    faz_tudo = cert.endosso.faz_tudo_lar
+    faz_tudo = cert.faz_tudo_lar_efetivo(meta.faz_tudo_lar)
+    avisos = cert.todos_avisos()
+    if (extra := cert.aviso_faz_tudo_lar(meta.faz_tudo_lar)) is not None:
+        avisos.append(extra)
     return {
         "_meta": {
             "versao_schema": VERSAO_SCHEMA,
@@ -75,7 +79,7 @@ def certificado_para_dict(cert: Certificado, meta: MetaEmissao) -> dict:
             "template": TEMPLATE,
             "faz_tudo_lar": faz_tudo,
             "modo_conexao": meta.modo_conexao,
-            "avisos": [a.para_dict() for a in cert.todos_avisos()],
+            "avisos": [a.para_dict() for a in avisos],
         },
         "arquivo": {
             "pdf": meta.nome_pdf,

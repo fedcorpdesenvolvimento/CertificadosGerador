@@ -10,7 +10,7 @@
     busca: $("busca"), limpar: $("limpar"),
     listaPainel: $("lista-painel"), todos: $("todos"), contador: $("contador"),
     segurados: $("segurados"), erroLista: $("erro-lista"),
-    emissaoPainel: $("emissao-painel"), pasta: $("pasta"), imprimePremio: $("imprime_premio"),
+    emissaoPainel: $("emissao-painel"), pasta: $("pasta"), procurar: $("procurar"), imprimePremio: $("imprime_premio"),
     individuais: $("individuais"), soXml: $("so_xml"), imprime: $("imprime"), progresso: $("progresso"),
     relPainel: $("relatorio-painel"), relResumo: $("relatorio-resumo"), rel: $("relatorio"), relErro: $("relatorio-erro"),
   };
@@ -65,7 +65,7 @@
   function irPara(estado) {
     // RF-01: cada estado desabilita e limpa tudo o que vem depois
     if (estado <= 0) { opcoes(el.apolice, [], null, null, "—"); el.apolice.disabled = true; }
-    if (estado <= 1) { opcoes(el.fatura, [], null, null, "—"); el.fatura.disabled = true; el.produto.value = ""; el.fazTudo.checked = false; el.locacao.checked = false; }
+    if (estado <= 1) { opcoes(el.fatura, [], null, null, "—"); el.fatura.disabled = true; el.produto.value = ""; el.fazTudo.checked = false; el.fazTudo.disabled = true; el.locacao.checked = false; }
     if (estado <= 2) { el.busca.disabled = true; }
     if (estado <= 3) {
       segurados = []; el.segurados.innerHTML = ""; el.contador.textContent = "Seg.:0";
@@ -125,7 +125,9 @@
       const d = await api(`/api/incendio/segurados?${new URLSearchParams(lote())}`);
       segurados = d.segurados;
       el.produto.value = d.produto ? `${segurados[0].produto} - ${d.produto}` : "";  // RF-13
-      el.fazTudo.checked = d.faz_tudo_lar; el.locacao.checked = d.locacao;
+      el.fazTudo.checked = d.faz_tudo_lar; el.fazTudo.disabled = false;  // ADR-06: pre-marcado, editavel
+      el.fazTudo.dataset.derivado = String(d.faz_tudo_lar);
+      el.locacao.checked = d.locacao;  // RF-13: so derivado
       el.segurados.innerHTML = "";
       segurados.forEach((s, i) => {
         const tr = document.createElement("tr");
@@ -160,6 +162,7 @@
         ...lote(), pasta: el.pasta.value,
         selecionados: sel.length === segurados.length ? null : sel.map((s) => s.chave),
         imprime_premio: el.imprimePremio.checked, individuais: el.individuais.checked, so_xml: el.soXml.checked,
+        faz_tudo_lar: el.fazTudo.checked,  // ADR-06: escolha do operador (pre-marcada pela RN-18)
       };
       const r = await api("/api/incendio/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       el.relResumo.textContent = `${r.emitidos.length} emitidos, ${r.falhas.length} falhas — pasta ${r.pasta}` +
@@ -194,6 +197,14 @@
   el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
+  el.procurar.addEventListener("click", async () => {
+    el.procurar.disabled = true;
+    try {
+      const r = await api("/api/escolher-pasta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ inicial: el.pasta.value }) });
+      if (r.pasta) el.pasta.value = r.pasta;  // null = cancelou
+    } catch (e) { mostrarErro(el.relErro, `Não foi possível abrir a janela de pastas: ${e.message}`); el.relPainel.hidden = false; }
+    finally { el.procurar.disabled = false; }
+  });
   el.limpar.addEventListener("click", () => { el.adm.value = ""; el.vig.value = ""; carregado = { adm: null, vig: null }; mostrarErro(erroData, ""); irPara(0); });
 
   carregarAdministradoras().catch((e) => { mostrarErro(el.erroLista, `Falha ao carregar administradoras: ${e.message}`); el.listaPainel.hidden = false; });

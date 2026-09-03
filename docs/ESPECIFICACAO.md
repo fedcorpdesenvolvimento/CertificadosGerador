@@ -346,7 +346,7 @@ Extraído do `.dfm`. A coluna *Legenda* traz a legenda literal, que o sistema no
 | `CheckListBox1` | — | lista | segurados, todos marcados ao carregar | — |
 | `RxSwitch1` | — | switch | marcar / desmarcar todos | — |
 | `Edit2` | — | edit | contador `Seg.:N` | — |
-| `DirectoryEdit1` | — | path | pasta de destino | `D:\Temporario\CERTINC` |
+| `DirectoryEdit1` | — | path | pasta de destino; na tela nova o botão **Procurar…** abre a janela nativa do Windows (o servidor roda na máquina do operador, `RNF-10`) | `D:\Temporario\CERTINC` |
 | `SpeedButton1` | **Busca Segurados** | botão | carrega o `CheckListBox` | — |
 | `Button1` | **&Imprime** | botão | fluxo manual | — |
 | `Button4` | **Imprime/&Geral** | botão | fluxo em massa | — |
@@ -356,7 +356,7 @@ Extraído do `.dfm`. A coluna *Legenda* traz a legenda literal, que o sistema no
 
 **`RF-12`** — As legendas acima **DEVEM** ser preservadas literalmente na tela nova, incluindo *Imprime Premio* e *Só XML de Cert.*. Renomear controles que o operador usa diariamente é custo sem benefício.
 
-**`RF-13`** — `ComboBox4` (Produto) e `CheckBox4`/`CheckBox5` são **derivados**, nunca entrada. Na tela nova **DEVEM** ser exibidos como somente-leitura, deixando visível a derivação. No legado são editáveis, o que permite ao operador contradizer a regra sem aviso.
+**`RF-13`** — `ComboBox4` (Produto) e `CheckBox5` (Locação) são **derivados**, nunca entrada. *(`CheckBox4` Faz Tudo Lar passou a ser entrada pré-preenchida em 03/09/2026 — ver `RF-13a` em `ADR-06`.)* Na tela nova **DEVEM** ser exibidos como somente-leitura, deixando visível a derivação. No legado são editáveis, o que permite ao operador contradizer a regra sem aviso.
 
 ### 5.2 Máquina de estados da cascata
 
@@ -1131,6 +1131,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `PORTAL_AUSENTE` | `codigo_pedido_port` nulo (`GAP-11`) |
 | `PRODUTO_POR_EXCECAO` | produto resolvido por `RN-03.1` |
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
+| `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18` (`ADR-06`, `RF-13a`) |
 
 Este campo é o que torna visível, em dado estruturado e agregável, tudo o que hoje passa silenciosamente pelo legado. É a contrapartida operacional de `ADR-04`.
 
@@ -1613,6 +1614,8 @@ Registrado na seção `7.3`.
 ### `ADR-06` — Um único layout de referência: o PDF `0_33016330725_0004_13008_380819.pdf`
 **Contexto.** A matriz `7.3` tem cinco `.fr3` e só dois têm PDF de referência (`GAP-09`). Os `.fr3` estão embutidos no `.dfm` ou em um form não entregue.
 **Decisão (usuário, 03/09/2026).** O layout do sistema novo é o do PDF `0_33016330725_0004_13008_380819.pdf` (`frxReportCntRupturaFT`), para **todos** os produtos e apólices. A única variação é o bloco **Assistência Faz Tudo Lar**, que é **opcional**: hoje governado por `RN-18` (`codigo_assist_mondial = '1003'`), e a regra definitiva de opcionalidade será definida pelo negócio depois — por isso a flag `faz_tudo_lar` do `ContextoTemplate` fica isolada e trocar a regra não toca o template. Ajustes de layout serão tratados conforme surgirem.
+**Complemento (usuário, 03/09/2026) — `RF-13a`.** O checkbox **Faz Tudo Lar** da tela deixa de ser somente-leitura: decide se o bloco *Assistência Faz Tudo Lar* é impresso. Vem **pré-marcado** pela derivação `RN-18` e o operador pode alterá-lo antes de *Imprime*. A escolha vale para o lote inteiro, vai ao JSON em `_meta.faz_tudo_lar`, `produto.faz_tudo_lar` e `assistencia.faz_tudo_lar`, e quando divergir da derivação gera o aviso `FAZ_TUDO_LAR_MANUAL` (`RD-23`). Na CLI: `--faz-tudo-lar sim|nao`. **Locação** continua apenas derivada (`RF-13`). O texto do bloco é fixo por enquanto e passará a ser variável (regra a definir).
+
 **Consequências.** `GAP-09` fecha com os textos legais deste PDF (redação A de Incêndio/Raio/Explosão/Perda de Aluguel, Assistência 24h, Faz Tudo Lar, rodapé). Os textos vão ao template **como estão** no PDF, inclusive erros de digitação, até compliance decidir (`GAP-19`). Os PDFs `..._15008_381066` deixam de ser referência de layout e ficam como casos de teste de dados (`RN-03.1`, `DEF-06`, `RD-22`). Os cinco nomes da matriz `7.3` viram apenas rastreabilidade: `_meta.template` passa a ser `"demonstrativo_v1"`, com `_meta.faz_tudo_lar: true|false`. `RNF-01` (fidelidade visual) passa a comparar apenas contra este PDF.
 **Rejeitada.** Reproduzir os cinco `.fr3` — exigiria exportá-los do FastReport e triplicaria o esforço de fidelidade sem valor de negócio declarado.
 

@@ -36,7 +36,8 @@
     </label>
   </div>
   <div class="linha derivados">
-    <label class="check"><input type="checkbox" id="faz_tudo" disabled> Faz Tudo Lar <small>(derivado — RN-18)</small></label>
+    <label class="check" title="Decide se o bloco Assistência Faz Tudo Lar sai no certificado. Vem pré-marcado pela regra atual (código Mondial 1003); pode ser alterado.">
+      <input type="checkbox" id="faz_tudo" disabled> Faz Tudo Lar <small>(pré-marcado pela RN-18; editável)</small></label>
     <label class="check"><input type="checkbox" id="locacao" disabled> Locação <small>(derivado — RN-04)</small></label>
     <button id="busca" class="botao" disabled>Busca Segurados</button>
     <button id="limpar" class="botao secundario">Limpar</button>
@@ -60,6 +61,7 @@
     <label class="cresce">Pasta de destino
       <input type="text" id="pasta" value="{{ pasta_padrao }}">
     </label>
+    <button id="procurar" class="botao" title="Abre a janela do Windows para escolher a pasta">Procurar…</button>
   </div>
   <div class="linha">
     <label class="check"><input type="checkbox" id="imprime_premio"> Imprime Premio</label>

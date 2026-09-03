@@ -248,10 +248,27 @@ class Certificado:
         abrev = self.administradora.abreviacao_normalizada
         return f"{self.numero} {abrev}" if abrev else self.numero
 
-    def contexto_template(self, exibe_premio: bool) -> ContextoTemplate:
+    def faz_tudo_lar_efetivo(self, escolha: bool | None = None) -> bool:
+        """ADR-06 — o bloco Faz Tudo Lar e opcional: a escolha do operador prevalece;
+        sem escolha, vale a derivacao RN-18 (codigo_assist_mondial = '1003')."""
+        return self.endosso.faz_tudo_lar if escolha is None else escolha
+
+    def aviso_faz_tudo_lar(self, escolha: bool | None) -> Aviso | None:
+        """RD-23 — registra quando o operador divergiu da derivacao."""
+        if escolha is None or escolha == self.endosso.faz_tudo_lar:
+            return None
+        return Aviso(
+            CodigoAviso.FAZ_TUDO_LAR_MANUAL,
+            f"operador marcou {escolha}; derivacao RN-18 (mondial="
+            f"{self.endosso.codigo_assist_mondial!r}) indicava {self.endosso.faz_tudo_lar}",
+        )
+
+    def contexto_template(
+        self, exibe_premio: bool, faz_tudo_lar: bool | None = None
+    ) -> ContextoTemplate:
         return ContextoTemplate(
             locacao=self.endosso.locacao,
-            faz_tudo_lar=self.endosso.faz_tudo_lar,
+            faz_tudo_lar=self.faz_tudo_lar_efetivo(faz_tudo_lar),
             produto=self.produto,
             exibe_premio=exibe_premio,
             marca=marca_para_apolice(self.chave.apolice),

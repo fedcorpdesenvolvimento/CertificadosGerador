@@ -195,6 +195,7 @@ class EmissaoIn(BaseModel):
     pasta: str = Field(..., description="pasta de destino (DirectoryEdit1)")
     selecionados: list[ChaveIn] | None = Field(None, description="None = todos (RF-14)")
     imprime_premio: bool = False  # CheckBox1 — RF-10
+    faz_tudo_lar: bool | None = None  # CheckBox4 — ADR-06: escolha do operador; None = RN-18
     individuais: bool = True  # CheckBox2 — RF-07
     so_xml: bool = False  # CheckBox6 'So XML de Cert.' — aqui: so JSON, sem PDF
     competencia: date | None = None  # RN-19
@@ -217,6 +218,7 @@ def api_emitir(
     opcoes = OpcoesEmissao(
         pasta_saida=pasta,
         exibe_premio=req.imprime_premio,
+        faz_tudo_lar=req.faz_tudo_lar,
         individuais=req.individuais,
         data_competencia=req.competencia,
         apenas=[c.dominio() for c in req.selecionados] if req.selecionados is not None else None,
@@ -232,12 +234,50 @@ def api_emitir(
         with RenderizadorPdf() as render:
 
             def renderizar(cert, meta, destino):
-                dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio)
+                dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio, meta.faz_tudo_lar)
                 return render.renderizar_certificado(cert, dados, destino)
 
             return emitir_lote(repo, lote, opcoes, renderizar_pdf=renderizar).para_dict()
     except ErroRenderizacao as exc:
         return _erro(exc, 503)
+
+
+# ------------------------------------------------------------ escolha de pasta
+def _dialogo_pasta(inicial: str | None) -> str | None:
+    """Abre a janela nativa do Windows para escolher pasta. O servidor roda na mesma
+    maquina do operador (RNF-10), entao o dialogo aparece na tela dele. Devolve None
+    se cancelado."""
+    import tkinter
+    from tkinter import filedialog
+
+    raiz = tkinter.Tk()
+    raiz.withdraw()
+    raiz.attributes("-topmost", True)
+    try:
+        escolhida = filedialog.askdirectory(
+            title="Pasta de destino dos certificados",
+            initialdir=inicial if inicial and Path(inicial).is_dir() else None,
+            mustexist=True,
+        )
+    finally:
+        raiz.destroy()
+    return str(Path(escolhida)) if escolhida else None
+
+
+app.state.escolher_pasta = _dialogo_pasta  # testes substituem
+
+
+class PastaIn(BaseModel):
+    inicial: str | None = None
+
+
+@app.post("/api/escolher-pasta")
+def api_escolher_pasta(req: PastaIn, request: Request):
+    try:
+        pasta = request.app.state.escolher_pasta(req.inicial)
+    except Exception as exc:  # tkinter indisponivel, sem sessao grafica etc.
+        return _erro(exc, 501)
+    return {"pasta": pasta}
 
 
 @app.get("/api/saude")

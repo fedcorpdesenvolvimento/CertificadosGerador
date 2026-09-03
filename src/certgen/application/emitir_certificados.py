@@ -125,6 +125,7 @@ class Relatorio:
 class OpcoesEmissao:
     pasta_saida: Path
     exibe_premio: bool = True  # RF-10
+    faz_tudo_lar: bool | None = None  # ADR-06 — escolha do operador; None = derivacao RN-18
     individuais: bool = True  # RF-07 — False: um PDF consolidado + um JSON com o array
     data_competencia: date | None = None  # RN-19; padrao: inicio_vig do certificado
     apenas: Sequence[ChaveCertificado] | None = None  # UC-02 selecao parcial
@@ -219,6 +220,7 @@ def _emitir_consolidado(
                 sub = OpcoesEmissao(
                     pasta_saida=temporaria,
                     exibe_premio=opcoes.exibe_premio,
+                    faz_tudo_lar=opcoes.faz_tudo_lar,
                     individuais=True,
                     data_competencia=opcoes.data_competencia,
                     modo_conexao=opcoes.modo_conexao,
@@ -273,6 +275,7 @@ def _emitir_um(
         pasta_destino=pasta_rel,
         exibe_premio=opcoes.exibe_premio,
         modo_conexao=opcoes.modo_conexao,
+        faz_tudo_lar=opcoes.faz_tudo_lar,
     )
     doc = certificado_para_dict(cert, meta)
     # RD-15 valida antes de qualquer escrita; RF-16: PDF so depois do JSON valido

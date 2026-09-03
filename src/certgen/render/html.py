@@ -40,6 +40,7 @@ class DadosRender:
 
     data_emissao: date  # RN-21
     exibe_premio: bool  # RF-10
+    faz_tudo_lar: bool | None = None  # ADR-06 — escolha do operador; None = derivacao RN-18
 
 
 @lru_cache(maxsize=1)
@@ -69,7 +70,9 @@ def ambiente() -> Environment:
 
 
 def renderizar_html(cert: Certificado, dados: DadosRender) -> str:
-    ctx: ContextoTemplate = cert.contexto_template(exibe_premio=dados.exibe_premio)
+    ctx: ContextoTemplate = cert.contexto_template(
+        exibe_premio=dados.exibe_premio, faz_tudo_lar=dados.faz_tudo_lar
+    )
     imagens = imagens_base64()
     logo_seg = LOGOS_SEGURADORA.get(cert.contrato.cod_seguradora or "")
     por_codigo = {c.codigo: c for c in cert.coberturas}

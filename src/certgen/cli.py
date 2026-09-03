@@ -38,9 +38,11 @@ def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
 
     cfg = Config.do_ambiente()
     lote = ChaveLote(args.administradora, args.apolice, args.seq, args.fatura)
+    faz_tudo = {"sim": True, "nao": False, None: None}[args.faz_tudo_lar]
     opcoes = OpcoesEmissao(
         pasta_saida=Path(args.saida) if args.saida else cfg.pasta_saida,
         exibe_premio=not args.sem_premio,
+        faz_tudo_lar=faz_tudo,
         data_competencia=date.fromisoformat(args.competencia) if args.competencia else None,
         modo_conexao="firebird-local",
     )
@@ -56,7 +58,7 @@ def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
             with RenderizadorPdf() as render:
 
                 def renderizar(cert, meta, destino):
-                    dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio)
+                    dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio, meta.faz_tudo_lar)
                     return render.renderizar_certificado(cert, dados, destino)
 
                 relatorio = emitir_lote(repo, lote, opcoes, renderizar_pdf=renderizar)
@@ -122,6 +124,10 @@ def _args_lote(p: argparse.ArgumentParser) -> None:
     p.add_argument("--seq", required=True, type=int)
     p.add_argument("--fatura", required=True, type=int)
     p.add_argument("--sem-premio", action="store_true", help="RF-10: premio nao impresso")
+    p.add_argument(
+        "--faz-tudo-lar", choices=["sim", "nao"], default=None,
+        help="ADR-06: forca o bloco Faz Tudo Lar; sem a opcao vale a derivacao RN-18",
+    )  # fmt: skip
 
 
 def construir_parser() -> argparse.ArgumentParser:

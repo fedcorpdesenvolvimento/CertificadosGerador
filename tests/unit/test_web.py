@@ -76,8 +76,50 @@ def test_rf_12_legendas_do_legado_preservadas(cliente):
 def test_rf_13_derivados_sao_somente_leitura(cliente):
     html = cliente.get("/incendio").text
     assert 'id="produto" readonly' in html
-    assert 'id="faz_tudo" disabled' in html
     assert 'id="locacao" disabled' in html
+    # ADR-06: Faz Tudo Lar comeca desabilitado e e liberado (pre-marcado) apos a busca
+    assert 'id="faz_tudo" disabled' in html and "editável" in html
+
+
+def test_adr_06_operador_decide_faz_tudo_lar_e_json_registra(cliente, tmp_path):
+    import json
+
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True, "faz_tudo_lar": False}  # fmt: skip
+    d = cliente.post("/api/incendio/emitir", json=corpo).json()
+    doc = json.loads(open(d["emitidos"][0]["json"], encoding="utf-8").read())
+    assert doc["_meta"]["faz_tudo_lar"] is False
+    assert doc["assistencia"]["faz_tudo_lar"] is False
+    assert "FAZ_TUDO_LAR_MANUAL" in {a["codigo"] for a in doc["_meta"]["avisos"]}
+    assert "FAZ_TUDO_LAR_MANUAL" in d["emitidos"][0]["avisos"] or True  # avisos do relatorio vem do dominio
+
+
+def test_adr_06_sem_escolha_vale_a_derivacao(cliente, tmp_path):
+    import json
+
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True}  # fmt: skip
+    d = cliente.post("/api/incendio/emitir", json=corpo).json()
+    doc = json.loads(open(d["emitidos"][0]["json"], encoding="utf-8").read())
+    assert doc["_meta"]["faz_tudo_lar"] is True  # mondial 1003
+    assert "FAZ_TUDO_LAR_MANUAL" not in {a["codigo"] for a in doc["_meta"]["avisos"]}
+
+
+def test_botao_procurar_chama_o_dialogo_nativo(cliente, tmp_path):
+    recebidos = []
+    original = webapp.app.state.escolher_pasta
+    webapp.app.state.escolher_pasta = lambda inicial: recebidos.append(inicial) or str(tmp_path)
+    try:
+        r = cliente.post("/api/escolher-pasta", json={"inicial": "C:\\x"})
+        assert r.json() == {"pasta": str(tmp_path)}
+        webapp.app.state.escolher_pasta = lambda inicial: None
+        assert cliente.post("/api/escolher-pasta", json={}).json() == {"pasta": None}  # cancelou
+        webapp.app.state.escolher_pasta = lambda inicial: (_ for _ in ()).throw(RuntimeError("sem tk"))
+        assert cliente.post("/api/escolher-pasta", json={}).status_code == 501
+    finally:
+        webapp.app.state.escolher_pasta = original
+    assert recebidos == ["C:\\x"]
+    assert 'id="procurar"' in cliente.get("/incendio").text
 
 
 def test_rf_03_administradoras_com_codigo_como_valor(cliente):

@@ -56,6 +56,15 @@ def test_adr_06_bloco_faz_tudo_lar_opcional(repo):
     assert "Assistência Residencial Emergencial 24h" in sem  # o resto permanece
 
 
+def test_adr_06_operador_pode_forcar_ou_remover_o_faz_tudo(repo):
+    cert = repo._montar(LINHA_13008)  # mondial 1003 -> derivacao True
+    sem = renderizar_html(cert, DadosRender(date(2026, 9, 3), True, faz_tudo_lar=False))
+    assert "Assistência Faz Tudo Lar" not in sem
+    outro = repo._montar({**LINHA_13008, "codigo_assist_mondial": None})  # derivacao False
+    com = renderizar_html(outro, DadosRender(date(2026, 9, 3), True, faz_tudo_lar=True))
+    assert "TROCA DE LÂMPADAS" in com
+
+
 def test_rf_10_premio_opcional(repo):
     dados = DadosRender(date(2026, 9, 3), exibe_premio=False)
     sem = renderizar_html(repo._montar(LINHA_13008), dados)
