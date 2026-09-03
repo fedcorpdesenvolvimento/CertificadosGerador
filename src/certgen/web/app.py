@@ -243,3 +243,21 @@ def api_emitir(
 @app.get("/api/saude")
 def saude() -> dict:
     return {"ok": True, "versao": __version__}
+
+
+def _encerrar_processo() -> None:
+    """Botao Sair do menu: encerra o servidor com o mesmo efeito de Ctrl+C (uvicorn desliga
+    graciosamente). Roda meio segundo depois para a resposta chegar ao navegador."""
+    import signal
+    import threading
+
+    threading.Timer(0.5, lambda: signal.raise_signal(signal.SIGINT)).start()
+
+
+app.state.encerrar = _encerrar_processo  # testes substituem por um espiao
+
+
+@app.post("/api/encerrar")
+def api_encerrar(request: Request) -> dict:
+    request.app.state.encerrar()
+    return {"ok": True, "mensagem": "encerrando"}

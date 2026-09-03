@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block titulo %}{{ modulo.titulo }}{% endblock %}
 {% block conteudo %}
-<h1>{{ modulo.titulo }}</h1>
+<div class="linha entre cabecalho-pagina">
+  <h1>{{ modulo.titulo }}</h1>
+  <a class="botao secundario" href="/">◄ Voltar ao menu</a>
+</div>
 <div class="aviso">
   <p>Este módulo ainda não tem especificação. O menu já reserva o lugar dele para que a
   navegação e o padrão de tela sejam os mesmos do <a href="/incendio">CERTIFICADO INCENDIO</a>.</p>

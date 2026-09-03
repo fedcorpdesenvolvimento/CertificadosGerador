@@ -1,20 +1,28 @@
 {% extends "base.html" %}
 {% block titulo %}CERTIFICADO INCENDIO{% endblock %}
 {% block conteudo %}
-<h1>CERTIFICADO INCENDIO</h1>
+<div class="linha entre cabecalho-pagina">
+  <h1>CERTIFICADO INCENDIO</h1>
+  <a class="botao secundario" href="/">◄ Voltar ao menu</a>
+</div>
 
-{# Legendas literais do legado (RF-12). Cascata da secao 5.2; RF-01 invalida os posteriores. #}
+{# Legendas literais do legado (RF-12). Cascata da secao 5.2; RF-01 invalida os posteriores.
+   Datas: o operador digita dd/mm/aaaa (RN-14); a conversao para ISO acontece so na chamada
+   da API (RD-06) — o formato americano nunca aparece na tela. #}
 <section class="painel" id="cascata">
   <div class="linha">
     <label>Administradora
       <select id="administradora" data-estado="S0"><option value="">— selecione —</option></select>
     </label>
     <label>Vigência
-      <input type="date" id="vigencia" title="Filtra segurados_inc.inicio_vig (RN-05)">
+      <input type="text" id="vigencia" class="data" placeholder="dd/mm/aaaa" maxlength="10"
+             inputmode="numeric" title="Início de vigência (segurados_inc.inicio_vig). Formato dd/mm/aaaa">
     </label>
     <label>Emissão:
-      <input type="date" id="emissao" disabled title="Só no fluxo em massa (Fase 6)">
+      <input type="text" id="emissao" class="data" placeholder="dd/mm/aaaa" maxlength="10" disabled
+             title="Só no fluxo em massa (Fase 6)">
     </label>
+    <span id="erro-data" class="erro inline" hidden></span>
   </div>
   <div class="linha">
     <label>Apólice

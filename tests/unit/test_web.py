@@ -155,3 +155,33 @@ def test_rf_07_modo_consolidado_so_json(cliente, tmp_path):
 
 def test_saude(cliente):
     assert cliente.get("/api/saude").json()["ok"] is True
+
+
+def test_botao_sair_chama_o_encerramento(cliente):
+    chamadas = []
+    original = webapp.app.state.encerrar
+    webapp.app.state.encerrar = lambda: chamadas.append(1)
+    try:
+        assert cliente.post("/api/encerrar").json()["ok"] is True
+    finally:
+        webapp.app.state.encerrar = original
+    assert chamadas == [1]
+    assert 'id="sair"' in cliente.get("/").text
+
+
+def test_voltar_ao_menu_nos_submenus(cliente):
+    for rota in ("/incendio", "/prestamista", "/vida"):
+        assert "Voltar ao menu" in cliente.get(rota).text
+
+
+def test_rn_14_datas_da_tela_sao_texto_dd_mm_aaaa(cliente):
+    html = cliente.get("/incendio").text
+    assert 'type="date"' not in html
+    assert 'id="vigencia" class="data" placeholder="dd/mm/aaaa"' in html
+
+
+def test_rd_06_api_recebe_iso_e_filtra(cliente):
+    r = cliente.get("/api/incendio/apolices", params={"administradora": "0000001192", "inicio_vig": "2026-07-01"})
+    assert r.status_code == 200 and len(r.json()) == 2
+    r = cliente.get("/api/incendio/apolices", params={"administradora": "0000001192", "inicio_vig": "01/07/2026"})
+    assert r.status_code == 422  # formato brasileiro nunca chega a API; a tela converte

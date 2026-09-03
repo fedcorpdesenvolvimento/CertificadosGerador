@@ -34,6 +34,32 @@
     }
   };
   const mostrarErro = (onde, msg) => { onde.textContent = msg; onde.hidden = !msg; };
+  const erroData = $("erro-data");
+
+  // ------------------------------------------------------------ datas dd/mm/aaaa
+  // A tela e brasileira (RN-14). ISO (aaaa-mm-dd) so existe na chamada da API (RD-06).
+  function mascararData(input) {
+    const d = input.value.replace(/\D/g, "").slice(0, 8);
+    input.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`
+                : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+  }
+  function dataParaIso(texto) {
+    // "" -> null; invalida -> lanca Error com a mensagem para o operador
+    const t = (texto || "").trim();
+    if (!t) return null;
+    const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) throw new Error(`Data "${t}" incompleta: use dd/mm/aaaa`);
+    const [dia, mes, ano] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const dt = new Date(Date.UTC(ano, mes - 1, dia));
+    if (dt.getUTCFullYear() !== ano || dt.getUTCMonth() !== mes - 1 || dt.getUTCDate() !== dia) {
+      throw new Error(`Data "${t}" inválida`);
+    }
+    return `${m[3]}-${m[2]}-${m[1]}`;
+  }
+  function vigenciaIso() {
+    try { const iso = dataParaIso(el.vig.value); mostrarErro(erroData, ""); return iso; }
+    catch (e) { mostrarErro(erroData, e.message); throw e; }
+  }
 
   // ---------------------------------------------------------------- estados
   function irPara(estado) {
@@ -58,11 +84,18 @@
     const adms = await api("/api/incendio/administradoras");
     opcoes(el.adm, adms, (a) => a.nome, (a) => a.codigo, "— selecione —");  // RF-03
   }
+  // Evita recarregar (e invalidar a cascata — RF-01) quando administradora e vigencia nao mudaram:
+  // o evento `change` da data dispara de novo ao perder o foco mesmo apos o Enter.
+  let carregado = { adm: null, vig: null };
   async function carregarApolices() {
+    const chave = { adm: el.adm.value, vig: el.vig.value.trim() };
+    if (chave.adm === carregado.adm && chave.vig === carregado.vig) return;
+    carregado = chave;
     irPara(0);
     if (!el.adm.value) return;  // RF-15
+    const iso = vigenciaIso();
     const q = new URLSearchParams({ administradora: el.adm.value });
-    if (el.vig.value) q.set("inicio_vig", el.vig.value);
+    if (iso) q.set("inicio_vig", iso);
     const refs = await api(`/api/incendio/apolices?${q}`);
     opcoes(el.apolice, refs, (r) => r.rotulo, (r) => `${r.apolice}|${r.seq}`, "—");  // RN-08 / RN-17
     irPara(1);
@@ -71,8 +104,9 @@
     irPara(1);
     const op = el.apolice.selectedOptions[0];
     if (!el.apolice.value || !op) return;
+    const iso = vigenciaIso();
     const q = new URLSearchParams({ administradora: el.adm.value, apolice: op.dataset.apolice, seq: op.dataset.seq });
-    if (el.vig.value) q.set("inicio_vig", el.vig.value);
+    if (iso) q.set("inicio_vig", iso);
     const faturas = await api(`/api/incendio/faturas?${q}`);
     opcoes(el.fatura, faturas, (f) => String(f), (f) => String(f), "—");
     irPara(2);
@@ -149,15 +183,18 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ------------------------------------------------------------------ eventos
-  el.adm.addEventListener("change", () => carregarApolices().catch((e) => mostrarErro(el.erroLista, e.message)));
-  el.vig.addEventListener("change", () => carregarApolices().catch((e) => mostrarErro(el.erroLista, e.message)));
+  const recarregar = () => carregarApolices().catch((e) => { if (!erroData.textContent) mostrarErro(el.erroLista, e.message); });
+  el.adm.addEventListener("change", recarregar);
+  el.vig.addEventListener("input", () => mascararData(el.vig));
+  el.vig.addEventListener("change", recarregar);   // ao sair do campo ou Enter
+  el.vig.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); recarregar(); } });
   el.apolice.addEventListener("change", () => carregarFaturas().catch((e) => mostrarErro(el.erroLista, e.message)));
   el.fatura.addEventListener("change", escolherFatura);
   el.busca.addEventListener("click", buscarSegurados);
   el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
-  el.limpar.addEventListener("click", () => { el.adm.value = ""; el.vig.value = ""; irPara(0); });
+  el.limpar.addEventListener("click", () => { el.adm.value = ""; el.vig.value = ""; carregado = { adm: null, vig: null }; mostrarErro(erroData, ""); irPara(0); });
 
   carregarAdministradoras().catch((e) => { mostrarErro(el.erroLista, `Falha ao carregar administradoras: ${e.message}`); el.listaPainel.hidden = false; });
   irPara(0);

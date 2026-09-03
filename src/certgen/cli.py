@@ -103,9 +103,15 @@ def _cmd_html(args: argparse.Namespace) -> int:
 
 def _cmd_web(args: argparse.Namespace) -> int:
     """Fase 4 — sobe a tela em 127.0.0.1 (RNF-10: nunca exposta na rede)."""
+    import threading
+    import webbrowser
+
     import uvicorn
 
-    print(f"Gerador de Certificados em http://127.0.0.1:{args.porta}/  (Ctrl+C para encerrar)")
+    url = f"http://127.0.0.1:{args.porta}/"
+    print(f"Gerador de Certificados em {url}  (botao Sair no menu ou Ctrl+C para encerrar)")
+    if not args.sem_navegador:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run("certgen.web.app:app", host="127.0.0.1", port=args.porta, reload=args.reload)
     return 0
 
@@ -141,6 +147,7 @@ def construir_parser() -> argparse.ArgumentParser:
     web = sub.add_parser("web", help="Sobe a tela web em 127.0.0.1 (menu + CERTIFICADO INCENDIO)")
     web.add_argument("--porta", type=int, default=8000)
     web.add_argument("--reload", action="store_true", help="recarrega ao editar o codigo")
+    web.add_argument("--sem-navegador", action="store_true", help="nao abre o navegador ao iniciar")
     web.set_defaults(func=_cmd_web)
 
     ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")
