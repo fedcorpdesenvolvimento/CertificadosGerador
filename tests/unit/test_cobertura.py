@@ -23,16 +23,22 @@ REF_13008 = {
 }
 
 
-def test_rn_01_catalogo_tem_exatamente_12_na_ordem_fixa():
-    assert len(CATALOGO) == 12
+def test_rn_01_catalogo_tem_exatamente_11_na_ordem_fixa():
+    assert len(CATALOGO) == 11
     assert CODIGOS == (
         "INC_PREDIO", "INC_CONTEUDO", "COB_INCENDIO", "ALUGUEL", "RUP_ENCANAMENTO", "RC",
-        "RUP_ENC_TER", "RESP_CIVIL", "DANOS_ELETRICOS", "QUEBRA_VIDRO", "LINHA_BRANCA",
-        "ACIDENTE_PESSOAL",
+        "RUP_ENC_TER", "RESP_CIVIL", "DANOS_ELETRICOS", "QUEBRA_VIDRO", "ACIDENTE_PESSOAL",
     )  # fmt: skip
 
 
-def test_rd_11_montar_devolve_sempre_as_12_mesmo_com_entrada_parcial():
+def test_gap_16_linha_branca_fora_do_catalogo():
+    """Decisao de 03/09/2026: LINHA_BRANCA (flag S/N no banco) nao e cobertura nesta fase."""
+    assert "LINHA_BRANCA" not in CODIGOS
+    with pytest.raises(KeyError):
+        montar_coberturas({"LINHA_BRANCA": "S"})
+
+
+def test_rd_11_montar_devolve_sempre_as_11_mesmo_com_entrada_parcial():
     cobs, _ = montar_coberturas(REF_13008)
     assert [c.codigo for c in cobs] == list(CODIGOS)
 
@@ -80,18 +86,9 @@ def test_rn_02_banco_igual_nao_gera_aviso():
     assert avisos == []
 
 
-def test_gap_16_linha_branca_flag_s_n_falha_alto_ate_decisao():
-    """No banco LINHA_BRANCA e VARCHAR(1) com 'S'/'N'/'0' (03/09/2026), nao valor.
-
-    Enquanto GAP-16 estiver aberto, receber o flag como dinheiro e erro explicito
-    (ADR-04), nunca silenciosamente zero ou nulo.
-    """
-    for flag in ("S", "N"):
-        with pytest.raises(DinheiroInvalido):
-            montar_coberturas({"LINHA_BRANCA": flag})
-    # '0' e numerico e passa como IS zero, nao contratada — comportamento a rever em GAP-16
-    cobs, _ = montar_coberturas({"LINHA_BRANCA": "0"})
-    assert next(c for c in cobs if c.codigo == "LINHA_BRANCA").contratada is False
+def test_rd_05_texto_nao_numerico_em_cobertura_falha_alto():
+    with pytest.raises(DinheiroInvalido):
+        montar_coberturas({"RC": "S"})
 
 
 def test_rn_01_codigo_fora_do_catalogo_falha_alto():

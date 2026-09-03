@@ -1,7 +1,9 @@
-"""RN-01 / RN-02 — Catalogo fechado de 12 coberturas e a cobertura derivada.
+"""RN-01 / RN-02 — Catalogo fechado de 11 coberturas e a cobertura derivada.
 
-RN-01: o PDF omite coberturas com IS nula ou zero; o JSON declara todas as 12,
+RN-01: o PDF omite coberturas com IS nula ou zero; o JSON declara todas as 11,
        sempre nesta ordem, com `contratada: false` quando nao contratada (RD-11).
+GAP-16 (fechado em 03/09/2026): LINHA_BRANCA e flag S/N no banco, nao valor, e o
+       negocio decidiu que nao e necessaria nesta fase. Fora do catalogo.
 RN-02: COB_INCENDIO = COALESCE(inc_conteudo,0) + COALESCE(inc_predio,0), em Decimal,
        recalculada aqui e comparada com o valor do banco (DEF-05).
 
@@ -41,13 +43,11 @@ CATALOGO: tuple[DefinicaoCobertura, ...] = (
     DefinicaoCobertura("RESP_CIVIL", "Responsabilidade Civil", "sicb.resp_civil"),
     DefinicaoCobertura("DANOS_ELETRICOS", "Danos Eletricos", "sicb.danos_eletricos"),
     DefinicaoCobertura("QUEBRA_VIDRO", "Quebra de Vidros", "sicb.quebra_vidro"),
-    DefinicaoCobertura("LINHA_BRANCA", "Linha Branca", "sicb.linha_branca"),
     DefinicaoCobertura("ACIDENTE_PESSOAL", "Acidentes Pessoais", "sicb.acidente_pessoal"),
 )
 CODIGOS: tuple[str, ...] = tuple(d.codigo for d in CATALOGO)
-_POR_CODIGO: dict[str, DefinicaoCobertura] = {d.codigo: d for d in CATALOGO}
 
-assert len(CATALOGO) == 12, "RN-01 fixa exatamente 12 coberturas"
+assert len(CATALOGO) == 11, "RN-01 fixa exatamente 11 coberturas"
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +88,7 @@ def montar_coberturas(
 
     `valores` e indexado pelo codigo da cobertura (exceto COB_INCENDIO, que e
     derivada aqui). Chaves ausentes contam como NULL. Valores passam por
-    `para_dinheiro`, o que tambem absorve LINHA_BRANCA como string (DEF-11).
+    `para_dinheiro`. Codigo fora do catalogo (ex.: LINHA_BRANCA, GAP-16) e erro.
 
     `cob_incendio_banco` e o valor da coluna calculada no SQL; se divergir da
     soma recalculada, gera COB_INCENDIO_DIVERGENTE (RN-02).

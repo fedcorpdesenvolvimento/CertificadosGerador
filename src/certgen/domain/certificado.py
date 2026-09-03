@@ -70,6 +70,7 @@ class Administradora:
     codigo: str
     nome: str
     abreviacao: str | None  # pes.abrev — RD-08
+    possui_portal: bool = False  # pes.possui_portal — QRY-01, fluxo em massa (GAP-12)
 
     @property
     def abreviacao_normalizada(self) -> str | None:

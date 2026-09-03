@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 9 lacunas fechadas, 3 novas (`GAP-16`..`GAP-18`)
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 11 lacunas fechadas, 1 nova aberta (`GAP-18`)
 
 ### Fontes analisados
 
@@ -287,7 +287,7 @@ Projeção comum às consultas `QRY-05a`, `QRY-05b`, `QRY-06`, `QRY-09` e `QRY-1
 | 28 | `sicb.quebra_vidro` | `QUEBRA_VIDRO` | — | `coberturas[]` |
 | 29 | `sicb.rc` | `RC` | COBERTURA RC | `coberturas[]` |
 | 30 | `sicb.danos_eletricos` | `DANOS_ELETRICOS` | — | `coberturas[]` |
-| 31 | `sicb.linha_branca` | `LINHA_BRANCA` | — | `coberturas[]` |
+| 31 | ~~`sicb.linha_branca`~~ | ~~`LINHA_BRANCA`~~ | — | *removido — `GAP-16`* |
 | 32 | `sicb.resp_civil` | `RESP_CIVIL` | — | `coberturas[]` |
 | 33 | `sicb.rup_encanamento` | `RUP_ENCANAMENTO` | COBERTURA RUPTURA DE ENCANAMENTO | `coberturas[]` |
 | 34 | `sicb.rup_enc_ter` | `RUP_ENC_TER` | — | `coberturas[]` |
@@ -301,7 +301,7 @@ Projeção comum às consultas `QRY-05a`, `QRY-05b`, `QRY-06`, `QRY-09` e `QRY-1
 
 ### 4.4 Catálogo de coberturas
 
-**`RN-01`** — Catálogo fechado e ordenado de 12 coberturas. O PDF **DEVE** omitir as de IS nula ou zero; o JSON **DEVE** declará-las com `contratada: false`.
+**`RN-01`** — Catálogo fechado e ordenado de **11** coberturas. *(Eram 12 na v0.2; `LINHA_BRANCA` saiu em 03/09/2026 — é flag `S`/`N`, não valor, e o negócio decidiu que não é necessária nesta fase. Ver `GAP-16`.)* O PDF **DEVE** omitir as de IS nula ou zero; o JSON **DEVE** declará-las com `contratada: false`.
 
 | # | Código | Nome no certificado | Origem | Visto nos PDFs |
 |---|---|---|---|---|
@@ -315,8 +315,7 @@ Projeção comum às consultas `QRY-05a`, `QRY-05b`, `QRY-06`, `QRY-09` e `QRY-1
 | 8 | `RESP_CIVIL` | Responsabilidade Civil | `sicb.resp_civil` | — |
 | 9 | `DANOS_ELETRICOS` | Danos Elétricos | `sicb.danos_eletricos` | — |
 | 10 | `QUEBRA_VIDRO` | Quebra de Vidros | `sicb.quebra_vidro` | — |
-| 11 | `LINHA_BRANCA` | Linha Branca | `sicb.linha_branca` | — |
-| 12 | `ACIDENTE_PESSOAL` | Acidentes Pessoais | `sicb.acidente_pessoal` | — |
+| 11 | `ACIDENTE_PESSOAL` | Acidentes Pessoais | `sicb.acidente_pessoal` | — |
 
 **`RN-02`** — `COB_INCENDIO = COALESCE(inc_conteudo,0) + COALESCE(inc_predio,0)`, em `Decimal`. **DEVE** ser recalculada na aplicação e comparada com o valor do banco; divergência gera aviso. Ver `DEF-05`, que é o defeito mais grave do levantamento.
 
@@ -467,14 +466,14 @@ SELECT pes.nome                                             AS nome_adm,
        en.codigo_assist_mondial, en.cod_cat,
        ss.certificado || ' ' || COALESCE(pes.abrev,'')       AS cod_0800,
        sicb.quebra_vidro, sicb.rc, sicb.danos_eletricos,
-       sicb.linha_branca, sicb.resp_civil, sicb.rup_encanamento,
+       sicb.resp_civil, sicb.rup_encanamento,
        sicb.rup_enc_ter, sicb.acidente_pessoal
 FROM segurados_inc ss
 LEFT JOIN pessoas             pes  ON pes.pessoa = ss.administradora
 LEFT JOIN apolice_seguradora  aps  ON aps.apolice = ss.apolice
                                   AND aps.cod_seguradora = ss.cod_seguradora
 LEFT JOIN endossos            en   ON en.endosso = ss.endosso
-LEFT JOIN segurados_inc_cob_aux sicb ON sicb.fatura = ss.fatura
+LEFT JOIN segurados_inc_cob_aux sicb ON sicb.endosso = ss.endosso          -- GAP-17: PK (ENDOSSO, CERTIFICADO)
                                     AND sicb.certificado = ss.certificado
 WHERE ss.status_seg <> 'C'
   AND ss.cpf_cnpj <> ''
@@ -489,6 +488,8 @@ Diferenças declaradas em relação ao legado:
 2. **`RN-02`** — `COALESCE` em `cob_incendio` (`DEF-05`).
 3. **`RN-20`** — `COALESCE(pes.abrev,'')` no `cod_0800`: sem isso, `abrev` nula torna o **código inteiro nulo** em Firebird, e o campo sai vazio no certificado — não só sem o sufixo.
 4. **`RD-19`** — `cpf_cnpj <> ''` aplicado sempre (`DEF-03`).
+5. **`GAP-17`** — `JOIN` com `segurados_inc_cob_aux` por `(endosso, certificado)`, a PK das duas tabelas, em vez de `(fatura, certificado)`, que se mostrou não único no banco (03/09/2026).
+6. **`GAP-16`** — `linha_branca` não é projetada.
 
 **`RN-06`** — Todas as consultas **DEVEM** usar bind parameters. Concatenação de valores em SQL é proibida.
 
@@ -1073,7 +1074,6 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
     { "codigo": "RESP_CIVIL",      "nome": "Responsabilidade Civil",          "importancia_segurada": null,        "contratada": false },
     { "codigo": "DANOS_ELETRICOS", "nome": "Danos Eletricos",                 "importancia_segurada": null,        "contratada": false },
     { "codigo": "QUEBRA_VIDRO",    "nome": "Quebra de Vidros",                "importancia_segurada": null,        "contratada": false },
-    { "codigo": "LINHA_BRANCA",    "nome": "Linha Branca",                    "importancia_segurada": null,        "contratada": false },
     { "codigo": "ACIDENTE_PESSOAL","nome": "Acidentes Pessoais",              "importancia_segurada": null,        "contratada": false }
   ],
   "premio": {
@@ -1104,7 +1104,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 
 ### 9.2 Regras do schema
 
-**`RD-11`** — O array `coberturas` **DEVE** conter as 12 entradas de `RN-01` **sempre**, inclusive as não contratadas (`contratada: false`, `importancia_segurada: null`). O PDF omite; o JSON declara. O consumidor não precisa conhecer o catálogo para saber que uma cobertura não foi contratada.
+**`RD-11`** — O array `coberturas` **DEVE** conter as 11 entradas de `RN-01` **sempre**, inclusive as não contratadas (`contratada: false`, `importancia_segurada: null`). O PDF omite; o JSON declara. O consumidor não precisa conhecer o catálogo para saber que uma cobertura não foi contratada.
 
 **`RD-12`** — `documento.tipo` **DEVE** ser derivado do comprimento de `cpf_cnpj` após remoção de não-dígitos: 11 → `"CPF"`, 14 → `"CNPJ"`, outro → `"INDEFINIDO"` com aviso em `_meta.avisos`. Necessário porque os templates gravam o campo com e sem máscara (`DEF-08`).
 
@@ -1536,7 +1536,7 @@ Estrutura de pastas, `pyproject.toml`, `.env.example`, `git init`, `CLAUDE.md`, 
 
 ### Fase 2 — JSON *(pré-requisito: Fase 1)*
 `certificado-1.0.schema.json`; `serialize/json_certificado.py`; validação obrigatória antes da escrita.
-**Aceitação:** JSON de certificado real valida; nulos aparecem como `null`; as 12 coberturas sempre presentes; avisos registrados.
+**Aceitação:** JSON de certificado real valida; nulos aparecem como `null`; as 11 coberturas sempre presentes; avisos registrados.
 
 > Esta fase entrega valor isolado antes de qualquer pixel de PDF, e é deliberado: o JSON é o requisito novo e o mais fácil de validar objetivamente. Rodando contra os três certificados de referência, ela já produz o dado estruturado que hoje não existe.
 
@@ -1640,6 +1640,7 @@ Verificações empíricas que alteram requisitos:
 - **`RD-22` confirmado em escala:** 3.061 pares `(fatura, certificado)` repetidos em `segurados_inc` não cancelados. `certificado` não é único por fatura.
 - **`RD-09` — o fan-out existe:** há 1 par `(fatura, certificado)` duplicado em `segurados_inc_cob_aux` e 1 par `(apolice, cod_seguradora)` duplicado em `apolice_seguradora`. Ver `GAP-17` e `GAP-18`.
 - **Os PDFs de referência `..._15008_381066` são da administradora `0000000019`.** Logo `RN-03.1` se aplica a eles: o produto correto é **`0001` RESIDENCIAL**, não `0004`, e a emissão registra `PRODUTO_POR_EXCECAO`. No legado o fluxo manual saiu vazio (`DEF-09`) e o fluxo em massa teria saído `0001`. Os dois registros têm `final_vig = 30/12/1899` (`DEF-06` confirmado) e `codigo_pedido_port` nulo (`GAP-11` confirmado).
+- **A chave real do PDF de referência `..._13008_380819` é `administradora = '0000001192'`, `seq = 1`, `endosso = '01112380819'`, `status_seg = 'R'`.** O exemplo canônico da seção 9.1 traz `0000004691` e `seq = 0`; ambos estão errados e **DEVEM** ser corrigidos junto com o campo `endosso`. A fatura 380819 tem 5 segurados. Verificado em 03/09/2026; o adaptador Firebird reproduz o certificado a partir dessa chave (teste de integração).
 - **`endosso` ≠ `fatura`.** Nos registros acima `endosso = '01112381066'` e `fatura = 381066`. O exemplo canônico da seção 9.1 traz `"endosso": "380819"`, igual à fatura; está errado e **DEVE** ser corrigido quando o certificado real for lido.
 - `ENDOSSOS.COD_CAT` assume `1`..`7`; `RN-04` (`{3,4}`) continua válida. `CODIGO_ASSIST_MONDIAL` assume `NULL`, `''`, `0`, `1000`, `1001`, `1002`, `1003`; `RN-18` continua válida.
 - `GAP-12`: só 70 de 6.902 pessoas ativas têm `possui_portal = 'S'`. O filtro, se aplicado, reduz drasticamente o fluxo em massa. Decisão de negócio continua pendente.
@@ -1648,11 +1649,11 @@ Verificações empíricas que alteram requisitos:
 
 | ID | Lacuna | Bloqueia | Como fechar |
 |---|---|---|---|
-| `GAP-16` | `LINHA_BRANCA` é flag `S`/`N`/`0`, não valor. O que o certificado imprime quando `S`? Qual é a IS? Deve sair do catálogo `RN-01` ou virar cobertura sem valor? | `RN-01`, `RD-11`, Fase 2 | Abrir o `.fr3` ou perguntar ao negócio. Até lá o domínio **falha alto** ao receber `S`/`N` como dinheiro (comportamento atual de `para_dinheiro`). |
-| `GAP-17` | O `JOIN` com `segurados_inc_cob_aux` deve passar a usar `(endosso, certificado)`, que é a PK das duas tabelas, em vez de `(fatura, certificado)`? | `QRY canônica`, `RD-09` | Confirmar que `segurados_inc.endosso = segurados_inc_cob_aux.endosso` para os pares existentes. Proposta: sim, e manter `RD-09` como rede de segurança. |
+| `GAP-16` | ~~`LINHA_BRANCA` é flag `S`/`N`/`0`, não valor.~~ **Fechado em 03/09/2026 (decisão do negócio):** o campo não é necessário nesta fase. Sai do catálogo `RN-01` (11 coberturas), da projeção da consulta canônica e do JSON. Reabrir se o layout precisar dele. | — | — |
+| `GAP-17` | ~~O `JOIN` com `segurados_inc_cob_aux` deve usar `(endosso, certificado)`?~~ **Fechado em 03/09/2026 (aprovado):** a consulta canônica passa a fazer o `JOIN` pela PK `(endosso, certificado)`. `RD-09` permanece como rede de segurança. | — | — |
 | `GAP-18` | `apolice_seguradora` tem um par `(apolice, cod_seguradora)` duplicado; o `JOIN` do legado pode dobrar linhas para essa apólice | `QRY canônica`, `RD-09` | Identificar o par, decidir qual `CODIGO` vale ou corrigir o dado. |
 
-**Próximo passo imediato:** `GAP-16` e `GAP-17`, ambos decidíveis em minutos com o negócio, e desbloqueiam a consulta canônica em `queries.sql`.
+**Próximo passo imediato:** `GAP-18` (par duplicado em `apolice_seguradora`) e `GAP-09`/`GAP-13`, que bloqueiam a Fase 3.
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 
