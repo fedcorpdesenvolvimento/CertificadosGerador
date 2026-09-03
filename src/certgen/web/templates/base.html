@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Gerador de Certificados{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topo">
+  <a class="marca" href="/">Gerador de Certificados</a>
+  <nav>
+    {% for m in modulos %}
+    <a href="/{{ m.slug }}" class="{{ 'ativo' if m.ativo else 'inativo' }}">{{ m.titulo }}</a>
+    {% endfor %}
+  </nav>
+  <span class="versao">v{{ versao }}</span>
+</header>
+<main>
+{% block conteudo %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

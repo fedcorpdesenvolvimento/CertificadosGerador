@@ -59,8 +59,16 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Testes: `pytest`
 - Lint: `ruff check .`
 - Verificar Firebird: `python -m certgen.cli check-conexao`
-- Servidor: `uvicorn certgen.web.app:app --reload --host 127.0.0.1`
+- Tela web: `python -m certgen.cli web` (127.0.0.1:8000; `--reload` em desenvolvimento)
+- Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
 - CLI: `python -m certgen.cli --help`
+
+## Menu de modulos (ADR-07)
+
+A tela abre num menu com CERTIFICADO INCENDIO (implementado), CERTIFICADO
+PRESTAMISTA/ALUG e CERTIFICADO VIDA (sem especificacao — GAP-21/22). Nao
+implementar os dois ultimos por suposicao; cada um exige a mesma analise
+feita para o Incendio.
 
 ## Legado
 

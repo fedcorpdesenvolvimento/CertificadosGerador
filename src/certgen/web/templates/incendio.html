@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}CERTIFICADO INCENDIO{% endblock %}
+{% block conteudo %}
+<h1>CERTIFICADO INCENDIO</h1>
+
+{# Legendas literais do legado (RF-12). Cascata da secao 5.2; RF-01 invalida os posteriores. #}
+<section class="painel" id="cascata">
+  <div class="linha">
+    <label>Administradora
+      <select id="administradora" data-estado="S0"><option value="">— selecione —</option></select>
+    </label>
+    <label>Vigência
+      <input type="date" id="vigencia" title="Filtra segurados_inc.inicio_vig (RN-05)">
+    </label>
+    <label>Emissão:
+      <input type="date" id="emissao" disabled title="Só no fluxo em massa (Fase 6)">
+    </label>
+  </div>
+  <div class="linha">
+    <label>Apólice
+      <select id="apolice" disabled><option value="">—</option></select>
+    </label>
+    <label>Fatura
+      <select id="fatura" disabled><option value="">—</option></select>
+    </label>
+    <label>Produto
+      <input type="text" id="produto" readonly title="Derivado da apólice (RN-03) — somente leitura (RF-13)">
+    </label>
+  </div>
+  <div class="linha derivados">
+    <label class="check"><input type="checkbox" id="faz_tudo" disabled> Faz Tudo Lar <small>(derivado — RN-18)</small></label>
+    <label class="check"><input type="checkbox" id="locacao" disabled> Locação <small>(derivado — RN-04)</small></label>
+    <button id="busca" class="botao" disabled>Busca Segurados</button>
+    <button id="limpar" class="botao secundario">Limpar</button>
+  </div>
+</section>
+
+<section class="painel" id="lista-painel" hidden>
+  <div class="linha entre">
+    <label class="check"><input type="checkbox" id="todos" checked> marcar / desmarcar todos</label>
+    <span id="contador" class="contador">Seg.:0</span>
+  </div>
+  <div id="erro-lista" class="erro" hidden></div>
+  <table class="lista">
+    <thead><tr><th></th><th>Certificado</th><th>Portal</th><th>Documento</th><th>Nome</th><th>Endereço</th><th>Unidade</th><th>Avisos</th></tr></thead>
+    <tbody id="segurados"></tbody>
+  </table>
+</section>
+
+<section class="painel" id="emissao-painel" hidden>
+  <div class="linha">
+    <label class="cresce">Pasta de destino
+      <input type="text" id="pasta" value="{{ pasta_padrao }}">
+    </label>
+  </div>
+  <div class="linha">
+    <label class="check"><input type="checkbox" id="imprime_premio"> Imprime Premio</label>
+    <label class="check"><input type="checkbox" id="individuais" checked> Individuais</label>
+    <label class="check"><input type="checkbox" id="so_xml"> Só XML de Cert. <small>(gera só o JSON, sem PDF)</small></label>
+    <label class="check"><input type="checkbox" id="upload_aws" disabled> Upload AWS <small>(Fase 7)</small></label>
+  </div>
+  <div class="linha">
+    <button id="imprime" class="botao primario" disabled>Imprime</button>
+    <button id="imprime_geral" class="botao" disabled title="Fluxo em massa — Fase 6">Imprime/Geral</button>
+    <progress id="progresso" hidden></progress>
+  </div>
+</section>
+
+<section class="painel" id="relatorio-painel" hidden>
+  <h2>Relatório da emissão</h2>
+  <p id="relatorio-resumo"></p>
+  <div id="relatorio-erro" class="erro" hidden></div>
+  <table class="lista">
+    <thead><tr><th>Situação</th><th>Certificado</th><th>Arquivo</th><th>Avisos / motivo</th></tr></thead>
+    <tbody id="relatorio"></tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/incendio.js"></script>{% endblock %}

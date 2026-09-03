@@ -101,6 +101,15 @@ def _cmd_html(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_web(args: argparse.Namespace) -> int:
+    """Fase 4 — sobe a tela em 127.0.0.1 (RNF-10: nunca exposta na rede)."""
+    import uvicorn
+
+    print(f"Gerador de Certificados em http://127.0.0.1:{args.porta}/  (Ctrl+C para encerrar)")
+    uvicorn.run("certgen.web.app:app", host="127.0.0.1", port=args.porta, reload=args.reload)
+    return 0
+
+
 def _args_lote(p: argparse.ArgumentParser) -> None:
     p.add_argument("--administradora", required=True, help="codigo pessoas.pessoa, ex. 0000001192")
     p.add_argument("--apolice", required=True, help="ex. 13008")
@@ -128,6 +137,11 @@ def construir_parser() -> argparse.ArgumentParser:
             "--competencia", help="data ISO para a pasta {adm}/{MMYYYY}; padrao inicio_vig"
         )
         em.set_defaults(func=func)
+
+    web = sub.add_parser("web", help="Sobe a tela web em 127.0.0.1 (menu + CERTIFICADO INCENDIO)")
+    web.add_argument("--porta", type=int, default=8000)
+    web.add_argument("--reload", action="store_true", help="recarrega ao editar o codigo")
+    web.set_defaults(func=_cmd_web)
 
     ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")
     _args_lote(ht)

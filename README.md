@@ -26,6 +26,9 @@ Para a Fase 3 (PDF) será necessário `playwright install chromium`.
 pytest                              # suite de testes (integração pula sem .env)
 python -m certgen.cli check-conexao  # SELECT 1 no Firebird (Fase 0)
 
+# Tela web (Fase 4): menu com CERTIFICADO INCENDIO / PRESTAMISTA-ALUG / VIDA
+python -m certgen.cli web            # abre em http://127.0.0.1:8000/
+
 # PDF + JSON de todos os certificados de uma fatura (Fases 2 e 3)
 python -m certgen.cli emitir --administradora 0000001192 --apolice 13008 --seq 1 --fatura 380819 --saida C:\certificados
 
@@ -48,6 +51,7 @@ O PDF exige o Chromium do Playwright: `python -m playwright install chromium` (u
 | 1 | Domínio + consultas + adaptador Firebird | feita |
 | 2 | JSON (schema, serializador, `emitir-json`) | feita |
 | 3 | PDF (layout único, ADR-06, `emitir`) | feita; diff de imagem automatizado pendente |
+| 4 | Tela web (`web`): menu de 3 módulos (ADR-07) + cascata do Incêndio | feita; Prestamista e Vida aguardam especificação |
 | 4 | Tela web | pendente |
 | 5 | Adaptador de API | pendente |
 | 6 | Emissão em massa | pendente |

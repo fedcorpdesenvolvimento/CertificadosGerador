@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block titulo %}{{ modulo.titulo }}{% endblock %}
+{% block conteudo %}
+<h1>{{ modulo.titulo }}</h1>
+<div class="aviso">
+  <p>Este módulo ainda não tem especificação. O menu já reserva o lugar dele para que a
+  navegação e o padrão de tela sejam os mesmos do <a href="/incendio">CERTIFICADO INCENDIO</a>.</p>
+  <p>Para começar, precisamos do mesmo que foi feito para o Incêndio: o fonte ou a tela do
+  sistema atual, um ou mais PDFs de referência e as consultas ao banco.</p>
+</div>
+<p><a class="botao" href="/">Voltar ao menu</a></p>
+{% endblock %}

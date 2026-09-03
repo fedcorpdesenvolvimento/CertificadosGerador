@@ -40,6 +40,7 @@ where = ["src"]
 "certgen.config" = ["*.toml"]
 "certgen.adapters.firebird" = ["*.sql"]
 "certgen.render.templates" = ["*.j2", "*.css", "img/*"]
+"certgen.web" = ["templates/*.html", "static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -56,3 +57,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Depends()/Query() em defaults e o idioma do FastAPI
+"src/certgen/web/app.py" = ["B008"]

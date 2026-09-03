@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.2 — 2026-09-03
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-20` (logotipos de seguradoras)
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-20` (logotipos de seguradoras), `GAP-21`/`GAP-22` (módulos Prestamista e Vida)
 
 ### Fontes analisados
 
@@ -1561,6 +1561,8 @@ Template único condicional (`ADR-05`); filtros de formatação (`RN-14`); `rend
 FastAPI com os endpoints da cascata; página única com a máquina de estados de `5.2`; destino, opções, progresso e relatório final.
 **Aceitação:** um operador emite uma fatura completa sem linha de comando, e a cascata invalida corretamente (`RF-01`).
 
+> **Estado em 03/09/2026:** entregue. `certgen web` sobe FastAPI em `127.0.0.1` (`RNF-10`) com o menu de `ADR-07` e a página `/incendio`: cascata de `5.2` com invalidação (`RF-01`), *Imprime* só em S4 (`RF-02`), administradora por código (`RF-03`), marcar/desmarcar e contador `Seg.:N` (`RF-04`), colunas de `RF-05`, pasta validada antes (`RF-06`), *Individuais* com modo consolidado gravado (`RF-07`, `RF-08`, `DEF-15` corrigido), relatório emitidos/falhas (`RF-09`), *Imprime Premio* (`RF-10`), legendas literais (`RF-12`), Produto/Faz Tudo Lar/Locação somente-leitura (`RF-13`), todos marcados ao carregar (`RF-14`), chave estruturada nos itens (`RN-17`). *Só XML de Cert.* passa a significar *só JSON, sem PDF*. *Emissão:*, *Imprime/Geral* e *Upload AWS* aparecem desabilitados até as Fases 6 e 7. Sem autenticação (fora de escopo, `1.3`).
+
 ### Fase 5 — Adaptador de API *(pré-requisito: API disponível)*
 `adapters/api/repositorio.py`; chave `CERTGEN_REPOSITORIO=firebird|api`; a suíte de domínio roda idêntica nos dois.
 **Aceitação:** trocar a variável muda a origem sem alterar PDF nem JSON.
@@ -1602,6 +1604,11 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 
 ### `ADR-05` — Um template condicional em vez de cinco arquivos
 Registrado na seção `7.3`.
+
+### `ADR-07` — Menu com três módulos de certificado
+**Contexto.** Decisão do usuário em 03/09/2026: a tela deve ser o ponto de entrada para mais de um tipo de certificado.
+**Decisão.** A aplicação web abre num **menu** com três opções: **CERTIFICADO INCENDIO** (este sistema, `/incendio`), **CERTIFICADO PRESTAMISTA/ALUG** (`/prestamista`) e **CERTIFICADO VIDA** (`/vida`). Os dois últimos não têm especificação e são exibidos como *Em preparação* (`GAP-21`, `GAP-22`). Cada módulo futuro entra como pacote próprio (`domain/`, `adapters/`, `render/`) sob o mesmo menu, o mesmo padrão de tela e a mesma porta `RepositorioCertificados`, quando fizer sentido.
+**Consequências.** A navegação e o padrão visual ficam definidos antes dos módulos existirem; o Incêndio serve de modelo. Custo: dois cartões sem função até que as especificações cheguem.
 
 ### `ADR-06` — Um único layout de referência: o PDF `0_33016330725_0004_13008_380819.pdf`
 **Contexto.** A matriz `7.3` tem cinco `.fr3` e só dois têm PDF de referência (`GAP-09`). Os `.fr3` estão embutidos no `.dfm` ou em um form não entregue.
@@ -1670,6 +1677,8 @@ Verificações empíricas que alteram requisitos:
 |---|---|---|---|
 | `GAP-16` | ~~`LINHA_BRANCA` é flag `S`/`N`/`0`, não valor.~~ **Fechado em 03/09/2026 (decisão do negócio):** o campo não é necessário nesta fase. Sai do catálogo `RN-01` (11 coberturas), da projeção da consulta canônica e do JSON. Reabrir se o layout precisar dele. | — | — |
 | `GAP-17` | ~~O `JOIN` com `segurados_inc_cob_aux` deve usar `(endosso, certificado)`?~~ **Fechado em 03/09/2026 (aprovado):** a consulta canônica passa a fazer o `JOIN` pela PK `(endosso, certificado)`. `RD-09` permanece como rede de segurança. | — | — |
+| `GAP-21` | **CERTIFICADO PRESTAMISTA/ALUG** — módulo do menu (`ADR-07`) sem especificação. | Módulo Prestamista | Fonte/tela do sistema atual, PDFs de referência e consultas, como foi feito para o Incêndio. |
+| `GAP-22` | **CERTIFICADO VIDA** — idem. | Módulo Vida | idem |
 | `GAP-20` | **Logotipo da seguradora** na caixa do bloco Seguro Incêndio: só o da Bradesco (`cod_seguradora = 0000000104`) existe, extraído do PDF de referência. A `15008` é da seguradora `0000000109` e sairia com a caixa vazia. | Fase 3, apólices de outras seguradoras | O negócio fornece a imagem de cada seguradora; o mapa é `LOGOS_SEGURADORA` em `render/html.py`. |
 | `GAP-18` | ~~`apolice_seguradora` tem um par duplicado~~ **Fechado em 03/09/2026:** o par é a apólice `236` / seguradora `0000000003` (`CODIGO` 18 e 19, mesmos valores). Não é apólice de certificado (`RN-03.2`); `RD-09` cobre o caso se aparecer. Sem ação. | — | — |
 
@@ -1707,7 +1716,7 @@ Regras derivadas das decisões de 03/09/2026:
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
 - **`RN-26` — SUC.** `apolices.sucursal`, projetado pela consulta canônica via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, normalizado para maiúsculas e sem espaços. Valor que não seja UF de 2 letras gera aviso `SUCURSAL_INVALIDA` (`RD-23`) e é impresso como veio. JSON: `contrato.sucursal`.
 
-**`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** Fases 2 e 3 entregues em 03/09/2026 (`certgen emitir`). **Próximo passo imediato:** Fase 4 (tela web) e a regra definitiva de opcionalidade do Faz Tudo Lar (`ADR-06`).
+**`GAP-13` fechado. `GAP-09` fechado (`ADR-06`).** Fases 2, 3 e 4 entregues em 03/09/2026 (`certgen emitir`, `certgen web`). **Próximo passo imediato:** testes de uso pelo operador na tela, a regra definitiva de opcionalidade do Faz Tudo Lar (`ADR-06`) e as especificações dos módulos Prestamista e Vida (`GAP-21`, `GAP-22`).
 
 ~~**Próximo passo imediato:** `GAP-03`.~~ O DDL fecha `GAP-15`, dá tipos reais a todo o dicionário de dados e permite confirmar se o `JOIN` de `segurados_inc_cob_aux` por `(fatura, certificado)` pode multiplicar linhas — questão que hoje só se resolve com `RD-09`.
 

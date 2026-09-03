@@ -1,0 +1,157 @@
+# ruff: noqa: E501
+"""Fase 4 — API da tela com repositorio falso (sem banco, sem Chromium)."""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from fastapi.testclient import TestClient
+
+from certgen.adapters.firebird.repositorio import RepositorioFirebird
+from certgen.application.ports import CertificadoNaoEncontrado
+from certgen.domain.certificado import Administradora, ApoliceRef, ContextoEndosso
+from certgen.web import app as webapp
+from tests.unit.test_repositorio_mapeamento import LINHA_13008
+
+LINHA_B = {**LINHA_13008, "certificado": "CF1DI/AP.701", "documento_seg": "05554363733", "beneficiario": "OUTRA PESSOA"}
+
+
+class RepoFalso:
+    def __init__(self):
+        self._m = RepositorioFirebird()
+        self.linhas = [LINHA_13008, LINHA_B]
+
+    def listar_administradoras(self):
+        return [
+            Administradora("0000001192", "IMODATA ADM", None),
+            Administradora("0000000019", "PROTEST", "19PAEL", possui_portal=True),
+        ]
+
+    def listar_apolices(self, administradora, inicio_vig):
+        assert administradora
+        return [ApoliceRef("13008", 1, date(2026, 7, 1)), ApoliceRef("13008", 2, None)]
+
+    def listar_faturas(self, administradora, apolice, seq, inicio_vig):
+        return [380819, 380820] if seq == 1 else []
+
+    def listar_segurados(self, lote):
+        return [self._m._montar(dict(li, seq=lote.seq)) for li in self.linhas]
+
+    def obter_certificado(self, chave):
+        raise CertificadoNaoEncontrado(chave)
+
+    def obter_contexto_endosso(self, fatura):
+        return ContextoEndosso("x", None, "1003")
+
+
+@pytest.fixture
+def cliente():
+    webapp.app.dependency_overrides[webapp.get_repositorio] = lambda: RepoFalso()
+    with TestClient(webapp.app) as c:
+        yield c
+    webapp.app.dependency_overrides.clear()
+
+
+def test_menu_tem_os_tres_modulos(cliente):
+    html = cliente.get("/").text
+    for titulo in ("CERTIFICADO INCENDIO", "CERTIFICADO PRESTAMISTA/ALUG", "CERTIFICADO VIDA"):
+        assert titulo in html
+    assert cliente.get("/incendio").status_code == 200
+    assert "ainda não tem especificação" in cliente.get("/prestamista").text
+    assert "CERTIFICADO VIDA" in cliente.get("/vida").text
+    assert "Em preparação" in html  # etiqueta dos dois modulos no menu
+
+
+def test_rf_12_legendas_do_legado_preservadas(cliente):
+    html = cliente.get("/incendio").text
+    for legenda in (
+        "Administradora", "Vigência", "Emissão:", "Apólice", "Fatura", "Produto",
+        "Imprime Premio", "Individuais", "Upload AWS", "Faz Tudo Lar", "Locação",
+        "Só XML de Cert.", "Busca Segurados", "Imprime", "Imprime/Geral",
+    ):
+        assert legenda in html, legenda
+
+
+def test_rf_13_derivados_sao_somente_leitura(cliente):
+    html = cliente.get("/incendio").text
+    assert 'id="produto" readonly' in html
+    assert 'id="faz_tudo" disabled' in html
+    assert 'id="locacao" disabled' in html
+
+
+def test_rf_03_administradoras_com_codigo_como_valor(cliente):
+    r = cliente.get("/api/incendio/administradoras").json()
+    assert r[0] == {"codigo": "0000001192", "nome": "IMODATA ADM", "abrev": None, "possui_portal": False}
+
+
+def test_rn_08_rn_17_apolices_com_rotulo_e_chave_estruturada(cliente):
+    r = cliente.get("/api/incendio/apolices", params={"administradora": "0000001192"}).json()
+    assert r == [
+        {"apolice": "13008", "seq": 1, "rotulo": "13008.1"},
+        {"apolice": "13008", "seq": 2, "rotulo": "13008.2"},
+    ]
+
+
+def test_rf_15_administradora_vazia_bloqueia_apolices(cliente):
+    r = cliente.get("/api/incendio/apolices", params={"administradora": ""})
+    assert r.status_code == 400
+    assert "RF-15" in r.json()["erro"]
+
+
+def test_qry_04_faturas(cliente):
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1}
+    assert cliente.get("/api/incendio/faturas", params=q).json() == [380819, 380820]
+
+
+def test_rf_05_rf_13_segurados_com_dados_e_derivados(cliente):
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819}
+    r = cliente.get("/api/incendio/segurados", params=q).json()
+    assert r["quantidade"] == 2
+    assert r["produto"] == "RUPTURA" and r["faz_tudo_lar"] is True and r["locacao"] is False
+    s = r["segurados"][0]
+    assert s["certificado"] == "CF1DI/AP.602"
+    assert s["documento"] == "330.163.307-25"
+    assert s["chave"]["cpf_cnpj"] == "33016330725"
+    assert set(s) >= {"portal", "nome", "endereco", "unidade", "avisos"}
+
+
+def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path / "nao-existe"), "so_xml": True}  # fmt: skip
+    r = cliente.post("/api/incendio/emitir", json=corpo)
+    assert r.status_code == 400
+    assert "nao existe" in r.json()["erro"]
+
+
+def test_uc_01_emitir_so_json_todos(cliente, tmp_path):
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True}  # fmt: skip
+    r = cliente.post("/api/incendio/emitir", json=corpo)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert len(d["emitidos"]) == 2 and d["falhas"] == []
+    assert all(e["pdf"] is None for e in d["emitidos"])
+    assert (tmp_path / "0000001192" / "072026").is_dir()
+
+
+def test_uc_02_selecao_parcial(cliente, tmp_path):
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819}
+    seg = cliente.get("/api/incendio/segurados", params=q).json()["segurados"][1]
+    corpo = {**q, "pasta": str(tmp_path), "so_xml": True, "selecionados": [seg["chave"]]}
+    d = cliente.post("/api/incendio/emitir", json=corpo).json()
+    assert [e["chave"]["certificado"] for e in d["emitidos"]] == ["CF1DI/AP.701"]
+
+
+def test_rf_07_modo_consolidado_so_json(cliente, tmp_path):
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True, "individuais": False}  # fmt: skip
+    d = cliente.post("/api/incendio/emitir", json=corpo).json()
+    assert d["consolidado_json"] and d["consolidado_json"].endswith(".json")
+    assert "certificados_13008_1_380819_" in d["consolidado_json"]
+    pasta = tmp_path / "0000001192" / "072026"
+    assert [p.name for p in pasta.iterdir()] == [d["consolidado_json"].rsplit("\\", 1)[-1].rsplit("/", 1)[-1]]
+
+
+def test_saude(cliente):
+    assert cliente.get("/api/saude").json()["ok"] is True

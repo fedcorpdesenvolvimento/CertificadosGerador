@@ -114,7 +114,8 @@ class Config:
             firebird=ConfigFirebird.do_ambiente() if repositorio == "firebird" else None,
             api_base_url=os.getenv("CERTGEN_API_BASE_URL", ""),
             api_token=os.getenv("CERTGEN_API_TOKEN", ""),
-            pasta_saida=Path(os.getenv("CERTGEN_PASTA_SAIDA", "saida")),
+            # absoluta, para a tela mostrar o destino real (RF-06)
+            pasta_saida=Path(os.getenv("CERTGEN_PASTA_SAIDA", "saida")).expanduser().resolve(),
             apolices_massa=apolices,
             susep_corretora=os.getenv("CERTGEN_SUSEP_CORRETORA", "00000202049583").strip(),
         )
