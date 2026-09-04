@@ -156,11 +156,12 @@ def api_administradoras(repo: RepositorioCertificados = Depends(get_repositorio)
 def api_apolices(
     administradora: str = Query(""),
     inicio_vig: date | None = Query(None),
+    data_fat: date | None = Query(None),
     repo: RepositorioCertificados = Depends(get_repositorio),
 ):
-    """QRY-03 — rotulo RN-08, chave estruturada RN-17."""
+    """QRY-03 — rotulo RN-08, chave estruturada RN-17. data_fat: RN-05a (Emissao:)."""
     try:
-        refs = Cascata(repo).apolices(administradora, inicio_vig)
+        refs = Cascata(repo).apolices(administradora, inicio_vig, data_fat)
     except ValueError as exc:
         return _erro(exc)
     return [{"apolice": r.apolice, "seq": r.seq, "rotulo": rotulo_apolice(r)} for r in refs]
@@ -172,11 +173,12 @@ def api_faturas(
     apolice: str,
     seq: int,
     inicio_vig: date | None = Query(None),
+    data_fat: date | None = Query(None),
     repo: RepositorioCertificados = Depends(get_repositorio),
 ):
-    """QRY-04"""
+    """QRY-04. data_fat: RN-05a — data de emissao da fatura (faturas.data_fat)."""
     try:
-        return Cascata(repo).faturas(administradora, apolice, seq, inicio_vig)
+        return Cascata(repo).faturas(administradora, apolice, seq, inicio_vig, data_fat)
     except ValueError as exc:
         return _erro(exc)
 

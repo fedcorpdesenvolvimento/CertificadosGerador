@@ -5,7 +5,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const el = {
-    adm: $("administradora"), vig: $("vigencia"), apolice: $("apolice"), fatura: $("fatura"),
+    adm: $("administradora"), vig: $("vigencia"), emissao: $("emissao"), apolice: $("apolice"), fatura: $("fatura"),
     produto: $("produto"), fazTudo: $("faz_tudo"), locacao: $("locacao"),
     busca: $("busca"), limpar: $("limpar"),
     listaPainel: $("lista-painel"), todos: $("todos"), contador: $("contador"),
@@ -60,6 +60,15 @@
     try { const iso = dataParaIso(el.vig.value); mostrarErro(erroData, ""); return iso; }
     catch (e) { mostrarErro(erroData, e.message); throw e; }
   }
+  function emissaoIso() {  // RN-05a — faturas.data_fat
+    try { const iso = dataParaIso(el.emissao.value); mostrarErro(erroData, ""); return iso; }
+    catch (e) { mostrarErro(erroData, e.message); throw e; }
+  }
+  function filtrosData(q) {
+    const vig = vigenciaIso(); if (vig) q.set("inicio_vig", vig);
+    const emi = emissaoIso(); if (emi) q.set("data_fat", emi);
+    return q;
+  }
 
   // ---------------------------------------------------------------- estados
   function irPara(estado) {
@@ -86,16 +95,14 @@
   }
   // Evita recarregar (e invalidar a cascata — RF-01) quando administradora e vigencia nao mudaram:
   // o evento `change` da data dispara de novo ao perder o foco mesmo apos o Enter.
-  let carregado = { adm: null, vig: null };
+  let carregado = { adm: null, vig: null, emi: null };
   async function carregarApolices() {
-    const chave = { adm: el.adm.value, vig: el.vig.value.trim() };
-    if (chave.adm === carregado.adm && chave.vig === carregado.vig) return;
+    const chave = { adm: el.adm.value, vig: el.vig.value.trim(), emi: el.emissao.value.trim() };
+    if (chave.adm === carregado.adm && chave.vig === carregado.vig && chave.emi === carregado.emi) return;
     carregado = chave;
     irPara(0);
     if (!el.adm.value) return;  // RF-15
-    const iso = vigenciaIso();
-    const q = new URLSearchParams({ administradora: el.adm.value });
-    if (iso) q.set("inicio_vig", iso);
+    const q = filtrosData(new URLSearchParams({ administradora: el.adm.value }));
     const refs = await api(`/api/incendio/apolices?${q}`);
     opcoes(el.apolice, refs, (r) => r.rotulo, (r) => `${r.apolice}|${r.seq}`, "—");  // RN-08 / RN-17
     irPara(1);
@@ -104,9 +111,7 @@
     irPara(1);
     const op = el.apolice.selectedOptions[0];
     if (!el.apolice.value || !op) return;
-    const iso = vigenciaIso();
-    const q = new URLSearchParams({ administradora: el.adm.value, apolice: op.dataset.apolice, seq: op.dataset.seq });
-    if (iso) q.set("inicio_vig", iso);
+    const q = filtrosData(new URLSearchParams({ administradora: el.adm.value, apolice: op.dataset.apolice, seq: op.dataset.seq }));
     const faturas = await api(`/api/incendio/faturas?${q}`);
     opcoes(el.fatura, faturas, (f) => String(f), (f) => String(f), "—");
     irPara(2);
@@ -193,6 +198,9 @@
   el.vig.addEventListener("input", () => mascararData(el.vig));
   el.vig.addEventListener("change", recarregar);   // ao sair do campo ou Enter
   el.vig.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); recarregar(); } });
+  el.emissao.addEventListener("input", () => mascararData(el.emissao));
+  el.emissao.addEventListener("change", recarregar);
+  el.emissao.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); recarregar(); } });
   el.apolice.addEventListener("change", () => carregarFaturas().catch((e) => mostrarErro(el.erroLista, e.message)));
   el.fatura.addEventListener("change", escolherFatura);
   el.busca.addEventListener("click", buscarSegurados);
@@ -207,7 +215,7 @@
     } catch (e) { mostrarErro(el.relErro, `Não foi possível abrir a janela de pastas: ${e.message}`); el.relPainel.hidden = false; }
     finally { el.procurar.disabled = false; }
   });
-  el.limpar.addEventListener("click", () => { el.adm.value = ""; el.vig.value = ""; carregado = { adm: null, vig: null }; mostrarErro(erroData, ""); irPara(0); });
+  el.limpar.addEventListener("click", () => { el.adm.value = ""; el.vig.value = ""; el.emissao.value = ""; carregado = { adm: null, vig: null, emi: null }; mostrarErro(erroData, ""); irPara(0); });
 
   carregarAdministradoras().catch((e) => { mostrarErro(el.erroLista, `Falha ao carregar administradoras: ${e.message}`); el.listaPainel.hidden = false; });
   irPara(0);

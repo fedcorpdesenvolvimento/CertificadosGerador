@@ -408,6 +408,8 @@ Extraído do `.dfm`. A coluna *Legenda* traz a legenda literal, que o sistema no
 
 O sistema novo **DEVE** rotular os campos conforme o efeito real: *Vigência* filtra os segurados; *Emissão* filtra o faturamento. **`GAP-04` fechado.**
 
+**`RN-05a`** *(decisão do usuário, 04/09/2026)* — No fluxo manual, o campo **Emissão:** passa a ser um filtro **adicional e opcional** nas listas de apólices (`QRY-03`) e de faturas (`QRY-04`): quando preenchido, só entram as faturas cuja **data de emissão** (`faturas.data_fat`) é igual à informada, via `EXISTS` em `faturas` pela chave `(fatura, administradora, apolice, seq)`. *Vigência* continua filtrando `segurados_inc.inicio_vig`; os dois podem ser combinados. Nenhum dos dois é obrigatório. Isto revisa a parte de `RN-05` que restringia *Emissão* ao fluxo em massa.
+
 > A **DATA DE EMISSÃO impressa no PDF** é outra coisa: os três PDFs de referência trazem `03/09/2026`, a data em que foram gerados, não o conteúdo de `DateEdit2`. É a data corrente no momento da emissão. Ver `RN-21`.
 
 **`RN-21`** — O campo *DATA DE EMISSÃO* do PDF **DEVE** ser a data de geração do documento (`date.today()`), não um campo do banco nem `DateEdit2`. Consequência: reemitir um certificado produz PDF diferente do original. **DEVE** constar no JSON como `_meta.gerado_em` e como `certificado.data_emissao`, para que a diferença seja rastreável (relacionado a `RNF-08`).

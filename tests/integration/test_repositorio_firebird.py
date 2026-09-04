@@ -46,6 +46,17 @@ def test_qry_03_qry_04_cascata_da_referencia_13008(repo):
     assert 380819 in faturas
 
 
+def test_rn_05a_data_fat_filtra_faturas_e_apolices(repo):
+    from datetime import date
+
+    # fatura 380819: data_fat = 2026-07-30, dt_ini_vig = 2026-07-01 (verificado em 04/09/2026)
+    com = repo.listar_faturas("0000001192", "13008", 1, None, data_fat=date(2026, 7, 30))
+    assert com == [380819]
+    assert repo.listar_faturas("0000001192", "13008", 1, None, data_fat=date(2026, 7, 29)) == []
+    assert repo.listar_apolices("0000001192", None, data_fat=date(2026, 7, 30))
+    assert repo.listar_apolices("0000001192", None, data_fat=date(1999, 1, 1)) == []
+
+
 def test_rf_15_administradora_vazia_nao_lista_apolices(repo):
     with pytest.raises(ValueError):
         repo.listar_apolices("", None)

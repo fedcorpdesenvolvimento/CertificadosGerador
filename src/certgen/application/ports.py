@@ -48,14 +48,21 @@ class RepositorioCertificados(Protocol):
         """QRY-01 — apenas status <> 'C' (RD-03), ordenadas por nome."""
         ...
 
-    def listar_apolices(self, administradora: str, inicio_vig: date | None) -> list[ApoliceRef]:
-        """QRY-03 — administradora obrigatoria (RF-15)."""
+    def listar_apolices(
+        self, administradora: str, inicio_vig: date | None, data_fat: date | None = None
+    ) -> list[ApoliceRef]:
+        """QRY-03 — administradora obrigatoria (RF-15). data_fat: RN-05a (Emissao:)."""
         ...
 
     def listar_faturas(
-        self, administradora: str, apolice: str, seq: int, inicio_vig: date | None
+        self,
+        administradora: str,
+        apolice: str,
+        seq: int,
+        inicio_vig: date | None,
+        data_fat: date | None = None,
     ) -> list[int]:
-        """QRY-04."""
+        """QRY-04. data_fat: RN-05a — filtra pela data de emissao da fatura (faturas.data_fat)."""
         ...
 
     def listar_segurados(self, lote: ChaveLote) -> list[Certificado]:

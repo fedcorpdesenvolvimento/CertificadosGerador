@@ -11,7 +11,8 @@ WHERE pes.status <> 'C'
 ORDER BY pes.nome
 
 -- name: apolices
--- QRY-03. Filtros: ss.administradora = ? (obrigatorio, RF-15); ss.inicio_vig = ? (opcional)
+-- QRY-03. Filtros: ss.administradora = ? (obrigatorio, RF-15); ss.inicio_vig = ? (opcional);
+-- RN-05a: EXISTS faturas.data_fat = ? (opcional — campo "Emissao:" da tela)
 SELECT ss.apolice, ss.seq, MIN(ss.inicio_vig) AS inicio_vig
 FROM segurados_inc ss
 WHERE ss.status_seg <> 'C'
@@ -21,7 +22,8 @@ GROUP BY ss.apolice, ss.seq
 ORDER BY ss.apolice, ss.seq
 
 -- name: faturas
--- QRY-04. Filtros: administradora, apolice, seq (obrigatorios); inicio_vig (opcional)
+-- QRY-04. Filtros: administradora, apolice, seq (obrigatorios); inicio_vig (opcional);
+-- RN-05a: EXISTS faturas.data_fat = ? (opcional — campo "Emissao:" da tela)
 SELECT ss.fatura
 FROM segurados_inc ss
 WHERE ss.status_seg <> 'C'

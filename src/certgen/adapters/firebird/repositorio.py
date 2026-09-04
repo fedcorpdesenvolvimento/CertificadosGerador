@@ -107,11 +107,18 @@ class RepositorioFirebird:
             for r in self._executar("administradoras")
         ]
 
-    def listar_apolices(self, administradora: str, inicio_vig: date | None) -> list[ApoliceRef]:
-        """QRY-03. RF-15: administradora vazia nao lista nada."""
+    def listar_apolices(
+        self, administradora: str, inicio_vig: date | None, data_fat: date | None = None
+    ) -> list[ApoliceRef]:
+        """QRY-03. RF-15: administradora vazia nao lista nada. RN-05a: data_fat opcional."""
         if not administradora:
             raise ValueError("administradora obrigatoria para listar apolices (RF-15)")
-        f = Filtros().igual("ss.administradora", administradora).igual("ss.inicio_vig", inicio_vig)
+        f = (
+            Filtros()
+            .igual("ss.administradora", administradora)
+            .igual("ss.inicio_vig", inicio_vig)
+            .data_fat(data_fat)
+        )
         return [
             ApoliceRef(
                 apolice=_txt(r["apolice"]) or "", seq=int(r["seq"]), inicio_vig=r["inicio_vig"]
@@ -120,15 +127,21 @@ class RepositorioFirebird:
         ]
 
     def listar_faturas(
-        self, administradora: str, apolice: str, seq: int, inicio_vig: date | None
+        self,
+        administradora: str,
+        apolice: str,
+        seq: int,
+        inicio_vig: date | None,
+        data_fat: date | None = None,
     ) -> list[int]:
-        """QRY-04."""
+        """QRY-04. RN-05a: data_fat filtra pela data de emissao da fatura."""
         f = (
             Filtros()
             .igual("ss.administradora", administradora)
             .igual("ss.apolice", apolice)
             .igual("ss.seq", seq)
             .igual("ss.inicio_vig", inicio_vig)
+            .data_fat(data_fat)
         )
         return [int(r["fatura"]) for r in self._executar("faturas", f) if r["fatura"] is not None]
 

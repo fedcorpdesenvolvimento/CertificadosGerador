@@ -28,11 +28,14 @@ class RepoFalso:
             Administradora("0000000019", "PROTEST", "19PAEL", possui_portal=True),
         ]
 
-    def listar_apolices(self, administradora, inicio_vig):
+    def listar_apolices(self, administradora, inicio_vig, data_fat=None):
         assert administradora
+        self.ultimo_data_fat = data_fat
         return [ApoliceRef("13008", 1, date(2026, 7, 1)), ApoliceRef("13008", 2, None)]
 
-    def listar_faturas(self, administradora, apolice, seq, inicio_vig):
+    def listar_faturas(self, administradora, apolice, seq, inicio_vig, data_fat=None):
+        if data_fat == date(2026, 7, 30):
+            return [380819]  # RN-05a: so a fatura emitida nessa data
         return [380819, 380820] if seq == 1 else []
 
     def listar_segurados(self, lote):
@@ -144,6 +147,14 @@ def test_rf_15_administradora_vazia_bloqueia_apolices(cliente):
 def test_qry_04_faturas(cliente):
     q = {"administradora": "0000001192", "apolice": "13008", "seq": 1}
     assert cliente.get("/api/incendio/faturas", params=q).json() == [380819, 380820]
+
+
+def test_rn_05a_emissao_filtra_pela_data_da_fatura(cliente):
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "data_fat": "2026-07-30"}
+    assert cliente.get("/api/incendio/faturas", params=q).json() == [380819]
+    html = cliente.get("/incendio").text
+    assert 'id="emissao" class="data" placeholder="dd/mm/aaaa" maxlength="10"\n' in html
+    assert 'id="emissao"' in html and "disabled" not in html.split('id="emissao"')[1].split(">")[0]
 
 
 def test_rf_05_rf_13_segurados_com_dados_e_derivados(cliente):

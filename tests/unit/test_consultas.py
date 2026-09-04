@@ -84,6 +84,18 @@ def test_rn_22_filtro_em_lista():
     assert params == ["4008", "5008"]
 
 
+def test_rn_05a_filtro_data_fat_usa_exists_em_faturas():
+    from datetime import date
+
+    f = Filtros().igual("ss.administradora", "x").data_fat(date(2026, 7, 30))
+    sql, params = montar("faturas", f)
+    assert "EXISTS (SELECT 1 FROM faturas fat WHERE fat.fatura = ss.fatura" in sql
+    assert "fat.data_fat = ?" in sql
+    assert params == ["x", date(2026, 7, 30)]
+    sql2, params2 = montar("faturas", Filtros().igual("ss.administradora", "x").data_fat(None))
+    assert "faturas fat" not in sql2 and params2 == ["x"]
+
+
 def test_rn_07_filtro_em_consulta_sem_marcador_e_erro():
     with pytest.raises(ValueError):
         Filtros().igual("a", 1).aplicar("SELECT 1")

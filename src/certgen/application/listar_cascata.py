@@ -63,17 +63,24 @@ class Cascata:
     def administradoras(self) -> list[Administradora]:
         return self._repo.listar_administradoras()
 
-    def apolices(self, administradora: str, inicio_vig: date | None) -> list[ApoliceRef]:
+    def apolices(
+        self, administradora: str, inicio_vig: date | None, data_fat: date | None = None
+    ) -> list[ApoliceRef]:
         if not administradora or not administradora.strip():
             raise ValueError("Escolha a administradora antes de listar apolices (RF-15)")
-        return self._repo.listar_apolices(administradora.strip(), inicio_vig)
+        return self._repo.listar_apolices(administradora.strip(), inicio_vig, data_fat)
 
     def faturas(
-        self, administradora: str, apolice: str, seq: int, inicio_vig: date | None
+        self,
+        administradora: str,
+        apolice: str,
+        seq: int,
+        inicio_vig: date | None,
+        data_fat: date | None = None,
     ) -> list[int]:
         if not administradora or not apolice:
             raise ValueError("Administradora e apolice sao obrigatorias para listar faturas")
-        return self._repo.listar_faturas(administradora, apolice, seq, inicio_vig)
+        return self._repo.listar_faturas(administradora, apolice, seq, inicio_vig, data_fat)
 
     def segurados(self, lote: ChaveLote) -> list[ItemSegurado]:
         return [ItemSegurado.de(c) for c in self._repo.listar_segurados(lote)]

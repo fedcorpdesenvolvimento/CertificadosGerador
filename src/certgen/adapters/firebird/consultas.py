@@ -58,6 +58,22 @@ class Filtros:
             self.parametros.append(valor)
         return self
 
+    def data_fat(self, valor: object) -> Filtros:
+        """RN-05a — filtro pela data de emissao da fatura (faturas.data_fat), quando informada.
+
+        segurados_inc nao tem a data de emissao; ela esta em faturas, ligada pela
+        chave (fatura, administradora, apolice, seq). EXISTS evita multiplicar linhas
+        pelos varios tipo_fat/seguradora da PK de faturas.
+        """
+        if valor is not None:
+            self.predicados.append(
+                "EXISTS (SELECT 1 FROM faturas fat WHERE fat.fatura = ss.fatura "
+                "AND fat.administradora = ss.administradora AND fat.apolice = ss.apolice "
+                "AND fat.seq = ss.seq AND fat.data_fat = ?)"
+            )
+            self.parametros.append(valor)
+        return self
+
     def em(self, coluna: str, valores: list[object] | tuple[object, ...] | None) -> Filtros:
         """Adiciona `coluna IN (?, ?, ...)` se houver valores."""
         if valores:
