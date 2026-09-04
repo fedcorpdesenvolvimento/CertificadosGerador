@@ -85,7 +85,7 @@ body {
 
 /* ------------------------------------------------------------- beneficiario */
 .beneficiario .corpo { display: grid; grid-template-columns: 64mm 1fr; gap: 6mm; align-items: start; padding-top: 9mm; }
-.beneficiario .texto { font-size: 8.5pt; line-height: 1.35; padding-top: 4mm; }
+.beneficiario .texto { font-size: 9.5pt; line-height: 1.35; padding-top: 4mm; }  /* +1pt, 04/09/2026 */
 .cartao {
   position: relative;
   width: 108mm; height: 66mm;
@@ -97,7 +97,7 @@ body {
   grid-auto-rows: 10.2mm;
   column-gap: 5mm;
 }
-.cartao .campo .rotulo { font-size: 6.5pt; font-weight: bold; color: var(--azul-claro); }
+.cartao .campo .rotulo { font-size: 7.5pt; font-weight: bold; color: var(--azul-claro); }  /* +1pt, 04/09/2026 */
 .cartao .campo .valor { font-size: 5.5pt; font-weight: bold; color: #111; line-height: 1.2; }
 .cartao .campo.vig .valor span + span { margin-left: 3mm; }
 
