@@ -160,4 +160,5 @@ body {
   padding: 0 10mm 0 12mm;
 }
 .rodape .premio { font-weight: bold; font-size: 8pt; color: var(--cinza); }
-.rodape .central { color: #fff; font-weight: bold; text-align: right; font-size: 8.5pt; line-height: 1.4; padding-left: 40mm; }
+/* texto desce para caber inteiro na parte azul da faixa (pedido de 04/09/2026) */
+.rodape .central { color: #fff; font-weight: bold; text-align: right; font-size: 8.5pt; line-height: 1.4; padding-left: 40mm; padding-top: 7mm; }
