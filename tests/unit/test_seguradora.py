@@ -18,8 +18,8 @@ def catalogo():
 @pytest.mark.parametrize(
     ("codigo", "nome", "logo"),
     [
-        ("0000000109", "Bradesco Seguros", "bradesco.jpg"),
-        ("0000000104", "Alfa Seguradora", "bradesco.jpg"),  # decisao: Alfa imprime Bradesco
+        ("0000000109", "Bradesco Seguros", "bradesco.png"),
+        ("0000000104", "Alfa Seguradora", "bradesco.png"),  # decisao: Alfa imprime Bradesco
         ("0000000108", "HDI Seguros", "hdi.png"),
         ("0000000003", "Sompo Seguros", "hdi.png"),  # decisao: Sompo imprime HDI
         ("0000000006", "Porto Seguro", "porto.png"),
@@ -47,7 +47,7 @@ def test_rn_28_certificado_alfa_imprime_bradesco_e_json_traz_o_nome():
     c = RepositorioFirebird()._montar(LINHA_13008)  # cod_seguradora 0000000104 = Alfa
     assert c.contrato.seguradora.nome == "Alfa Seguradora"
     html = renderizar_html(c, DADOS)
-    assert 'alt="Alfa Seguradora"' in html and "data:image/jpeg" in html
+    assert 'alt="Alfa Seguradora"' in html and "data:image/png" in html
     assert CodigoAviso.LOGO_SEGURADORA_AUSENTE not in {a.codigo for a in c.todos_avisos()}
 
 
@@ -59,10 +59,20 @@ def test_rn_28_seguradora_sem_entrada_caixa_vazia_e_aviso():
     assert "<img" not in caixa
 
 
-def test_rn_28_arquivo_de_logo_ainda_ausente_nao_quebra():
-    # hdi.png / porto.png ainda nao foram entregues: a caixa sai vazia, sem erro
+def test_rn_28_arquivo_de_logo_ausente_nao_quebra():
     assert logo_seguradora_base64("arquivo-que-nao-existe.png") is None
-    c = RepositorioFirebird()._montar({**LINHA_13008, "cod_seguradora": "0000000003"})
+
+
+@pytest.mark.parametrize(
+    ("cod", "nome"),
+    [
+        ("0000000003", "Sompo Seguros"),
+        ("0000000108", "HDI Seguros"),
+        ("0000000006", "Porto Seguro"),
+    ],
+)
+def test_rn_28_logos_entregues_em_04_09_2026_renderizam(cod, nome):
+    c = RepositorioFirebird()._montar({**LINHA_13008, "cod_seguradora": cod})
     html = renderizar_html(c, DadosRender(DADOS.data_emissao, True))
-    assert c.contrato.seguradora.nome == "Sompo Seguros"
-    assert "Sompo" not in html or logo_seguradora_base64("hdi.png") is not None
+    assert c.contrato.seguradora.nome == nome
+    assert f'alt="{nome}"' in html and "data:image/png" in html

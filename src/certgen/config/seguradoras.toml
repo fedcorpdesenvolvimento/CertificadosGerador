@@ -15,12 +15,12 @@
 [[seguradora]]
 codigo = "0000000109"
 nome   = "Bradesco Seguros"
-logo   = "bradesco.jpg"
+logo   = "bradesco.png"
 
 [[seguradora]]
 codigo = "0000000104"
 nome   = "Alfa Seguradora"
-logo   = "bradesco.jpg"
+logo   = "bradesco.png"
 motivo = "decisao 03/09/2026: tudo que for Alfa imprime Bradesco"
 
 [[seguradora]]
