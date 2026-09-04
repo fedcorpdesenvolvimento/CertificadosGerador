@@ -15,7 +15,8 @@ from certgen.domain.certificado import Certificado
 from certgen.render.html import DadosRender, renderizar_html
 
 LARGURA_MM = 210
-ALTURA_MM = 650
+ALTURA_MM = 650  # minimo — a altura do PDF de referencia; cresce com o conteudo (04/09/2026)
+_PX_POR_MM = 96 / 25.4
 
 
 class ErroRenderizacao(RuntimeError):
@@ -61,21 +62,31 @@ class RenderizadorPdf:
         if self._browser is None:
             raise ErroRenderizacao("use dentro de `with RenderizadorPdf()`")
         destino.parent.mkdir(parents=True, exist_ok=True)
-        page = self._browser.new_page()
+        largura_px = round(LARGURA_MM * _PX_POR_MM)
+        page = self._browser.new_page(viewport={"width": largura_px, "height": 1000})
         try:
             page.set_content(html, wait_until="load")
             page.emulate_media(media="print")
+            altura_mm = self._altura_necessaria_mm(page)
             page.pdf(
                 path=str(destino),
                 width=f"{LARGURA_MM}mm",
-                height=f"{ALTURA_MM}mm",
+                height=f"{altura_mm}mm",
                 print_background=True,
                 margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
-                prefer_css_page_size=True,
+                prefer_css_page_size=False,
             )
         finally:
             page.close()
         return destino
+
+    @staticmethod
+    def _altura_necessaria_mm(page) -> int:
+        """Pagina unica: no minimo 650 mm; se o conteudo (ex.: Faz Tudo Lar) passar disso,
+        a pagina cresce em vez de cortar. Arredonda para cima com folga de 2 mm."""
+        altura_px = page.evaluate("document.documentElement.scrollHeight")
+        necessaria = int(altura_px / _PX_POR_MM) + 2
+        return max(ALTURA_MM, necessaria)
 
     def renderizar_certificado(self, cert: Certificado, dados: DadosRender, destino: Path) -> Path:
         return self.pdf(renderizar_html(cert, dados), destino)

@@ -20,3 +20,6 @@ conformidade antes de irem ao template (`certificado.html.j2`). Erros de digita�
 do legado foram preservados aqui de propósito: `dentruindo-o`, `extremamemnte`,
 `recepientes`, `Assitência`, `DESINTETIZAÇÃO`. A decisão de corrigir ou preservar
 está em aberto (GAP-09).
+
+
+**04/09/2026:** os blocos *Assistência Residencial Emergencial 24h* e *Assistência Faz Tudo Lar* do template **não usam mais** os textos destes PDFs; o negócio forneceu textos novos, que estão em `src/certgen/render/templates/blocos/`. Os textos de Incêndio/Raio/Explosão/Perda de Aluguel, Ruptura e RC continuam vindo do PDF de referência.

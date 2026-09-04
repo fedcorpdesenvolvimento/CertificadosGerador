@@ -47,7 +47,7 @@ def test_rnf_02_pdf_tem_texto_e_tamanho_da_referencia(render, cert, tmp_path):
     assert len(reader.pages) == 1
     mb = reader.pages[0].mediabox
     assert round(float(mb.width) / 72 * 25.4) == LARGURA_MM
-    assert round(float(mb.height) / 72 * 25.4) == ALTURA_MM
+    assert round(float(mb.height) / 72 * 25.4) >= ALTURA_MM  # cresce com o conteudo
     assert "JORGE EDUARDO MONT SERRAT" in texto
     assert "DEMONSTRATIVO" in texto
 

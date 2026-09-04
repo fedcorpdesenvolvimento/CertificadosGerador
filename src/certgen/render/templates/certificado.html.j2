@@ -114,14 +114,8 @@
 <section class="secao assistencia">
   <div class="sombra"></div><div class="aba m">Assistência Residencial Emergencial 24h</div>
   <div class="corpo duas-colunas">
-    <div class="caixa bloco-texto">
-      <p class="intro">Central de atendimento personalizado, 24 horas por dia, 7 dias por semana, PARA ATENDIMENTO EMERGENCIAL EM UM CONJUNTO DE SERVIÇOS, COM PROFISSIONAIS QUALIFICADOS, CONFORME A NECESSIDADE, através de uma rede devidamente capacitada e treinada.</p>
-      <h4>ELETRICISTA</h4>
-      <p>Em caso de falta de energia elétrica na residência assistida devido à falha ou danos nas instalações da mesma, a Assistência enviará um profissional que realizará a reparação de urgência necessária para restabelecer a energia elétrica, contanto que tecnicamente possível.</p>
-      <h4>CHAVEIRO</h4>
-      <p>Em caso de perda, roubo das chaves ou quebra da mesma dentro da fechadura, será enviado profissional especializado para abrir a porta, contanto que tecnicamente possível e se o beneficiário não tiver alternativa para entrar na sua residência.</p>
-      <h4>BOMBEIRO</h4>
-      <p>Em caso de vazamentos, será fornecido profissional capacitado para reparo emergencial.</p>
+    <div class="caixa bloco-texto maior">
+      {% include "blocos/assistencia_24h.html.j2" %}
     </div>
     <div class="lateral">
       <div class="caixa garantia"><div class="rotulo">Garantia</div><img src="{{ imagens.selo_lider }}" alt="Líder Assistência 24h"></div>
@@ -136,53 +130,13 @@
   <div class="sombra"></div><div class="aba m">Assistência Faz Tudo Lar</div>
   <div class="corpo duas-colunas">
     <div class="caixa bloco-texto">
-      <p class="intro">Assistência Faz Tudo Lar</p>
-      <p>O FAZ TUDO LAR disponibiliza benefícios diferenciados e que vão além do conceito tradicional dos planos básicos de assistência 24 horas. O cliente tem direito a uma visita, feita por um profissional indicado, para procedimentos de manutenção do lar nos momentos de mais necessidade.</p>
-      <h4>TROCA DE LÂMPADAS</h4>
-      <p>A assistência providenciará a troca de lâmpadas queimadas na residência do titular segurado.</p>
-      <h4>AVALIAÇÃO E DISPOSIÇÃO DOS MÓVEIS</h4>
-      <p>A Assistência providenciará o envio de profissional para realizar uma avaliação técnica dos espaços comuns de ambientes na residência, para identificar riscos e fornecer sugestões de melhorias e orientações para que acidentes domésticos sejam evitados.</p>
-      <h4>REVISÃO DA INSTALAÇÃO ELÉTRICA</h4>
-      <p>Checagem em toda a instalação elétrica da residência assistida e apontamento de eventuais consertos que deverão ser feitos pelo beneficiário.</p>
-      <h4>FIXAÇÃO DE PRATELEIRAS, QUADROS, CORTINAS E PERSIANAS</h4>
-      <p>Envio de profissional capacitado para fixação de prateleiras, quadros, persiana e cortinas, desde que devidamente orientado por um responsável da empresa assistida.</p>
-      <h4>LUBRIFICAÇÃO DE FECHADURAS E DOBRADIÇAS</h4>
-      <p>Envio de profissional para lubrificação de até 05 unidades (fechaduras e dobradiças de portas e janelas) da residência assistida.</p>
-      <h4>DESINTETIZAÇÃO E DESRATIZAÇÃO</h4>
-      <p>Envio de um profissional técnico para livrar o ambiente de insetos nocivos/ectoparasitos animais e ratos (dedetização simples do ambiente).</p>
-      <h4>LIMPEZA DE CAIXA D’ÁGUA</h4>
-      <p>Envio de profissional para efetuar a limpeza completa da caixa d'água da Residência Assistida, desde que o acesso à mesma seja possível por escada.</p>
-      <h4>SUBSTITUIÇÃO DE TELHAS</h4>
-      <p>Em decorrência de eventos previstos no contrato, será fornecido profissional capacitado para substituição de até 10 telhas.</p>
-      <h4>TROCA DE VIDROS</h4>
-      <p>Em decorrência de eventos previstos no contrato, a Assistência ficará responsável pelo envio de profissionais capacitados que realizarão o reparo emergencial dos vidros da residência assistida, contanto que tecnicamente possível.</p>
-      <h4>FIXAÇÃO DE ANTENA</h4>
-      <p>Em decorrência de eventos previstos no contrato, a Assistência providenciará o envio de profissionais capacitados que realização a fixação de antena na residência assistida.</p>
-      <h4>INSTALAÇÃO DE OLHO MÁGICO</h4>
-      <p>Assistência providenciará o envio de um profissional técnico para realizar a instalação de olho mágico na porta principal de entrada da residência.</p>
-      <h4>REVISÃO DA INSTALAÇÃO HIDRÁULICA</h4>
-      <p>Envio de profissional capacitado para detectar possíveis vazamentos. Serão apontados os eventuais consertos que deverão ser feitos pelo beneficiário.</p>
-      <h4>INSTALAÇÃO DE CHUVEIRO E VENTILADOR DE TETO</h4>
-      <p>Envio de um profissional técnico para realizar a instalação de chuveiro elétrico e ventiladores de teto na residência.</p>
-      <h4>INSTALAÇÃO / CONVERSÃO DE FOGÃO A GÁS</h4>
-      <p>Envio de um profissional técnico para realizar da instalação ou conversão do fogão a gás.</p>
-      <h4>CONSERTO E LIMPEZA DE AR CONDICIONADO</h4>
-      <p>Envio de um profissional para manutenção ou limpeza de aparelhos de ar condicionado.</p>
-      <h4>INDICAÇÃO DE PROFISSIONAIS</h4>
-      <p>Para casos não caracterizados como emergenciais, a Assistência disponibilizará serviço de indicação (por telefone) e envio de profissionais que poderão realizar orçamentos dos serviços solicitados pela residência assistida.</p>
-      <p>Profissionais indicados:<br>• Eletricista • Encanador • Vidraceiro • Serralheiro • Carpinteiro<br>• Pedreiro • Vigilante • Pintor • Instalador de antena<br>• Instalador de Equipamentos de Segurança • Profissional de Limpeza</p>
-      <h4>CONSERTO DE LINHA BRANCA (mão de obra)</h4>
-      <p>Em caso de eletrodomésticos da Residência Assistida, serão enviados profissionais devidamente qualificados e previamente selecionados para a realização dos consertos que se façam necessários.</p>
-      <p>Estão cobertos os seguintes equipamentos:<br>• Fogões • Refrigeradores • Freezers • Máquinas de lavar roupas<br>• Forno Micro-ondas • Filtros e bebedouros elétricos</p>
-      <h4>CONSERTO DE ELETROELETRÔNICOS (Linha Marrom)</h4>
-      <p>Em caso de danificação de eletroeletrônicos, a Assistência providenciará o envio de um profissional para reparo do mesmo, contando que os equipamentos tenham até 05 anos de fabricação (comprovados mediante nota fiscal).</p>
-      <p>Estão cobertos os seguintes equipamentos:<br>• Televisores • Home Theaters • Aparelhos de som • DVD player e Blu-ray players</p>
+      {% include "blocos/faz_tudo_lar.html.j2" %}
     </div>
     <div class="lateral">
       <div class="caixa garantia"><div class="rotulo">Garantia</div><img src="{{ imagens.selo_lider }}" alt="Líder Assistência 24h"></div>
       <div class="caixa central"><div class="rotulo">Central de Atendimento</div><div class="valor">{{ central_atendimento }}</div></div>
       <div class="caixa limitacao"><div class="rotulo">Limitação de Utilização do Produto</div>
-        <div class="valor">Para todo o conjunto de serviços: 02 utilizações/ano – Limitado a R$ 400,00 todo o conjunto solicitado.<br><br>Não serão assumidos custos com materiais em nenhum dos serviços contidos neste produto.</div></div>
+        <div class="valor">Limite de Prestação de Serviço:<br>2 SERVIÇOS / ANO<br><br>Serviços através de agendamento pela Central de Atendimento.</div></div>
     </div>
   </div>
 </section>

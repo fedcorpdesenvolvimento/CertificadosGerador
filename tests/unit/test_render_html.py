@@ -44,7 +44,7 @@ def test_adr_06_valores_da_referencia_13008_no_html(html):
 
 def test_rn_18_bloco_faz_tudo_lar_presente_quando_mondial_1003(html):
     assert "Assistência Faz Tudo Lar" in html
-    assert "TROCA DE LÂMPADAS" in html
+    assert "KIT FIXAÇÃO" in html
 
 
 def test_adr_06_bloco_faz_tudo_lar_opcional(repo):
@@ -59,7 +59,7 @@ def test_adr_06_operador_pode_forcar_ou_remover_o_faz_tudo(repo):
     assert "Assistência Faz Tudo Lar" not in sem
     outro = repo._montar({**LINHA_13008, "codigo_assist_mondial": None})  # derivacao False
     com = renderizar_html(outro, DadosRender(date(2026, 9, 3), True, faz_tudo_lar=True))
-    assert "TROCA DE LÂMPADAS" in com
+    assert "KIT FIXAÇÃO" in com
 
 
 def test_rf_10_premio_opcional(repo):
