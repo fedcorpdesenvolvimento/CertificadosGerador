@@ -139,7 +139,8 @@ body {
 .lateral { display: grid; gap: 3mm; }
 .lateral .garantia { min-height: 27mm; }
 .lateral .garantia .rotulo { color: var(--azul); }
-.lateral .garantia img { display: block; margin: 5mm auto 0; height: 9mm; }
+/* selo da Lider (garantia): mesmo tamanho do logotipo da seguradora (04/09/2026) */
+.lateral .garantia img { display: block; margin: 4mm auto 0; max-height: 12mm; max-width: 28mm; }
 .lateral .central { text-align: center; padding: 3mm 2mm; }
 .lateral .central .rotulo { font-size: 8pt; text-transform: none; }
 .lateral .central .valor { font-size: 9pt; color: var(--azul); }
