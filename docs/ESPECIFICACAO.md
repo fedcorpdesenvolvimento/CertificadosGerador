@@ -3,7 +3,7 @@
 **Projeto:** Gerador de Certificados de Seguro Incêndio / Conteúdo
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
-**Documento:** v0.2 — 2026-09-03
+**Documento:** v0.3 — 2026-09-04 *(v0.2 em 2026-09-03)*
 **Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
 
 ### Fontes analisados
@@ -1989,4 +1989,43 @@ Copiar os arquivos para `src\certgen\render\templates\img\seguradoras\` com os n
 
 ---
 
-*Fim do documento. Versão 0.2 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*
+## Anexo B — Registro de alterações
+
+Cada linha corresponde a um commit no repositório (`git log`). A especificação foi atualizada junto com o código em todos os casos.
+
+### 03/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| Fases 0–4 | Fundação, domínio, JSON, PDF e tela web entregues no mesmo dia; `certgen emitir`, `certgen web`. |
+| Conexão | Modelo do EnvioPorto/FedHub: `fdb`, variáveis `FB_*`, pool por charset (Firebird 2.5). `FB_CHARSET=WIN1252` obrigatório. |
+| `GAP-03`/`GAP-15` | DDL em `docs/legado/schema.sql`; `LINHA_BRANCA` é flag. |
+| `GAP-16`/`GAP-17` | `LINHA_BRANCA` fora do catálogo (11 coberturas); `JOIN` com `segurados_inc_cob_aux` pela PK `(endosso, certificado)`. |
+| `GAP-13` → `RN-23`..`RN-26` | PLANO vazio; GARANTIA reservado para imagem; SUSEP da corretora fixo (`CERTGEN_SUSEP_CORRETORA`); SUC. = `apolices.sucursal`. |
+| `ADR-06`/`GAP-09` | Layout único: PDF `0_33016330725_0004_13008_380819`. Faz Tudo Lar opcional. |
+| `ADR-07` | Menu com CERTIFICADO INCENDIO / PRESTAMISTA-ALUG (`GAP-21`) / VIDA (`GAP-22`). |
+| `RD-25` | Bloco `arquivo` {pdf, pasta_destino, link} no JSON. |
+| `RD-26` | Opção *JSON único*: um arquivo por lote, indexado por `cpf_cnpj|certificado`. |
+| `RF-13a` | *Faz Tudo Lar* é entrada do operador, pré-marcada pela `RN-18`; divergência gera `FAZ_TUDO_LAR_MANUAL`. |
+| `RN-27` | Linhas de Ruptura/RC/link só com `rup_encanamento > 0`; `RUPTURA_INCONSISTENTE`. |
+| `RN-28`/`GAP-20` | Logotipo por `cod_seguradora` via `seguradoras.toml`: Alfa→Bradesco, Sompo→HDI, Porto; `LOGO_SEGURADORA_AUSENTE`. |
+| Tela | Datas `dd/mm/aaaa` (ISO só na API); *Sair*; *Voltar ao menu*; *Procurar…* (diálogo nativo). |
+| Repositório | Remoto GitHub `fedcorpdesenvolvimento/CertificadosGerador` (privado); `RNF-06a` dados pessoais nos PDFs de referência. |
+
+### 04/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `RNF-10a` | `certgen web --rede` para a equipe testar na rede interna; *Sair*/*Procurar…* só na máquina do servidor (todos os IPs dela contam como local). |
+| `RN-28` | Logotipos oficiais entregues: `bradesco.png`, `hdi.png`, `porto.png`. |
+| `RN-05a` | Campo *Emissão:* no fluxo manual filtra apólices e faturas por `faturas.data_fat`; consultas partem de `faturas` (índice) quando preenchido — 4 s → 0,05 s. |
+| Layout | Textos novos das assistências (`blocos/*.html.j2`), Faz Tudo Lar com 8 serviços e limite 2/ano; títulos de seção separados do bloco anterior; página cresce com o conteúdo (mín. 650 mm, ~900 mm com Faz Tudo Lar); texto do Beneficiário +1 pt; rótulos do cartão +1 pt; rodapé dentro da faixa azul; selo GARANTIA no tamanho do logotipo da seguradora. |
+| Pendências | Arquivo `img/selo_lider.png` (imagem entregue só na conversa); correção dos possíveis erros de digitação nos textos novos (`GAP-19`): "Expositor Vertica 1", "a plique", "boi ler", "Cooktop de portátil", frase de antenas incompleta, "Esta incluído". |
+
+### Lacunas abertas em 04/09/2026
+
+`GAP-10` (rc × resp_civil), `GAP-11` (portal zero), `GAP-12` (possui_portal no fluxo em massa), `GAP-14` (produtos 0003/0005), `GAP-19` (erros de digitação nos textos legais), `GAP-21`/`GAP-22` (módulos Prestamista e Vida). Nenhuma bloqueia a Fase 5, 6 ou 7.
+
+---
+
+*Fim do documento. Versão 0.3 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*

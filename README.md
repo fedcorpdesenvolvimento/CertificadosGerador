@@ -60,7 +60,8 @@ O PDF exige o Chromium do Playwright: `python -m playwright install chromium` (u
 | 1 | Domínio + consultas + adaptador Firebird | feita |
 | 2 | JSON (schema, serializador, `emitir-json`) | feita |
 | 3 | PDF (layout único, ADR-06, `emitir`) | feita; diff de imagem automatizado pendente |
-| 4 | Tela web (`web`): menu de 3 módulos (ADR-07) + cascata do Incêndio | feita; Prestamista e Vida aguardam especificação |
+| 4 | Tela web (`web`): menu de 3 módulos (ADR-07) + cascata do Incêndio; `--rede` para a equipe (RNF-10a) | feita; Prestamista e Vida aguardam especificação |
+| — | Ajustes de 03–04/09/2026: JSON único (RD-26), Faz Tudo Lar pelo operador (RF-13a), bloco Ruptura (RN-27), logotipos por seguradora (RN-28), filtro Emissão (RN-05a), textos novos das assistências, página de altura variável | feitos — ver Anexo B da spec |
 | 4 | Tela web | pendente |
 | 5 | Adaptador de API | pendente |
 | 6 | Emissão em massa | pendente |
