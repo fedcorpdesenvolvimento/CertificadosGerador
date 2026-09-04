@@ -46,3 +46,4 @@ progress { width: 200px; }
 .cabecalho-pagina h1 { margin: 0; }
 input.data { min-width: 120px; width: 130px; font-family: Consolas, monospace; letter-spacing: 1px; }
 .erro.inline { align-self: center; margin: 0; padding: 6px 10px; font-size: 12px; }
+.dica { color: #777; align-self: center; }

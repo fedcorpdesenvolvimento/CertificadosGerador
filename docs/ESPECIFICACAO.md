@@ -1492,7 +1492,8 @@ components:
 | `RNF-07` | Log estruturado por emissão | Um registro JSON por certificado |
 | `RNF-08` | Reprodutibilidade | Mesma chave + mesmo banco ⇒ saída idêntica, exceto `_meta.gerado_em` e `certificado.data_emissao` (`RN-21`) |
 | `RNF-09` | Nunca sobrescrever silenciosamente | `RN-13` |
-| `RNF-10` | Tela em `127.0.0.1`, sem exposição em rede | Bind explícito |
+| `RNF-10` | Tela em `127.0.0.1` por padrão | Bind explícito |
+| `RNF-10a` | *(04/09/2026)* Para testes e validação pela equipe, `certgen web --rede` aceita conexões da **rede interna** (`0.0.0.0`). Sem autenticação (fora de escopo, `1.3`): **nunca** expor fora da LAN. Os botões *Sair* e *Procurar…* e as APIs correspondentes só respondem ao navegador da própria máquina do servidor; os demais usuários digitam o caminho de destino, que **DEVE** ser uma pasta de rede acessível a todos. | `cliente_local` + teste |
 | `RNF-11` | Nenhum efeito colateral sem sucesso confirmado da etapa anterior | `RF-16` |
 | `RNF-12` | Locale independente: nenhuma formatação global mutável | Testes com `LANG` variado |
 
@@ -1960,6 +1961,23 @@ implemente nada relacionado a GAP-nn aberto.
 ```
 
 Depois, uma fase por sessão, sempre citando os IDs. O padrão que funciona: **especificação → teste → implementação → commit citando o ID**.
+
+### A.8a Compartilhar a tela com a equipe *(04/09/2026, `RNF-10a`)*
+
+Na máquina que vai servir (ligada durante os testes, com acesso ao Firebird e com o Chromium do Playwright instalado):
+```powershell
+cd "U:\--2021\05-Gerador Certificados"
+.\.venv\Scripts\python.exe -m certgen.cli web --rede --sem-navegador
+```
+O comando imprime os endereços `http://<ip-da-maquina>:8000/` que a equipe usa. Libere a porta no Firewall do Windows uma vez, em PowerShell como administrador:
+```powershell
+New-NetFirewallRule -DisplayName "Gerador de Certificados" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Domain,Private
+```
+A pasta de destino digitada na tela **DEVE** ser um caminho de rede que o servidor e a equipe enxerguem, por exemplo `\\192.168.0.2\Controle\Certificados`. Os PDFs são gerados pelo servidor; a equipe abre pela rede.
+
+### A.8b Logotipos das seguradoras (`RN-28`)
+
+Copiar os arquivos para `src\certgen\render\templates\img\seguradoras\` com os nomes exatos de `config\seguradoras.toml` (`bradesco.jpg`, `hdi.png`, `porto.png`). PNG com fundo transparente, cerca de 700 × 300 px. Reiniciar o `certgen web`. Sem o arquivo, a caixa sai vazia e o JSON recebe `LOGO_SEGURADORA_AUSENTE`.
 
 ### A.9 Extensões úteis
 

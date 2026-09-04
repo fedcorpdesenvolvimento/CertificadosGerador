@@ -84,15 +84,34 @@ def get_config() -> Config:
     return _config()
 
 
+HOSTS_LOCAIS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def cliente_local(request: Request) -> bool:
+    """RNF-10a — True quando o navegador esta na mesma maquina do servidor.
+
+    So o operador local pode encerrar o servidor (Sair) e abrir o dialogo nativo de
+    pastas (Procurar...), que aparecem na tela da maquina do servidor. Quando a tela
+    e compartilhada na rede (`certgen web --rede`), os demais usuarios nao veem
+    esses botoes e a API os recusa.
+    """
+    host = request.client.host if request.client else ""
+    return host in HOSTS_LOCAIS
+
+
 # ------------------------------------------------------------------- paginas
 @app.get("/", response_class=HTMLResponse)
-def menu() -> HTMLResponse:
-    return _pagina("menu.html")
+def menu(local: bool = Depends(cliente_local)) -> HTMLResponse:
+    return _pagina("menu.html", local=local)
 
 
 @app.get("/incendio", response_class=HTMLResponse)
-def pagina_incendio(cfg: Config = Depends(get_config)) -> HTMLResponse:
-    return _pagina("incendio.html", pasta_padrao=str(cfg.pasta_saida), modulo=MODULOS[0])
+def pagina_incendio(
+    cfg: Config = Depends(get_config), local: bool = Depends(cliente_local)
+) -> HTMLResponse:
+    return _pagina(
+        "incendio.html", pasta_padrao=str(cfg.pasta_saida), modulo=MODULOS[0], local=local
+    )
 
 
 @app.get("/prestamista", response_class=HTMLResponse)
@@ -274,7 +293,12 @@ class PastaIn(BaseModel):
 
 
 @app.post("/api/escolher-pasta")
-def api_escolher_pasta(req: PastaIn, request: Request):
+def api_escolher_pasta(req: PastaIn, request: Request, local: bool = Depends(cliente_local)):
+    if not local:
+        return _erro(
+            PermissionError("o dialogo de pastas abre na maquina do servidor; digite o caminho"),
+            403,
+        )
     try:
         pasta = request.app.state.escolher_pasta(req.inicial)
     except Exception as exc:  # tkinter indisponivel, sem sessao grafica etc.
@@ -300,6 +324,8 @@ app.state.encerrar = _encerrar_processo  # testes substituem por um espiao
 
 
 @app.post("/api/encerrar")
-def api_encerrar(request: Request) -> dict:
+def api_encerrar(request: Request, local: bool = Depends(cliente_local)):
+    if not local:
+        return _erro(PermissionError("so o operador da maquina do servidor pode encerrar"), 403)
     request.app.state.encerrar()
     return {"ok": True, "mensagem": "encerrando"}

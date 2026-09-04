@@ -199,7 +199,7 @@
   el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
-  el.procurar.addEventListener("click", async () => {
+  el.procurar?.addEventListener("click", async () => {
     el.procurar.disabled = true;
     try {
       const r = await api("/api/escolher-pasta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ inicial: el.pasta.value }) });

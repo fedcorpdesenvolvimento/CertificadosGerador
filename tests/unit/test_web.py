@@ -208,6 +208,21 @@ def test_rd_26_json_unico_pela_api(cliente, tmp_path):
     assert 'id="json_unico"' in cliente.get("/incendio").text
 
 
+def test_rnf_10a_cliente_da_rede_nao_ve_sair_nem_procurar(cliente):
+    webapp.app.dependency_overrides[webapp.cliente_local] = lambda: False
+    try:
+        assert 'id="sair"' not in cliente.get("/").text
+        pagina = cliente.get("/incendio").text
+        assert 'id="procurar"' not in pagina and "caminho de rede" in pagina
+        assert cliente.post("/api/encerrar").status_code == 403
+        assert cliente.post("/api/escolher-pasta", json={}).status_code == 403
+    finally:
+        del webapp.app.dependency_overrides[webapp.cliente_local]
+    # local (TestClient conta como local): botoes presentes
+    assert 'id="sair"' in cliente.get("/").text
+    assert 'id="procurar"' in cliente.get("/incendio").text
+
+
 def test_saude(cliente):
     assert cliente.get("/api/saude").json()["ok"] is True
 

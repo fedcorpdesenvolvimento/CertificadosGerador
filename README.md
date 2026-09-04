@@ -38,6 +38,9 @@ python -m certgen.cli web            # abre em http://127.0.0.1:8000/
 # PDF + JSON de todos os certificados de uma fatura (Fases 2 e 3)
 python -m certgen.cli emitir --administradora 0000001192 --apolice 13008 --seq 1 --fatura 380819 --saida C:\certificados
 
+# Compartilhar na rede interna para a equipe testar (RNF-10a; liberar a porta 8000 no firewall)
+python -m certgen.cli web --rede --sem-navegador
+
 # So o JSON
 python -m certgen.cli emitir-json --administradora 0000001192 --apolice 13008 --seq 1 --fatura 380819 --saida C:\certificados
 

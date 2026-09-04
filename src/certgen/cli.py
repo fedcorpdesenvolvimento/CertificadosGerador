@@ -104,18 +104,35 @@ def _cmd_html(args: argparse.Namespace) -> int:
     return 0
 
 
+def _enderecos_rede() -> list[str]:
+    import socket
+
+    try:
+        _, _, ips = socket.gethostbyname_ex(socket.gethostname())
+    except OSError:
+        return []
+    return [ip for ip in ips if not ip.startswith("127.")]
+
+
 def _cmd_web(args: argparse.Namespace) -> int:
-    """Fase 4 — sobe a tela em 127.0.0.1 (RNF-10: nunca exposta na rede)."""
+    """Fase 4 — sobe a tela. Padrao 127.0.0.1 (RNF-10); `--rede` compartilha na LAN (RNF-10a)."""
     import threading
     import webbrowser
 
     import uvicorn
 
+    host = "0.0.0.0" if args.rede else "127.0.0.1"
     url = f"http://127.0.0.1:{args.porta}/"
-    print(f"Gerador de Certificados em {url}  (botao Sair no menu ou Ctrl+C para encerrar)")
+    print(f"Gerador de Certificados em {url}  (Sair no menu ou Ctrl+C para encerrar)")
+    if args.rede:
+        print("Compartilhado na rede interna (RNF-10a). A equipe acessa por:")
+        for ip in _enderecos_rede() or ["<ip-desta-maquina>"]:
+            print(f"   http://{ip}:{args.porta}/")
+        print("Sem autenticacao: use apenas na rede interna.")
+        print("Sair e Procurar... ficam disponiveis so nesta maquina.")
     if not args.sem_navegador:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    uvicorn.run("certgen.web.app:app", host="127.0.0.1", port=args.porta, reload=args.reload)
+    uvicorn.run("certgen.web.app:app", host=host, port=args.porta, reload=args.reload)
     return 0
 
 
@@ -159,6 +176,10 @@ def construir_parser() -> argparse.ArgumentParser:
     web.add_argument("--porta", type=int, default=8000)
     web.add_argument("--reload", action="store_true", help="recarrega ao editar o codigo")
     web.add_argument("--sem-navegador", action="store_true", help="nao abre o navegador ao iniciar")
+    web.add_argument(
+        "--rede", action="store_true",
+        help="RNF-10a: aceita conexoes da rede interna (0.0.0.0) para testes da equipe",
+    )  # fmt: skip
     web.set_defaults(func=_cmd_web)
 
     ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")

@@ -61,7 +61,8 @@
     <label class="cresce">Pasta de destino
       <input type="text" id="pasta" value="{{ pasta_padrao }}">
     </label>
-    <button id="procurar" class="botao" title="Abre a janela do Windows para escolher a pasta">Procurar…</button>
+    {% if local %}<button id="procurar" class="botao" title="Abre a janela do Windows para escolher a pasta">Procurar…</button>
+    {% else %}<small class="dica">Digite um caminho de rede acessível a todos, ex.: \\192.168.0.2\Controle\Certificados</small>{% endif %}
   </div>
   <div class="linha">
     <label class="check"><input type="checkbox" id="imprime_premio"> Imprime Premio</label>
