@@ -84,7 +84,20 @@ def get_config() -> Config:
     return _config()
 
 
-HOSTS_LOCAIS = {"127.0.0.1", "::1", "localhost", "testclient"}
+@lru_cache(maxsize=1)
+def hosts_locais() -> frozenset[str]:
+    """Enderecos pelos quais o navegador da PROPRIA maquina do servidor pode chegar:
+    loopback e todos os IPs de rede desta maquina (quem abre http://192.168.x.x:8000
+    no mesmo computador chega com o IP de rede como origem, nao com 127.0.0.1)."""
+    import socket
+
+    ips = {"127.0.0.1", "::1", "localhost", "testclient"}
+    try:
+        _, _, proprios = socket.gethostbyname_ex(socket.gethostname())
+        ips.update(proprios)
+    except OSError:
+        pass
+    return frozenset(ips)
 
 
 def cliente_local(request: Request) -> bool:
@@ -96,7 +109,7 @@ def cliente_local(request: Request) -> bool:
     esses botoes e a API os recusa.
     """
     host = request.client.host if request.client else ""
-    return host in HOSTS_LOCAIS
+    return host in hosts_locais()
 
 
 # ------------------------------------------------------------------- paginas

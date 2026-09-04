@@ -223,6 +223,16 @@ def test_rnf_10a_cliente_da_rede_nao_ve_sair_nem_procurar(cliente):
     assert 'id="procurar"' in cliente.get("/incendio").text
 
 
+def test_rnf_10a_ip_de_rede_da_propria_maquina_conta_como_local():
+    import socket
+
+    locais = webapp.hosts_locais()
+    assert {"127.0.0.1", "::1"} <= locais
+    _, _, proprios = socket.gethostbyname_ex(socket.gethostname())
+    assert set(proprios) <= locais  # abrir pelo IP de rede na mesma maquina mantem Sair/Procurar
+    assert "10.255.255.254" not in locais
+
+
 def test_saude(cliente):
     assert cliente.get("/api/saude").json()["ok"] is True
 
