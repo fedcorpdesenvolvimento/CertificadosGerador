@@ -84,6 +84,21 @@ def test_rn_22_filtro_em_lista():
     assert params == ["4008", "5008"]
 
 
+def test_rn_05a_consultas_por_data_fat_partem_de_faturas():
+    from datetime import date
+
+    for nome in ("apolices_por_data_fat", "faturas_por_data_fat"):
+        sql = consulta(nome)
+        assert sql.startswith("SELECT") and "FROM faturas fat" in sql
+        assert "fat.data_fat = ?" in sql
+        assert "ss.status_seg <> 'C'" in sql and "ss.cpf_cnpj <> ''" in sql  # RD-02, RD-19
+    f = Filtros(parametros=[date(2026, 7, 30), "adm", "13008", 1])
+    f.igual("ss.inicio_vig", date(2026, 7, 1))
+    sql, params = montar("faturas_por_data_fat", f)
+    assert "AND ss.inicio_vig = ?)" in sql.replace("\n", "")  # filtro entra dentro do EXISTS
+    assert params == [date(2026, 7, 30), "adm", "13008", 1, date(2026, 7, 1)]
+
+
 def test_rn_05a_filtro_data_fat_usa_exists_em_faturas():
     from datetime import date
 

@@ -32,6 +32,44 @@ WHERE ss.status_seg <> 'C'
 GROUP BY ss.fatura
 ORDER BY 1
 
+-- name: apolices_por_data_fat
+-- RN-05a otimizada (decisao 04/09/2026): com "Emissao:" preenchida, parte de faturas
+-- (indice FATURAS_IDX3 em DATA_FAT) e confirma em segurados_inc por fatura (indice
+-- SEGURADOS_INC_FATURA). Parametros fixos: data_fat, administradora; /*FILTROS*/ dentro
+-- do EXISTS recebe ss.inicio_vig = ? quando a Vigencia tambem estiver preenchida.
+SELECT fat.apolice, fat.seq, MIN(fat.dt_ini_vig) AS inicio_vig
+FROM faturas fat
+WHERE fat.data_fat = ?
+  AND fat.administradora = ?
+  AND EXISTS (SELECT 1 FROM segurados_inc ss
+              WHERE ss.fatura = fat.fatura                        -- indice SEGURADOS_INC_FATURA
+                AND ss.administradora || '' = fat.administradora  -- || '' e + 0 impedem o otimizador
+                AND ss.apolice || '' = fat.apolice                --   do Firebird 2.5 de trocar para o
+                AND ss.seq + 0 = fat.seq                          --   indice de apolice (4 s -> 0,01 s)
+                AND ss.status_seg <> 'C'
+                AND ss.cpf_cnpj <> ''
+                /*FILTROS*/)
+GROUP BY fat.apolice, fat.seq
+ORDER BY fat.apolice, fat.seq
+
+-- name: faturas_por_data_fat
+-- RN-05a otimizada. Parametros fixos: data_fat, administradora, apolice, seq.
+SELECT DISTINCT fat.fatura
+FROM faturas fat
+WHERE fat.data_fat = ?
+  AND fat.administradora = ?
+  AND fat.apolice = ?
+  AND fat.seq = ?
+  AND EXISTS (SELECT 1 FROM segurados_inc ss
+              WHERE ss.fatura = fat.fatura                        -- indice SEGURADOS_INC_FATURA
+                AND ss.administradora || '' = fat.administradora  -- || '' e + 0 impedem o otimizador
+                AND ss.apolice || '' = fat.apolice                --   do Firebird 2.5 de trocar para o
+                AND ss.seq + 0 = fat.seq                          --   indice de apolice (4 s -> 0,01 s)
+                AND ss.status_seg <> 'C'
+                AND ss.cpf_cnpj <> ''
+                /*FILTROS*/)
+ORDER BY 1
+
 -- name: certificado_base
 -- A consulta canonica (secao 6.0). QRY-05, QRY-09 e QRY-10 sao ela + filtros.
 -- RD-04/RD-08: projeta cod_seguradora, abrev e cod_cat.

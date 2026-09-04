@@ -113,17 +113,19 @@ class RepositorioFirebird:
         """QRY-03. RF-15: administradora vazia nao lista nada. RN-05a: data_fat opcional."""
         if not administradora:
             raise ValueError("administradora obrigatoria para listar apolices (RF-15)")
-        f = (
-            Filtros()
-            .igual("ss.administradora", administradora)
-            .igual("ss.inicio_vig", inicio_vig)
-            .data_fat(data_fat)
-        )
+        if data_fat is not None:
+            # RN-05a otimizada: parte de faturas (indice em data_fat)
+            f = Filtros(parametros=[data_fat, administradora]).igual("ss.inicio_vig", inicio_vig)
+            linhas = self._executar("apolices_por_data_fat", f)
+        else:
+            f = Filtros().igual("ss.administradora", administradora)
+            f.igual("ss.inicio_vig", inicio_vig)
+            linhas = self._executar("apolices", f)
         return [
             ApoliceRef(
                 apolice=_txt(r["apolice"]) or "", seq=int(r["seq"]), inicio_vig=r["inicio_vig"]
             )
-            for r in self._executar("apolices", f)
+            for r in linhas
         ]
 
     def listar_faturas(
@@ -135,15 +137,22 @@ class RepositorioFirebird:
         data_fat: date | None = None,
     ) -> list[int]:
         """QRY-04. RN-05a: data_fat filtra pela data de emissao da fatura."""
-        f = (
-            Filtros()
-            .igual("ss.administradora", administradora)
-            .igual("ss.apolice", apolice)
-            .igual("ss.seq", seq)
-            .igual("ss.inicio_vig", inicio_vig)
-            .data_fat(data_fat)
-        )
-        return [int(r["fatura"]) for r in self._executar("faturas", f) if r["fatura"] is not None]
+        if data_fat is not None:
+            # RN-05a otimizada: parte de faturas (indice em data_fat)
+            f = Filtros(parametros=[data_fat, administradora, apolice, seq]).igual(
+                "ss.inicio_vig", inicio_vig
+            )
+            linhas = self._executar("faturas_por_data_fat", f)
+        else:
+            f = (
+                Filtros()
+                .igual("ss.administradora", administradora)
+                .igual("ss.apolice", apolice)
+                .igual("ss.seq", seq)
+                .igual("ss.inicio_vig", inicio_vig)
+            )
+            linhas = self._executar("faturas", f)
+        return [int(r["fatura"]) for r in linhas if r["fatura"] is not None]
 
     # ------------------------------------------------------------ certificados
     def listar_segurados(self, lote: ChaveLote) -> list[Certificado]:

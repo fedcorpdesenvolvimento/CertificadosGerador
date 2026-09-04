@@ -28,7 +28,12 @@ def _blocos(caminho: Path = _ARQUIVO) -> dict[str, str]:
     # partes = [preambulo, nome1, corpo1, nome2, corpo2, ...]
     blocos: dict[str, str] = {}
     for nome, corpo in zip(partes[1::2], partes[2::2], strict=True):
-        linhas = [ln for ln in corpo.strip().splitlines() if not ln.lstrip().startswith("--")]
+        linhas = []
+        for ln in corpo.strip().splitlines():
+            if ln.lstrip().startswith("--"):
+                continue
+            # comentario no fim da linha; o SQL deste projeto nao usa '--' dentro de literais
+            linhas.append(ln.split("--", 1)[0].rstrip())
         blocos[nome] = "\n".join(linhas).strip()
     return blocos
 

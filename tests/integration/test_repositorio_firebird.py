@@ -53,8 +53,13 @@ def test_rn_05a_data_fat_filtra_faturas_e_apolices(repo):
     com = repo.listar_faturas("0000001192", "13008", 1, None, data_fat=date(2026, 7, 30))
     assert com == [380819]
     assert repo.listar_faturas("0000001192", "13008", 1, None, data_fat=date(2026, 7, 29)) == []
-    assert repo.listar_apolices("0000001192", None, data_fat=date(2026, 7, 30))
+    apolices = repo.listar_apolices("0000001192", None, data_fat=date(2026, 7, 30))
+    assert ("13008", 1) in {(a.apolice, a.seq) for a in apolices}  # 2 faturas nesse dia
     assert repo.listar_apolices("0000001192", None, data_fat=date(1999, 1, 1)) == []
+    # combinado com Vigencia (dentro do EXISTS)
+    d30, vig_ok, vig_nao = date(2026, 7, 30), date(2026, 7, 1), date(2026, 6, 1)
+    assert repo.listar_faturas("0000001192", "13008", 1, vig_ok, d30) == [380819]
+    assert repo.listar_faturas("0000001192", "13008", 1, vig_nao, d30) == []
 
 
 def test_rf_15_administradora_vazia_nao_lista_apolices(repo):
