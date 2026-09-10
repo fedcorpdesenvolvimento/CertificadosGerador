@@ -248,6 +248,9 @@ class Certificado:
     endosso: ContextoEndosso
     cod_0800_banco: str | None  # valor da coluna COD_0800, para conferencia (RD-08)
     avisos: list[Aviso] = field(default_factory=list)
+    # RD-28 — link ja gravado em segurados_inc.link_certificado_aws. Metadado de
+    # publicacao: nao entra no JSON (RD-10) nem no PDF; serve a RN-33.
+    link_publicado: str | None = None
 
     @property
     def numero(self) -> str:

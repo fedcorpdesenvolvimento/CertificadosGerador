@@ -41,6 +41,11 @@ python -m certgen.cli emitir --administradora 0000001192 --apolice 13008 --seq 1
 # Compartilhar na rede interna para a equipe testar (RNF-10a; liberar a porta 8000 no firewall)
 python -m certgen.cli web --rede --sem-navegador
 
+# API de emissao para o portal (Fase 8, secao 11.1 da spec): exige CERTGEN_API_KEY no .env
+python -m certgen.cli api                 # http://127.0.0.1:8010/docs
+python -m certgen.cli api --rede          # portal chega pela rede interna (sem TLS: so na LAN)
+# Teste: curl -X POST http://127.0.0.1:8010/v1/certificados/emitir -H "X-API-Key: <chave>" -H "Content-Type: application/json" -d "{\"administradora\":\"0000001192\",\"cpf_cnpj\":\"33016330725\",\"vigencia\":\"2026-07-01\"}"
+
 # So o JSON
 python -m certgen.cli emitir-json --administradora 0000001192 --apolice 13008 --seq 1 --fatura 380819 --saida C:\certificados
 
@@ -62,7 +67,7 @@ O PDF exige o Chromium do Playwright: `python -m playwright install chromium` (u
 | 3 | PDF (layout único, ADR-06, `emitir`) | feita; diff de imagem automatizado pendente |
 | 4 | Tela web (`web`): menu de 3 módulos (ADR-07) + cascata do Incêndio; `--rede` para a equipe (RNF-10a) | feita; Prestamista e Vida aguardam especificação |
 | — | Ajustes de 03–04/09/2026: JSON único (RD-26), Faz Tudo Lar pelo operador (RF-13a), bloco Ruptura (RN-27), logotipos por seguradora (RN-28), filtro Emissão (RN-05a), textos novos das assistências, página de altura variável | feitos — ver Anexo B da spec |
-| 4 | Tela web | pendente |
-| 5 | Adaptador de API | pendente |
+| 5 | Adaptador de API (origem de dados) | pendente |
 | 6 | Emissão em massa | pendente |
-| 7 | Publicação S3 / Porto | bloqueada por SEC-01 |
+| 7 | Publicação S3 (`adapters/s3`, RN-29) e `registrar_link` (RD-20a) | feitos em 10/09/2026; XML Porto e e-mail pendentes; rotação das chaves AWS do legado (SEC-01) é ação do usuário |
+| 8 | API de emissão para o portal (`api`, seção 11.1: `X-API-Key`, administradora + CPF + vigência → link no S3) | feita em 10/09/2026 com adaptadores falsos; validação ponta a ponta com o portal pendente |

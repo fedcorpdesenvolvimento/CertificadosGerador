@@ -8,7 +8,7 @@ emitir usam o mesmo objeto, o que elimina DEF-03 por construcao.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -77,11 +77,43 @@ class RepositorioCertificados(Protocol):
         """QRY-11 — endossos.sequencial = fatura (RN-16)."""
         ...
 
+    def localizar_por_portal(
+        self, administradora: str, cpf_cnpj: str, vigencia: date
+    ) -> list[Certificado]:
+        """QRY-13 / RD-27 — consulta canonica filtrada por administradora, cpf_cnpj e
+        inicio_vig exato (RN-31). 0, 1 ou N linhas; quem chama decide (RN-32)."""
+        ...
 
-class PublicadorCertificados(Protocol):
+
+class ErroPublicacao(RuntimeError):
+    """Falha ao publicar o arquivo ou ao confirmar a publicacao (DEF-19)."""
+
+
+class LinkNaoRegistrado(RuntimeError):
+    """RD-20a — o UPDATE nao afetou exatamente 1 linha; nada foi gravado."""
+
+    def __init__(self, chave: ChaveCertificado, linhas: int) -> None:
+        self.chave = chave
+        self.linhas = linhas
+        super().__init__(
+            f"registrar_link afetaria {linhas} linhas para {chave.para_dict()}; rollback (RD-20a)"
+        )
+
+
+class PublicadorArquivos(Protocol):
     """Fase 7. Separado do repositorio porque escreve, e escrever tem outra
-    politica de falha (RF-16)."""
+    politica de falha (RF-16). Adaptador: S3 via boto3 (RN-29)."""
 
-    def publicar(self, arquivo: Path, destino: str) -> str: ...
+    def publicar(self, arquivo: Path, destino: str) -> str:
+        """Sobe `arquivo` em `destino` (caminho relativo no bucket), confirma e devolve o
+        link publico. Levanta ErroPublicacao se nao conseguir confirmar (DEF-19)."""
+        ...
 
-    def registrar_link(self, chave: ChaveCertificado, link: str) -> None: ...
+
+class RegistroLinks(Protocol):
+    """Fase 7. A unica escrita no banco (RD-20, RD-20a, RNF-05). Adaptador: Firebird."""
+
+    def registrar_link(self, chave: ChaveCertificado, link: str, quando: datetime) -> None:
+        """UPDATE de link_certificado_aws e dt_cria_link pela chave RD-01; exatamente 1 linha,
+        senao LinkNaoRegistrado."""
+        ...

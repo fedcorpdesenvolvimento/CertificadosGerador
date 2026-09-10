@@ -112,6 +112,19 @@ def pasta_lote(raiz: Path, administradora: str, data_competencia: date) -> Path:
     return raiz / administradora / competencia(data_competencia)
 
 
+def caminho_publicacao(
+    administradora: str, produto: str, data_competencia: date | None, fatura: int, nome_pdf: str
+) -> str:
+    """RN-29 — chave do objeto no bucket: {administradora}/{produto}/{competencia}/{fatura}/{pdf}.
+
+    E o `pstfin` do legado (8.1) com produto (RN-03) e competencia (RN-19) corrigidos.
+    Sempre com '/', independente do sistema de arquivos.
+    """
+    if not administradora or not produto or not nome_pdf:
+        raise NomeArquivoInvalido("caminho de publicacao exige administradora, produto e nome")
+    return f"{administradora}/{produto}/{competencia(data_competencia)}/{fatura}/{nome_pdf}"
+
+
 def resolver_colisao(
     caminho: Path, existe: Callable[[Path], bool] = Path.exists
 ) -> tuple[Path, bool]:

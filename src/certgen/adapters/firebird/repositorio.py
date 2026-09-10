@@ -10,12 +10,16 @@ acumulando avisos (RD-23). Falha alto (ADR-04): 0 ou >1 linhas na emissao
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from certgen.adapters.firebird import conexao
 from certgen.adapters.firebird.consultas import Filtros, montar
-from certgen.application.ports import CertificadoAmbiguo, CertificadoNaoEncontrado
+from certgen.application.ports import (
+    CertificadoAmbiguo,
+    CertificadoNaoEncontrado,
+    LinkNaoRegistrado,
+)
 from certgen.domain.avisos import Aviso
 from certgen.domain.certificado import (
     SUSEP_CORRETORA_PADRAO,
@@ -184,6 +188,49 @@ class RepositorioFirebird:
             raise CertificadoAmbiguo(chave, len(linhas))
         return self._montar(linhas[0])
 
+    def localizar_por_portal(
+        self, administradora: str, cpf_cnpj: str, vigencia: date
+    ) -> list[Certificado]:
+        """QRY-13 / RD-27 — administradora + cpf_cnpj + inicio_vig exato (RN-31)."""
+        if not (administradora and cpf_cnpj and vigencia):
+            raise ValueError("administradora, cpf_cnpj e vigencia sao obrigatorios (RD-27)")
+        f = (
+            Filtros()
+            .igual("ss.administradora", administradora)
+            .igual("ss.cpf_cnpj", cpf_cnpj)
+            .igual("ss.inicio_vig", vigencia)
+        )
+        return [self._montar(r) for r in self._executar("certificado_base", f)]
+
+    # ------------------------------------------------------------ escrita (RD-20)
+    def registrar_link(self, chave: ChaveCertificado, link: str, quando: datetime) -> None:
+        """RD-20a — a unica escrita: link_certificado_aws e dt_cria_link, chave RD-01 completa.
+
+        Exatamente 1 linha afetada; senao rollback e LinkNaoRegistrado. Implementa RegistroLinks.
+        """
+        sql, _ = montar("registrar_link")
+        params = [
+            link,
+            quando,
+            chave.administradora,
+            chave.apolice,
+            chave.seq,
+            chave.fatura,
+            chave.certificado,
+            chave.cpf_cnpj,
+        ]
+        with conexao.conectar() as con:
+            cur = con.cursor()
+            try:
+                cur.execute(sql, params)
+                linhas = cur.rowcount
+                if linhas != 1:
+                    con.rollback()
+                    raise LinkNaoRegistrado(chave, linhas)
+                con.commit()
+            finally:
+                cur.close()
+
     def obter_contexto_endosso(self, fatura: int) -> ContextoEndosso:
         """QRY-11."""
         linhas = self._executar("endosso_por_fatura", Filtros(parametros=[fatura]))
@@ -267,4 +314,5 @@ class RepositorioFirebird:
             ),
             cod_0800_banco=_txt(r["cod_0800"]),
             avisos=avisos,
+            link_publicado=_txt(r.get("link_certificado_aws")),  # RD-28
         )

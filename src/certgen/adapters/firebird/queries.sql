@@ -98,7 +98,8 @@ SELECT pes.nome                                                 AS nome_adm,
        ss.certificado || ' ' || COALESCE(pes.abrev, '')          AS cod_0800,
        sicb.quebra_vidro, sicb.rc, sicb.danos_eletricos,
        sicb.resp_civil, sicb.rup_encanamento,
-       sicb.rup_enc_ter, sicb.acidente_pessoal
+       sicb.rup_enc_ter, sicb.acidente_pessoal,
+       ss.link_certificado_aws                                   -- RD-28: metadado, fora do JSON
 FROM segurados_inc ss
 LEFT JOIN pessoas               pes  ON pes.pessoa = ss.administradora
 LEFT JOIN apolice_seguradora    aps  ON aps.apolice = ss.apolice
@@ -115,6 +116,22 @@ WHERE ss.status_seg <> 'C'
   /*FILTROS*/
 ORDER BY ss.administradora, ss.apolice, ss.seq, ss.fatura,
          ss.endereco, ss.unidade, ss.cpf_cnpj
+
+-- name: registrar_link
+-- RD-20 / RD-20a / RF-16 — a UNICA escrita do sistema (RNF-05): so estas duas colunas.
+-- Filtro pela chave completa RD-01 + status_seg <> 'C'. Parametros fixos, na ordem:
+-- link, dt_cria_link, administradora, apolice, seq, fatura, certificado, cpf_cnpj.
+-- Deve afetar exatamente 1 linha; o adaptador confere rowcount e faz rollback se nao.
+UPDATE segurados_inc ss
+   SET ss.link_certificado_aws = ?,
+       ss.dt_cria_link         = ?
+ WHERE ss.administradora = ?
+   AND ss.apolice        = ?
+   AND ss.seq            = ?
+   AND ss.fatura         = ?
+   AND ss.certificado    = ?
+   AND ss.cpf_cnpj       = ?
+   AND ss.status_seg    <> 'C'
 
 -- name: endosso_por_fatura
 -- QRY-11 / RN-16: o numero da fatura e o sequencial do endosso.

@@ -35,7 +35,9 @@ adaptador de API. Nunca chame o driver de dentro do dominio.
 - Nenhum efeito colateral antes do sucesso confirmado da etapa anterior
   (RF-16, RNF-11).
 - O banco recebe UPDATE apenas em link_certificado_aws, dt_cria_link e
-  id_controle_envio_portal (RNF-05).
+  id_controle_envio_portal (RNF-05). A unica escrita implementada e
+  `registrar_link` (RD-20a): chave RD-01 completa, exatamente 1 linha.
+- Credenciais AWS e a chave da API (RN-30) so no `.env`/ambiente (SEC-01).
 
 ## Conexao Firebird
 
@@ -60,6 +62,8 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Lint: `ruff check .`
 - Verificar Firebird: `python -m certgen.cli check-conexao`
 - Tela web: `python -m certgen.cli web` (127.0.0.1:8000; `--reload` em desenvolvimento)
+- API do portal (Fase 8, secao 11.1): `python -m certgen.cli api` (127.0.0.1:8010; `--rede` para a LAN;
+  exige `CERTGEN_API_KEY` no `.env`; `POST /v1/certificados/emitir` com header `X-API-Key`)
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
 - CLI: `python -m certgen.cli --help`
 

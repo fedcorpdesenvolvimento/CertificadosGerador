@@ -136,6 +136,34 @@ def _cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_api(args: argparse.Namespace) -> int:
+    """Fase 8 / RF-19 — API de emissao para o portal, processo separado da tela.
+
+    RNF-10b: 127.0.0.1 por padrao; `--rede` liga em 0.0.0.0. RN-30: recusa subir sem
+    CERTGEN_API_KEY (a chave nunca e impressa).
+    """
+    import logging
+
+    import uvicorn
+
+    try:
+        cfg = Config.do_ambiente()
+        cfg.exigir_api_key()
+    except ConfiguracaoAusente as exc:
+        print("FALHA:", exc, file=sys.stderr)
+        return 1
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    host = "0.0.0.0" if args.rede else "127.0.0.1"
+    print(f"API do portal em http://{host}:{args.porta}/v1  (docs em /docs; Ctrl+C encerra)")
+    print(f"Bucket {cfg.aws_bucket} ({cfg.aws_region}); saida local em {cfg.pasta_saida}")
+    if args.rede:
+        print("Aceitando conexoes da rede interna (RNF-10b). Sem TLS: nao expor fora da LAN.")
+        for ip in _enderecos_rede() or ["<ip-desta-maquina>"]:
+            print(f"   http://{ip}:{args.porta}/v1/certificados/emitir")
+    uvicorn.run("certgen.web.api_portal:app", host=host, port=args.porta, reload=args.reload)
+    return 0
+
+
 def _args_lote(p: argparse.ArgumentParser) -> None:
     p.add_argument("--administradora", required=True, help="codigo pessoas.pessoa, ex. 0000001192")
     p.add_argument("--apolice", required=True, help="ex. 13008")
@@ -181,6 +209,15 @@ def construir_parser() -> argparse.ArgumentParser:
         help="RNF-10a: aceita conexoes da rede interna (0.0.0.0) para testes da equipe",
     )  # fmt: skip
     web.set_defaults(func=_cmd_web)
+
+    api = sub.add_parser("api", help="Sobe a API de emissao para o portal (Fase 8, RF-19)")
+    api.add_argument("--porta", type=int, default=8010)
+    api.add_argument("--reload", action="store_true", help="recarrega ao editar o codigo")
+    api.add_argument(
+        "--rede", action="store_true",
+        help="RNF-10b: aceita conexoes da rede interna (0.0.0.0); sem TLS, so na LAN",
+    )  # fmt: skip
+    api.set_defaults(func=_cmd_api)
 
     ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")
     _args_lote(ht)

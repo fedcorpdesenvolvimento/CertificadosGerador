@@ -191,7 +191,7 @@ def emitir_lote(
         docs: list[dict] = []
         for cert in escolhidos:
             try:
-                emitido, doc = _emitir_um(
+                emitido, doc = emitir_um(
                     cert, opcoes, renderizar_pdf, gravar_json=not opcoes.json_unico
                 )
                 relatorio.emitidos.append(emitido)
@@ -258,7 +258,7 @@ def _emitir_consolidado(
                     modo_conexao=opcoes.modo_conexao,
                     agora=lambda: instante,
                 )
-                emitido, doc = _emitir_um(cert, sub, renderizar_pdf)
+                emitido, doc = emitir_um(cert, sub, renderizar_pdf)
                 docs.append(doc)
                 if emitido.pdf_path:
                     pdfs.append(emitido.pdf_path)
@@ -288,7 +288,7 @@ def _emitir_consolidado(
         shutil.rmtree(temporaria, ignore_errors=True)
 
 
-def _emitir_um(
+def emitir_um(
     cert: Certificado,
     opcoes: OpcoesEmissao,
     renderizar_pdf: RenderizadorPdf | None,
@@ -298,6 +298,8 @@ def _emitir_um(
 
     `gravar_json=False` (RD-26): valida mas nao grava o JSON individual — o lote grava
     um unico arquivo depois. A validacao continua acontecendo ANTES do PDF (RF-16).
+    Publico desde a Fase 8: `emitir_portal` (UC-12) emite um certificado por vez com o
+    MESMO passo da emissao em lote (RF-11).
     """
     pasta_rel = _pasta_destino(cert, opcoes)
     pasta = opcoes.pasta_saida / pasta_rel

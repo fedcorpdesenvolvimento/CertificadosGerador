@@ -100,6 +100,25 @@ class Config:
     pasta_saida: Path
     apolices_massa: tuple[str, ...] = field(default_factory=tuple)
     susep_corretora: str = "00000202049583"  # RN-25 — fixo nesta fase
+    api_key: str = ""  # RN-30 — CERTGEN_API_KEY; exigida so por `certgen api`
+    aws_region: str = "us-east-2"  # RN-29
+    aws_bucket: str = "certincendioaws"  # RN-29
+
+    def __repr__(self) -> str:  # RN-30: a chave nunca aparece em log
+        return (
+            f"Config(repositorio={self.repositorio!r}, pasta_saida={str(self.pasta_saida)!r}, "
+            f"aws_bucket={self.aws_bucket!r}, aws_region={self.aws_region!r}, "
+            f"api_key={'***' if self.api_key else ''!r})"
+        )
+
+    def exigir_api_key(self) -> str:
+        """RN-30 — o processo da API recusa subir sem chave."""
+        if not self.api_key:
+            raise ConfiguracaoAusente(
+                "CERTGEN_API_KEY ausente no .env. Gere com "
+                "python -c \"import secrets;print(secrets.token_hex(16))\" (RN-30)."
+            )
+        return self.api_key
 
     @classmethod
     def do_ambiente(cls) -> Config:
@@ -118,4 +137,7 @@ class Config:
             pasta_saida=Path(os.getenv("CERTGEN_PASTA_SAIDA", "saida")).expanduser().resolve(),
             apolices_massa=apolices,
             susep_corretora=os.getenv("CERTGEN_SUSEP_CORRETORA", "00000202049583").strip(),
+            api_key=os.getenv("CERTGEN_API_KEY", "").strip(),
+            aws_region=os.getenv("AWS_REGION", "us-east-2").strip() or "us-east-2",
+            aws_bucket=os.getenv("AWS_S3_BUCKET", "certincendioaws").strip() or "certincendioaws",
         )

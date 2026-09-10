@@ -3,7 +3,7 @@
 **Projeto:** Gerador de Certificados de Seguro Incêndio / Conteúdo
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
-**Documento:** v0.3 — 2026-09-04 *(v0.2 em 2026-09-03)*
+**Documento:** v0.4 — 2026-09-10 *(v0.3 em 2026-09-04, v0.2 em 2026-09-03)*
 **Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
 
 ### Fontes analisados
@@ -166,6 +166,7 @@ O legado tem **dois botões de emissão com regras diferentes**, e essa é a des
 | `UC-09` | Publicar certificado no S3 e gravar o link | ambos | Fase 7 |
 | `UC-10` | Gerar XML de envio à Porto | ambos | Fase 7 |
 | `UC-11` | Emitir consumindo API em vez de Firebird | — | Fase 5 |
+| `UC-12` | Emitir certificado a pedido do **portal** (API de emissão: localizar, emitir, publicar no S3, gravar e devolver o link) | **novo** | Fase 8 |
 
 ---
 
@@ -694,6 +695,14 @@ ORDER BY ss.nome_cond, ss.certificado, ss.nome
 
 > **`DEF-14`** — O campo `email` é **fabricado** concatenando o CPF do segurado com o nome da administradora: `33016330725@imodataadmdeimoveiseservicosempresariais.com.br`. Não é um endereço real; é um placeholder sintático para satisfazer o schema do parceiro. Está sendo enviado a um sistema externo como se fosse dado de contato. **DEVE** ser decidido explicitamente se o novo sistema mantém a prática — e, se mantiver, o campo **DEVE** ser marcado como sintético no JSON e no XML.
 
+### 6.13 `QRY-13` — Localização pelo portal *(Fase 8, decisão do usuário em 10/09/2026)*
+
+Consulta canônica (`6.0`) com os filtros `ss.administradora = :administradora`, `ss.cpf_cnpj = :cpf_cnpj` e `ss.inicio_vig = :vigencia`, mais os filtros fixos `status_seg <> 'C'` e `cpf_cnpj <> ''` (`RD-02`, `RD-19`). Ordem `RN-10`.
+
+**`RD-27`** — O portal **não** conhece a chave `RD-01`. Identifica o segurado por `(administradora, cpf_cnpj, vigencia)`, e `vigencia` **DEVE** casar exatamente com `segurados_inc.inicio_vig` (mesmo critério da tela, `RN-05`; decisão do usuário, alternativa "data dentro do período" rejeitada). O resultado pode ter 0, 1 ou N linhas: 0 é `404`; N é legítimo (`RD-22`: mesmo CPF em mais de uma unidade) e **todos** são emitidos (`RN-32`). Não se filtra por `codigo_pedido_port` (`RD-21`).
+
+**`RD-28`** — A projeção da consulta canônica passa a incluir `ss.link_certificado_aws`, mapeado em `Certificado.link_publicado`. É metadado de publicação: **NÃO** entra no JSON (`RD-10`) nem no PDF; serve a `RN-33`.
+
 ---
 ### 6.12 `RN-03` — Derivação do produto *(`GAP-07` fechado)*
 
@@ -963,6 +972,8 @@ link := 'https://certincendioaws.s3.us-east-2.amazonaws.com/' + pstfin + '/' + .
 
 > **`SEC-01` — Ação imediata.** As linhas 138-144 contêm um bloco `CONST` comentado com **`AccountKey` e `AccountName` da AWS em texto claro**. Estão em código-fonte versionado, num compartilhamento de rede acessível a quem tem a unidade `U:` mapeada. Mesmo comentadas, são credenciais expostas. **Recomendação:** rotacionar as chaves imediatamente, independentemente do projeto novo, e remover o bloco do fonte e do histórico do Git. O sistema novo **DEVE** obter credenciais de variável de ambiente ou IAM role (`RNF-06`), nunca do código.
 
+**`RN-29` — Caminho no S3 e URL pública** *(Fase 7/8, 10/09/2026)*. O objeto vai para `{administradora}/{produto}/{competência}/{fatura}/{nome_pdf}` no bucket `AWS_S3_BUCKET`, região `AWS_REGION` — o mesmo `pstfin` do legado, com `produto` e `competência` corrigidos (`RN-03`, `RN-19`). O link gravado e devolvido ao portal é a URL pública `https://{bucket}.s3.{região}.amazonaws.com/{caminho}` (decisão do usuário em 10/09/2026: URL pública "por enquanto"; URL assinada fica como `GAP-23`). O adaptador é `adapters/s3/publicador.py` com `boto3`; credenciais pela cadeia padrão do SDK (variáveis `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env` ou perfil/IAM), nunca em código (`SEC-01`, `RNF-06`). Após o `put_object`, o adaptador **DEVE** confirmar com `head_object` e comparar o tamanho antes de devolver o link (`DEF-19`). `Content-Type: application/pdf`.
+
 ### 8.2 Gravação em `segurados_inc`
 
 ```sql
@@ -974,6 +985,8 @@ UPDATE segurados_inc ss
 ```
 
 **`RD-20`** — O sistema **escreve** no banco. `RNF-05` é revisto: o usuário Firebird precisa de `UPDATE` em `segurados_inc`, e **apenas** nessas três colunas.
+
+**`RD-20a`** *(10/09/2026)* — O `UPDATE` de `registrar_link` filtra pela chave completa `RD-01` (`administradora, apolice, seq, fatura, certificado, cpf_cnpj`) e `status_seg <> 'C'`, com bind parameters (`RN-06`), gravando `link_certificado_aws` e `dt_cria_link`. **DEVE** afetar exatamente 1 linha; 0 ou >1 linhas fazem `rollback` e levantam erro (`RD-09` aplicado à escrita). `id_controle_envio_portal` não é tocado pela API (é do fluxo em massa, Fase 6/7). Bloco `-- name: registrar_link` em `queries.sql` (`RD-17`).
 
 **`RF-16`** — A gravação do link **DEVE** ocorrer somente após confirmação de que o PDF foi gerado **e** publicado. Sequência obrigatória: gerar PDF → gerar JSON → validar schema → publicar → gravar link. Falha em qualquer etapa aborta as seguintes para aquele certificado (`RF-09`). Esta é a correção de `DEF-04` e `DEF-19` juntos.
 
@@ -1233,12 +1246,18 @@ class RepositorioCertificados(Protocol):
     def obter_contexto_endosso(self, fatura: int) -> ContextoEndosso: ...   # QRY-11
 
 
-class PublicadorCertificados(Protocol):
+class PublicadorArquivos(Protocol):
     """Fase 7. Separado do repositório porque escreve, e escrever tem
-    outra política de falha (RF-16)."""
-    def publicar(self, arquivo: Path, destino: str) -> str: ...
-    def registrar_link(self, chave: ChaveCertificado, link: str) -> None: ...
+    outra política de falha (RF-16). Adaptador: S3/boto3 (RN-29)."""
+    def publicar(self, arquivo: Path, destino: str) -> str: ...   # devolve o link
+
+
+class RegistroLinks(Protocol):
+    """Fase 7. A única escrita no banco (RD-20, RD-20a). Adaptador: Firebird."""
+    def registrar_link(self, chave: ChaveCertificado, link: str, quando: datetime) -> None: ...
 ```
+
+*(10/09/2026)* `RepositorioCertificados` ganha `localizar_por_portal(administradora, cpf_cnpj, vigencia) -> list[Certificado]` (`QRY-13`, `RD-27`). O antigo `PublicadorCertificados` foi dividido em `PublicadorArquivos` (S3) e `RegistroLinks` (Firebird), porque são dois adaptadores com falhas independentes.
 
 **`RD-24`** — `listar_segurados` **DEVE** retornar `Certificado` completo, não um resumo. A consulta canônica já traz todos os campos (`RD-17`), então listar e emitir usam o mesmo objeto — o que elimina por construção a divergência `DEF-03` e permite emitir o lote com **uma** consulta em vez de N+1.
 
@@ -1277,7 +1296,8 @@ U:\--2021\05-Gerador Certificados\
 │   ├── adapters/
 │   │   ├── firebird/{conexao,repositorio}.py
 │   │   ├── firebird/queries.sql         # RD-17 — fonte única
-│   │   └── api/repositorio.py           # fase 5
+│   │   ├── api/repositorio.py           # fase 5
+│   │   └── s3/publicador.py             # fase 7 — RN-29 (boto3)
 │   ├── render/
 │   │   ├── templates/certificado.html.j2
 │   │   ├── templates/certificado.css
@@ -1479,6 +1499,51 @@ components:
 
 **`RN-15`** — A renderização (PDF e JSON em disco) permanece **local em todas as fases**. A API fornece dados; não emite documentos. Isso mantém o motor de PDF fora do escopo de negociação com terceiros.
 
+> A API desta seção é **consumida** pelo gerador (origem de dados). A API da seção `11.1` é **exposta** pelo gerador ao portal (emissão). `RN-15` continua valendo para a primeira; a segunda emite porque **é** o gerador.
+
+### 11.1 Fase 8 — API de emissão para o portal *(decisões do usuário em 10/09/2026)*
+
+**Contexto.** O portal do Grupo FedCorp precisa oferecer ao segurado o certificado sem operador. Ele chama o gerador com uma chave de autenticação, o código da administradora, o CPF/CNPJ do segurado e a vigência; o gerador localiza (`QRY-13`), emite (`UC-01` para um certificado), publica no S3 (`RN-29`), grava o link (`RF-16`, `RD-20a`) e devolve o link na mesma resposta (síncrono — decisão do usuário; um PDF leva poucos segundos).
+
+**`RF-18` — Endpoint.** `POST /v1/certificados/emitir`, corpo JSON `{administradora, cpf_cnpj, vigencia}`; `vigencia` em ISO 8601 (`RD-06`); `cpf_cnpj` aceita pontuação e é reduzido a dígitos antes da consulta (a coluna guarda só dígitos). Resposta `200`:
+
+```json
+{
+  "pedido": {"administradora": "0000001192", "cpf_cnpj": "33016330725", "vigencia": "2026-07-01"},
+  "quantidade": 1,
+  "certificados": [
+    {
+      "chave": {"administradora": "0000001192", "apolice": "13008", "seq": 1,
+                "fatura": 380819, "certificado": "CF1DI/AP.602", "cpf_cnpj": "33016330725"},
+      "situacao": "publicado",
+      "link": "https://certincendioaws.s3.us-east-2.amazonaws.com/0000001192/0004/072026/380819/0_33016330725_0004_13008_CF1DI-AP602_380819.pdf",
+      "avisos": [],
+      "motivo": null
+    }
+  ]
+}
+```
+
+`situacao` ∈ `publicado` (emitido agora), `ja_publicado` (`RN-33`), `falha` (com `motivo`, `RF-09`). Códigos HTTP: `401` chave ausente ou inválida; `400` corpo inválido; `404` `QRY-13` sem linhas; `502` nenhum certificado pôde ser publicado (todos `falha`); `200` quando ao menos um tem link. Um `GET /v1/saude` autenticado devolve `{"ok": true, "versao": ...}` para o portal testar a chave. O contrato OpenAPI é o gerado pelo FastAPI em `/docs`.
+
+**`RN-30` — Autenticação.** Chave **única** de 128 bits, gerada com `secrets.token_hex(16)` (32 caracteres hexadecimais), guardada em `CERTGEN_API_KEY` no `.env` (`RNF-06`) e entregue ao portal por canal seguro. O portal envia no header `X-API-Key`. A comparação **DEVE** ser em tempo constante (`hmac.compare_digest`). A chave **nunca** aparece em log, resposta ou mensagem de erro. Sem `CERTGEN_API_KEY`, o processo da API **recusa subir**. Rotação: gerar nova, trocar no `.env` e no portal; não há duas chaves simultâneas (`GAP-24`).
+
+**`RN-31` — Vigência exata.** `vigencia` casa `segurados_inc.inicio_vig` por igualdade (`RD-27`).
+
+**`RN-32` — Vários certificados.** Se `QRY-13` devolver N > 1 linhas, a API emite **todos** e devolve N itens; o portal exibe um link por unidade. Nenhum é escolhido em silêncio (`ADR-04`).
+
+**`RN-33` — Já publicado.** Certificado com `link_publicado` preenchido (`RD-28`) **não** é reemitido: a API devolve o link existente com `situacao = "ja_publicado"`. Reemissão continua sendo ação do operador na tela (`UC-07`). Consequência aceita pelo usuário: o PDF publicado pode não refletir alterações posteriores no banco.
+
+**`RN-34` — Cópia local.** A API grava PDF e JSON em `CERTGEN_PASTA_SAIDA` com a estrutura `RN-19`, exatamente como a emissão manual, antes de publicar. O JSON é regravado com `arquivo.link` após o upload confirmado (`RD-25`, `RF-16`). O JSON é o mesmo documento em qualquer fluxo (`RNF-08`).
+
+**`RF-19` — Processo separado.** A API sobe por `certgen api` (porta padrão `8010`), processo e aplicação FastAPI distintos da tela (`certgen web`), que continua sem autenticação e só na LAN (`RNF-10a`). A API **não** serve páginas, não expõe *Sair*/*Procurar…* e não tem os endpoints da cascata.
+
+**`RNF-10b`** — `certgen api` escuta em `127.0.0.1` por padrão; `--rede` liga em `0.0.0.0` para o portal chegar pela rede interna. Nesta fase roda na **máquina do usuário** (decisão de 10/09/2026). Não há TLS no processo: exposição fora da LAN exige proxy HTTPS na frente e está registrada em `GAP-23`.
+
+**`RNF-13`** — Toda chamada da API gera um registro de log estruturado (`RNF-07`) com pedido, chaves localizadas, situação por certificado e duração — **sem** a chave de autenticação e sem o nome do segurado.
+
+**Sequência por certificado (`RF-16` aplicado):** localizar → se `link_publicado`: devolver → gerar JSON (validar `RD-15`) → gerar PDF → `publicar` (S3, confirmado) → `registrar_link` (Firebird, 1 linha) → regravar JSON com o link → item `publicado`. Falha em qualquer passo interrompe **aquele** certificado, que sai como `falha` com o motivo; os demais seguem (`RF-09`). Se o S3 confirmou e o `UPDATE` falhou, o objeto fica no bucket e o item sai como `falha` com motivo explícito: nunca se devolve link cuja gravação não foi confirmada.
+
 ---
 
 ## 12. Requisitos não-funcionais
@@ -1498,6 +1563,8 @@ components:
 | `RNF-10a` | *(04/09/2026)* Para testes e validação pela equipe, `certgen web --rede` aceita conexões da **rede interna** (`0.0.0.0`). Sem autenticação (fora de escopo, `1.3`): **nunca** expor fora da LAN. Os botões *Sair* e *Procurar…* e as APIs correspondentes só respondem ao navegador da própria máquina do servidor; os demais usuários digitam o caminho de destino, que **DEVE** ser uma pasta de rede acessível a todos. | `cliente_local` + teste |
 | `RNF-11` | Nenhum efeito colateral sem sucesso confirmado da etapa anterior | `RF-16` |
 | `RNF-12` | Locale independente: nenhuma formatação global mutável | Testes com `LANG` variado |
+| `RNF-10b` | *(10/09/2026)* `certgen api` em `127.0.0.1` por padrão; `--rede` para a LAN; sem TLS próprio (`GAP-23`) | Bind explícito + teste |
+| `RNF-13` | *(10/09/2026)* Log estruturado por chamada da API, sem chave de autenticação nem nome do segurado | Revisão do log |
 
 `RNF-12` existe por causa de `DEF-01`. `RNF-11` existe por causa de `DEF-04`. `RNF-08` é o que torna a reemissão confiável e `RNF-01` estável.
 
@@ -1582,6 +1649,14 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 ### Fase 7 — Publicação e integração Porto *(pré-requisito: `SEC-01` resolvido, contrato XML especificado)*
 `boto3` no lugar do `fedcorp.jar`; `registrar_link` com `RF-16`; XML de envio; e-mail configurável.
 **Aceitação:** nenhum link é gravado sem upload confirmado.
+
+> **Estado em 10/09/2026:** entregue **em parte**, puxado pela Fase 8: `adapters/s3/publicador.py` (`RN-29`, confirmação `DEF-19`) e `registrar_link` no adaptador Firebird (`RD-20a`). Ficam para depois: XML de envio à Porto (`RF-17`), e-mail (`DEF-21`) e o botão *Upload AWS* da tela (`DEF-07`). `SEC-01`: o sistema novo só lê credenciais do ambiente; a rotação das chaves expostas no Delphi continua sendo ação do usuário e **não** foi verificada por este projeto.
+
+### Fase 8 — API de emissão para o portal *(pré-requisito: Fase 7 parcial; decisões de 10/09/2026)*
+`web/api_portal.py` (aplicação FastAPI própria), `application/emitir_portal.py` (`UC-12`), `QRY-13`, `certgen api`. Contrato em `11.1`.
+**Aceitação:** com a chave correta, `POST /v1/certificados/emitir` devolve link acessível e o banco tem `link_certificado_aws` preenchido só depois do upload confirmado; chave errada dá `401` sem tocar no banco; segundo pedido igual devolve `ja_publicado` sem gerar arquivo.
+
+> **Estado em 10/09/2026:** entregue conforme `11.1`; testado com adaptadores falsos (sem banco, sem S3). Validação ponta a ponta com o portal pendente.
 
 ---
 
@@ -1694,6 +1769,13 @@ Verificações empíricas que alteram requisitos:
 | `GAP-20` | ~~Logotipo da seguradora~~ **Fechado em 03/09/2026 por `RN-28`** (mapa em `config/seguradoras.toml`). Pendentes apenas os **arquivos** `hdi.png` e `porto.png` em `render/templates/img/seguradoras/`; até chegarem, Sompo/HDI e Porto saem com caixa vazia e aviso. | — | Usuário entrega os dois PNG. |
 | `GAP-18` | ~~`apolice_seguradora` tem um par duplicado~~ **Fechado em 03/09/2026:** o par é a apólice `236` / seguradora `0000000003` (`CODIGO` 18 e 19, mesmos valores). Não é apólice de certificado (`RN-03.2`); `RD-09` cobre o caso se aparecer. Sem ação. | — | — |
 
+### Novas em 10/09/2026
+
+| ID | Lacuna | Bloqueia | Como fechar |
+|---|---|---|---|
+| `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
+| `GAP-24` | Chave única (`RN-30`): rotação implica janela sem serviço; sem chave por administradora. | — | Decidir se o portal terá várias chaves ou chave por administradora; então `RN-30` passa a lista. |
+
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
 
 **`GAP-09` — textos legais.** Extraídos com `pypdf` para `docs/legado/textos-legais/*.txt`, um arquivo por PDF de referência. Cobrem **2 dos 5 templates** da matriz `7.3`:
@@ -1762,6 +1844,7 @@ Regras derivadas das decisões de 03/09/2026:
 | PDFs `..._15008_381066` (par) | `RD-22`, `DEF-06`, `DEF-08`, `DEF-09`, `DEF-18` |
 | Requisito novo (JSON) | `RD-10`..`RD-15`, `RD-23`, `RNF-04` |
 | Faseamento local → API | `ADR-01`, `RD-16`, `RD-18`, `RN-15`, seção 11 |
+| Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
 
 **`RD-22`** — Os dois PDFs `..._15008_381066` compartilham fatura e apólice, têm CPFs e certificados distintos e residem na mesma unidade condominial. Confirma que **`certificado` não é único por fatura** e que a chave de emissão precisa de `cpf_cnpj` para desambiguar (`RD-01`, `RD-21`).
 
@@ -2022,10 +2105,21 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | Layout | Textos novos das assistências (`blocos/*.html.j2`), Faz Tudo Lar com 8 serviços e limite 2/ano; títulos de seção separados do bloco anterior; página cresce com o conteúdo (mín. 650 mm, ~900 mm com Faz Tudo Lar); texto do Beneficiário +1 pt; rótulos do cartão +1 pt; rodapé dentro da faixa azul; selo GARANTIA no tamanho do logotipo da seguradora. |
 | Pendências | Arquivo `img/selo_lider.png` (imagem entregue só na conversa); correção dos possíveis erros de digitação nos textos novos (`GAP-19`): "Expositor Vertica 1", "a plique", "boi ler", "Cooktop de portátil", frase de antenas incompleta, "Esta incluído". |
 
+### 10/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `UC-12` / seção `11.1` | API de emissão para o portal: `POST /v1/certificados/emitir` com `X-API-Key`, `administradora`, `cpf_cnpj`, `vigencia`; síncrona; devolve link(s). Decisões do usuário: chave única de 128 bits; vigência = `inicio_vig` exato; vários certificados → emite todos; já publicado → devolve o link existente; URL pública do bucket por enquanto; roda na máquina do usuário. |
+| `QRY-13` / `RD-27` / `RD-28` | Localização por `(administradora, cpf_cnpj, inicio_vig)`; `link_certificado_aws` entra na projeção como `link_publicado`, fora do JSON. |
+| Fase 7 parcial | `adapters/s3/publicador.py` (boto3, `RN-29`, confirmação por `head_object`), `registrar_link` no Firebird (`RD-20a`, exatamente 1 linha). Portas `PublicadorArquivos` e `RegistroLinks`. |
+| `RF-19` / `RNF-10b` | `certgen api` (porta 8010, `127.0.0.1`; `--rede`), processo separado da tela. |
+| `.env` | `CERTGEN_API_KEY` (gerada em 10/09/2026, entregue ao portal fora do repositório), `AWS_REGION`, `AWS_S3_BUCKET`, credenciais AWS pela cadeia padrão do boto3. |
+| `GAP-23`, `GAP-24` | TLS/URL assinada; rotação da chave única. |
+
 ### Lacunas abertas em 04/09/2026
 
 `GAP-10` (rc × resp_civil), `GAP-11` (portal zero), `GAP-12` (possui_portal no fluxo em massa), `GAP-14` (produtos 0003/0005), `GAP-19` (erros de digitação nos textos legais), `GAP-21`/`GAP-22` (módulos Prestamista e Vida). Nenhuma bloqueia a Fase 5, 6 ou 7.
 
 ---
 
-*Fim do documento. Versão 0.3 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*
+*Fim do documento. Versão 0.4 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*
