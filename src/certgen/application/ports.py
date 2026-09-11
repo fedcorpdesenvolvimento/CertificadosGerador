@@ -84,6 +84,12 @@ class RepositorioCertificados(Protocol):
         inicio_vig exato (RN-31). 0, 1 ou N linhas; quem chama decide (RN-32)."""
         ...
 
+    def existe_segurado(self, administradora: str, cpf_cnpj: str, hoje: date) -> bool:
+        """QRY-14 / RN-35 (UC-13) — True se houver ao menos uma linha nao cancelada da
+        administradora com esse documento e inicio_vig <= hoje <= final_vig. Nenhum dado
+        do segurado e devolvido (RF-20)."""
+        ...
+
 
 class ErroPublicacao(RuntimeError):
     """Falha ao publicar o arquivo ou ao confirmar a publicacao (DEF-19)."""

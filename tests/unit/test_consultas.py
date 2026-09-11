@@ -14,7 +14,7 @@ from certgen.adapters.firebird.consultas import (
 def test_rd_17_blocos_esperados_existem():
     assert set(nomes()) >= {
         "administradoras", "apolices", "faturas", "certificado_base",
-        "endosso_por_fatura", "faturamento",
+        "endosso_por_fatura", "faturamento", "registrar_link", "existe_segurado",
     }  # fmt: skip
 
 
@@ -24,7 +24,7 @@ def test_rd_17_bloco_desconhecido_falha():
 
 
 def test_rd_02_rd_19_toda_consulta_a_segurados_inc_filtra_status_e_cpf():
-    for nome in ("apolices", "faturas", "certificado_base"):
+    for nome in ("apolices", "faturas", "certificado_base", "existe_segurado"):
         sql = consulta(nome)
         assert "ss.status_seg <> 'C'" in sql, nome
         assert "ss.cpf_cnpj <> ''" in sql, nome
@@ -119,3 +119,12 @@ def test_rn_07_filtro_em_consulta_sem_marcador_e_erro():
 def test_rn_07_marcador_removido_quando_nao_ha_filtros():
     sql, _ = montar("faturas")
     assert "/*FILTROS*/" not in sql
+
+
+def test_qry_14_existe_segurado_so_conta_e_exige_vigencia_ativa():
+    """RN-35 / RF-20: COUNT, sem projetar dados do segurado; inicio_vig <= hoje <= final_vig."""
+    sql = consulta("existe_segurado")
+    assert sql.upper().startswith("SELECT COUNT(*)")
+    assert "ss.nome" not in sql and "ss.endereco" not in sql
+    assert "ss.inicio_vig <= ?" in sql and "ss.final_vig >= ?" in sql
+    assert sql.count("?") == 4  # administradora, cpf_cnpj, hoje, hoje

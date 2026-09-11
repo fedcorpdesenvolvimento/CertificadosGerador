@@ -1,13 +1,16 @@
-"""UC-12 — emissao a pedido do portal (Fase 8, secao 11.1 da especificacao).
+"""UC-12 / UC-13 — emissao e verificacao a pedido do portal (Fase 8, secao 11.1).
 
-Sequencia por certificado (RF-16 aplicado, RN-33..RN-34):
-  localizar (QRY-13) -> se link_publicado: devolver (RN-33)
+UC-12, sequencia por certificado (RF-16 aplicado, RN-33..RN-34, RD-29):
+  localizar (QRY-13) -> se link_publicado: reler o JSON do disco e devolver (RN-33)
   -> gerar JSON (validar RD-15) -> gerar PDF -> publicar (S3, confirmado)
   -> registrar_link (Firebird, exatamente 1 linha) -> regravar JSON com o link
-  -> item `publicado`.
+  -> item `publicado` com o `documento` (RD-29).
 Falha em qualquer passo interrompe AQUELE certificado, que sai como `falha`
 com motivo; os demais seguem (RF-09, RN-32). Nunca se devolve link cuja
-gravacao no banco nao foi confirmada.
+gravacao no banco nao foi confirmada, nem link sem documento.
+
+UC-13 (RF-20, RN-35): `verificar_segurado` devolve so um booleano — o CPF/CNPJ
+e segurado ativo hoje daquela administradora? Nenhum dado do segurado sai.
 
 O passo de emissao e o mesmo da tela e da CLI (`emitir_um`, RF-11); os
 arquivos ficam em CERTGEN_PASTA_SAIDA com a estrutura RN-19 (RN-34).
@@ -23,6 +26,7 @@ from datetime import date
 from certgen.application.emitir_certificados import (
     OpcoesEmissao,
     RenderizadorPdf,
+    destino_emissao,
     emitir_um,
 )
 from certgen.application.ports import (
@@ -48,6 +52,18 @@ class NenhumCertificado(LookupError):
     """RD-27 — QRY-13 sem linhas (404)."""
 
 
+def _normalizar(administradora: str, cpf_cnpj: str) -> tuple[str, str]:
+    """RF-18 / RF-20 — administradora sem espacos; cpf_cnpj so digitos (a coluna guarda
+    so digitos), com 11 (CPF) ou 14 (CNPJ) posicoes."""
+    adm = (administradora or "").strip()
+    doc = _NAO_DIGITO.sub("", cpf_cnpj or "")
+    if not adm:
+        raise PedidoInvalido("administradora obrigatoria")
+    if len(doc) not in (11, 14):
+        raise PedidoInvalido("cpf_cnpj deve ter 11 (CPF) ou 14 (CNPJ) digitos")
+    return adm, doc
+
+
 @dataclass(frozen=True)
 class PedidoPortal:
     administradora: str
@@ -56,13 +72,8 @@ class PedidoPortal:
 
     @classmethod
     def criar(cls, administradora: str, cpf_cnpj: str, vigencia: date) -> PedidoPortal:
-        """RF-18 — normaliza: cpf_cnpj vira so digitos (a coluna guarda so digitos)."""
-        adm = (administradora or "").strip()
-        doc = _NAO_DIGITO.sub("", cpf_cnpj or "")
-        if not adm:
-            raise PedidoInvalido("administradora obrigatoria")
-        if len(doc) not in (11, 14):
-            raise PedidoInvalido("cpf_cnpj deve ter 11 (CPF) ou 14 (CNPJ) digitos")
+        """RF-18 — normaliza e valida o pedido de emissao."""
+        adm, doc = _normalizar(administradora, cpf_cnpj)
         if not isinstance(vigencia, date):
             raise PedidoInvalido("vigencia deve ser uma data ISO 8601 (RD-06)")
         return cls(adm, doc, vigencia)
@@ -76,10 +87,33 @@ class PedidoPortal:
 
 
 @dataclass(frozen=True)
+class PedidoVerificacao:
+    """RF-20 — o portal pergunta se o documento e segurado ativo da administradora."""
+
+    administradora: str
+    cpf_cnpj: str  # apenas digitos
+
+    @classmethod
+    def criar(cls, administradora: str, cpf_cnpj: str) -> PedidoVerificacao:
+        return cls(*_normalizar(administradora, cpf_cnpj))
+
+    def para_dict(self) -> dict:
+        return {"administradora": self.administradora, "cpf_cnpj": self.cpf_cnpj}
+
+
+def verificar_segurado(
+    repositorio: RepositorioCertificados, pedido: PedidoVerificacao, hoje: date
+) -> bool:
+    """UC-13 / RN-35 — True se ha linha ativa hoje (QRY-14). So o booleano; nada mais sai."""
+    return bool(repositorio.existe_segurado(pedido.administradora, pedido.cpf_cnpj, hoje))
+
+
+@dataclass(frozen=True)
 class ItemPortal:
     chave: ChaveCertificado
     situacao: str  # publicado | ja_publicado | falha
     link: str | None = None
+    documento: dict | None = None  # RD-29: o JSON espelho (RD-10), com arquivo.link
     avisos: tuple[str, ...] = ()
     motivo: str | None = None
 
@@ -88,6 +122,7 @@ class ItemPortal:
             "chave": self.chave.para_dict(),
             "situacao": self.situacao,
             "link": self.link,
+            "documento": self.documento,
             "avisos": list(self.avisos),
             "motivo": self.motivo,
         }
@@ -147,7 +182,7 @@ def _tratar_um(
     renderizar_pdf: RenderizadorPdf,
 ) -> ItemPortal:
     if cert.link_publicado:  # RN-33
-        return ItemPortal(cert.chave, "ja_publicado", link=cert.link_publicado)
+        return _ja_publicado(cert, opcoes)
     try:
         emitido, doc = emitir_um(cert, opcoes, renderizar_pdf)  # JSON valido -> PDF (RF-16)
         if emitido.pdf_path is None or emitido.json_path is None:
@@ -162,8 +197,12 @@ def _tratar_um(
         link = publicador.publicar(emitido.pdf_path, destino)  # confirmado (DEF-19)
         registro.registrar_link(cert.chave, link, opcoes.agora())  # 1 linha (RD-20a)
         doc["arquivo"]["link"] = link  # RD-25: JSON regravado apos upload confirmado
-        emitido.json_path.write_text(serializar(doc), encoding="utf-8")
-        return ItemPortal(cert.chave, "publicado", link=link, avisos=emitido.avisos)
+        texto = serializar(doc)
+        emitido.json_path.write_text(texto, encoding="utf-8")
+        # RD-29: o documento da resposta e EXATAMENTE o que foi gravado (RNF-08)
+        return ItemPortal(
+            cert.chave, "publicado", link=link, documento=json.loads(texto), avisos=emitido.avisos
+        )
     except (
         JsonInvalido,
         NomeArquivoInvalido,
@@ -173,4 +212,25 @@ def _tratar_um(
         OSError,
         json.JSONDecodeError,
     ) as exc:
+        return ItemPortal(cert.chave, "falha", motivo=f"[{type(exc).__name__}] {exc}")
+
+
+def _ja_publicado(cert: Certificado, opcoes: OpcoesEmissao) -> ItemPortal:
+    """RN-33 + RD-29 — sem reemitir: o documento e relido do JSON gravado na emissao
+    anterior (caminho RN-19/RN-34). Sem o arquivo, sai `falha` e sem link (ADR-04)."""
+    try:
+        _, pasta, base = destino_emissao(cert, opcoes)
+        caminho = pasta / f"{base}.json"
+        if not caminho.is_file():
+            return ItemPortal(
+                cert.chave,
+                "falha",
+                motivo=(
+                    f"[DocumentoAusente] link ja gravado ({cert.link_publicado}) mas o JSON "
+                    f"nao esta em {caminho}; reemita pela tela (UC-07) — RN-33/RD-29"
+                ),
+            )
+        doc = json.loads(caminho.read_text(encoding="utf-8"))
+        return ItemPortal(cert.chave, "ja_publicado", link=cert.link_publicado, documento=doc)
+    except (NomeArquivoInvalido, ProdutoIndeterminado, OSError, json.JSONDecodeError) as exc:
         return ItemPortal(cert.chave, "falha", motivo=f"[{type(exc).__name__}] {exc}")

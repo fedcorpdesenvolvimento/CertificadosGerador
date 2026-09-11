@@ -288,6 +288,24 @@ def _emitir_consolidado(
         shutil.rmtree(temporaria, ignore_errors=True)
 
 
+def destino_emissao(cert: Certificado, opcoes: OpcoesEmissao) -> tuple[str, Path, str]:
+    """RN-19 / RD-11 — (pasta relativa, pasta absoluta, nome-base) de um certificado.
+
+    E o unico lugar que decide onde o PDF e o JSON de um certificado ficam. `emitir_um`
+    grava ali; `emitir_portal` (RN-33, RD-29) rele o JSON de la sem reemitir.
+    """
+    pasta_rel = _pasta_destino(cert, opcoes)
+    base = nome_base_certificado(
+        portal=cert.contrato.codigo_pedido_porto,
+        cpf_cnpj=cert.chave.cpf_cnpj,
+        produto=cert.produto.codigo,
+        apolice=cert.chave.apolice,
+        certificado=cert.chave.certificado,
+        fatura=cert.chave.fatura,
+    )
+    return pasta_rel, opcoes.pasta_saida / pasta_rel, base
+
+
 def emitir_um(
     cert: Certificado,
     opcoes: OpcoesEmissao,
@@ -301,16 +319,7 @@ def emitir_um(
     Publico desde a Fase 8: `emitir_portal` (UC-12) emite um certificado por vez com o
     MESMO passo da emissao em lote (RF-11).
     """
-    pasta_rel = _pasta_destino(cert, opcoes)
-    pasta = opcoes.pasta_saida / pasta_rel
-    base = nome_base_certificado(
-        portal=cert.contrato.codigo_pedido_porto,
-        cpf_cnpj=cert.chave.cpf_cnpj,
-        produto=cert.produto.codigo,
-        apolice=cert.chave.apolice,
-        certificado=cert.chave.certificado,
-        fatura=cert.chave.fatura,
-    )
+    pasta_rel, pasta, base = destino_emissao(cert, opcoes)
     meta = MetaEmissao(
         gerado_em=opcoes.agora(),
         nome_pdf=f"{base}.pdf",

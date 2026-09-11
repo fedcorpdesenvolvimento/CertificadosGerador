@@ -202,6 +202,18 @@ class RepositorioFirebird:
         )
         return [self._montar(r) for r in self._executar("certificado_base", f)]
 
+    def existe_segurado(self, administradora: str, cpf_cnpj: str, hoje: date) -> bool:
+        """QRY-14 / RN-35 — contagem de linhas ativas hoje; so o booleano sai (RF-20)."""
+        if not (administradora and cpf_cnpj and hoje):
+            raise ValueError("administradora, cpf_cnpj e hoje sao obrigatorios (RF-20)")
+        sql, _ = montar("existe_segurado")
+        with conexao.conectar() as con:
+            cur = con.cursor()
+            cur.execute(sql, [administradora, cpf_cnpj, hoje, hoje])
+            (qtd,) = cur.fetchone()
+            cur.close()
+        return int(qtd or 0) >= 1
+
     # ------------------------------------------------------------ escrita (RD-20)
     def registrar_link(self, chave: ChaveCertificado, link: str, quando: datetime) -> None:
         """RD-20a — a unica escrita: link_certificado_aws e dt_cria_link, chave RD-01 completa.

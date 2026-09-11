@@ -1,4 +1,8 @@
-"""Fase 8 — API de emissao para o portal (secao 11.1: RF-18, RF-19, RN-30, RNF-10b, RNF-13).
+"""Fase 8 — APIs para o portal (secao 11.1: RF-18, RF-19, RF-20, RN-30, RNF-10b, RNF-13).
+
+Dois endpoints autenticados pela mesma chave (decisao de 11/09/2026):
+  POST /v1/certificados/emitir   — UC-12: emite, publica no S3, devolve link + JSON (RD-29)
+  POST /v1/segurados/verificar   — UC-13: {"existe": bool}; login do segurado no portal
 
 Aplicacao FastAPI SEPARADA da tela (`certgen web`): sem paginas, sem cascata,
 sem Sair/Procurar. Sobe por `certgen api` (RF-19).
@@ -30,7 +34,9 @@ from certgen.application.emitir_portal import (
     NenhumCertificado,
     PedidoInvalido,
     PedidoPortal,
+    PedidoVerificacao,
     emitir_para_portal,
+    verificar_segurado,
 )
 from certgen.application.ports import PublicadorArquivos, RegistroLinks, RepositorioCertificados
 from certgen.config.settings import Config
@@ -38,9 +44,13 @@ from certgen.config.settings import Config
 log = logging.getLogger("certgen.api")
 
 app = FastAPI(
-    title="API de emissao de certificados (portal)",
+    title="APIs do gerador de certificados para o portal",
     version=__version__,
-    description="UC-12 — emite, publica no S3 e devolve o link. Autenticacao por X-API-Key.",
+    description=(
+        "UC-12 — emite, publica no S3 e devolve link + JSON. "
+        "UC-13 — verifica se o CPF/CNPJ e segurado ativo da administradora. "
+        "Autenticacao por X-API-Key."
+    ),
 )
 
 
@@ -128,11 +138,56 @@ class PedidoIn(BaseModel):
     )
 
 
+class VerificacaoIn(BaseModel):
+    """RF-20 — sem vigencia: a pergunta e 'e segurado ativo HOJE?' (RN-35)."""
+
+    administradora: str = Field(..., examples=["0000001192"], description="pessoas.pessoa")
+    cpf_cnpj: str = Field(
+        ..., examples=["330.163.307-25"], description="CPF ou CNPJ; pontuacao aceita"
+    )
+
+
+class VerificacaoOut(BaseModel):
+    existe: bool
+
+
 # ------------------------------------------------------------------ endpoints
 @app.get("/v1/saude", dependencies=[Depends(autenticar)])
 def saude() -> dict:
     """RF-18 — o portal testa a chave aqui."""
     return {"ok": True, "versao": __version__}
+
+
+@app.post(
+    "/v1/segurados/verificar",
+    dependencies=[Depends(autenticar)],
+    response_model=VerificacaoOut,
+    responses={400: {"description": "administradora vazia ou documento sem 11/14 digitos"}},
+)
+def verificar(
+    req: VerificacaoIn,
+    repo: RepositorioCertificados = Depends(get_repositorio),
+):
+    """UC-13 / RF-20 — {"existe": true|false}. Nenhum dado do segurado sai (RN-35)."""
+    inicio = time.monotonic()
+    try:
+        pedido = PedidoVerificacao.criar(req.administradora, req.cpf_cnpj)
+    except PedidoInvalido as exc:
+        return JSONResponse({"erro": str(exc)}, status_code=400)
+    existe = verificar_segurado(repo, pedido, date.today())
+    log.info(  # RNF-13: sem chave, sem nome
+        json.dumps(
+            {
+                "evento": "verificacao_portal",
+                "pedido": pedido.para_dict(),
+                "existe": existe,
+                "http": 200,
+                "duracao_ms": round((time.monotonic() - inicio) * 1000),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return VerificacaoOut(existe=existe)
 
 
 @app.post("/v1/certificados/emitir", dependencies=[Depends(autenticar)])

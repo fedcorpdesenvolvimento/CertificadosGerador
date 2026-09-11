@@ -3,7 +3,7 @@
 **Projeto:** Gerador de Certificados de Seguro Incêndio / Conteúdo
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
-**Documento:** v0.4 — 2026-09-10 *(v0.3 em 2026-09-04, v0.2 em 2026-09-03)*
+**Documento:** v0.5 — 2026-09-11 *(v0.4 em 2026-09-10, v0.3 em 2026-09-04, v0.2 em 2026-09-03)*
 **Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
 
 ### Fontes analisados
@@ -166,7 +166,8 @@ O legado tem **dois botões de emissão com regras diferentes**, e essa é a des
 | `UC-09` | Publicar certificado no S3 e gravar o link | ambos | Fase 7 |
 | `UC-10` | Gerar XML de envio à Porto | ambos | Fase 7 |
 | `UC-11` | Emitir consumindo API em vez de Firebird | — | Fase 5 |
-| `UC-12` | Emitir certificado a pedido do **portal** (API de emissão: localizar, emitir, publicar no S3, gravar e devolver o link) | **novo** | Fase 8 |
+| `UC-12` | Emitir certificado a pedido do **portal** (API de emissão: localizar, emitir, publicar no S3, gravar e devolver o link **e o JSON**) | **novo** | Fase 8 |
+| `UC-13` | Verificar, a pedido do **portal**, se um CPF/CNPJ é segurado ativo de uma administradora (API de verificação, usada no login do portal) | **novo** | Fase 8 |
 
 ---
 
@@ -702,6 +703,23 @@ Consulta canônica (`6.0`) com os filtros `ss.administradora = :administradora`,
 **`RD-27`** — O portal **não** conhece a chave `RD-01`. Identifica o segurado por `(administradora, cpf_cnpj, vigencia)`, e `vigencia` **DEVE** casar exatamente com `segurados_inc.inicio_vig` (mesmo critério da tela, `RN-05`; decisão do usuário, alternativa "data dentro do período" rejeitada). O resultado pode ter 0, 1 ou N linhas: 0 é `404`; N é legítimo (`RD-22`: mesmo CPF em mais de uma unidade) e **todos** são emitidos (`RN-32`). Não se filtra por `codigo_pedido_port` (`RD-21`).
 
 **`RD-28`** — A projeção da consulta canônica passa a incluir `ss.link_certificado_aws`, mapeado em `Certificado.link_publicado`. É metadado de publicação: **NÃO** entra no JSON (`RD-10`) nem no PDF; serve a `RN-33`.
+
+### 6.14 `QRY-14` — Verificação de segurado pelo portal *(Fase 8, decisão do usuário em 11/09/2026)*
+
+```sql
+SELECT COUNT(*) AS qtd
+FROM segurados_inc ss
+WHERE ss.status_seg <> 'C'
+  AND ss.cpf_cnpj <> ''
+  AND ss.administradora = :administradora
+  AND ss.cpf_cnpj = :cpf_cnpj
+  AND ss.inicio_vig <= :hoje
+  AND ss.final_vig >= :hoje
+```
+
+Não é a consulta canônica: devolve só a contagem, porque a resposta é um booleano (`RF-20`) e nenhum dado do segurado sai. Bloco `-- name: existe_segurado` em `queries.sql` (`RD-17`), com os filtros fixos `RD-02`/`RD-19`.
+
+**`RN-35` — Existência = vigência ativa hoje.** "O CPF/CNPJ existe na base da administradora" significa: ao menos uma linha não cancelada dessa administradora com esse documento cuja vigência **inclui a data de hoje** (`inicio_vig <= hoje <= final_vig`). Segurado com vigência encerrada **não** autentica (decisão do usuário; alternativas "qualquer linha não cancelada" e "encerrada há até 12 meses" rejeitadas). `hoje` é a data local do servidor no momento da chamada. Consequência: linha com `final_vig` nula ou igual ao zero-Delphi (`DEF-06`) **não** conta como ativa — registrado em `GAP-25`.
 
 ---
 ### 6.12 `RN-03` — Derivação do produto *(`GAP-07` fechado)*
@@ -1501,7 +1519,7 @@ components:
 
 > A API desta seção é **consumida** pelo gerador (origem de dados). A API da seção `11.1` é **exposta** pelo gerador ao portal (emissão). `RN-15` continua valendo para a primeira; a segunda emite porque **é** o gerador.
 
-### 11.1 Fase 8 — API de emissão para o portal *(decisões do usuário em 10/09/2026)*
+### 11.1 Fase 8 — APIs para o portal: emissão e verificação *(decisões do usuário em 10 e 11/09/2026)*
 
 **Contexto.** O portal do Grupo FedCorp precisa oferecer ao segurado o certificado sem operador. Ele chama o gerador com uma chave de autenticação, o código da administradora, o CPF/CNPJ do segurado e a vigência; o gerador localiza (`QRY-13`), emite (`UC-01` para um certificado), publica no S3 (`RN-29`), grava o link (`RF-16`, `RD-20a`) e devolve o link na mesma resposta (síncrono — decisão do usuário; um PDF leva poucos segundos).
 
@@ -1517,12 +1535,15 @@ components:
                 "fatura": 380819, "certificado": "CF1DI/AP.602", "cpf_cnpj": "33016330725"},
       "situacao": "publicado",
       "link": "https://certincendioaws.s3.us-east-2.amazonaws.com/0000001192/0004/072026/380819/0_33016330725_0004_13008_CF1DI-AP602_380819.pdf",
+      "documento": { "...": "o JSON espelho do certificado (RD-10..RD-15), com arquivo.link preenchido — RD-29" },
       "avisos": [],
       "motivo": null
     }
   ]
 }
 ```
+
+**`RD-29`** *(11/09/2026)* — Cada item da resposta carrega em `documento` o **mesmo** JSON gravado em disco (`RN-34`, `RNF-08`), já com `arquivo.link`. Não é um resumo nem outro schema: é o documento `RD-10` tal como validado por `RD-15`. Em `falha`, `documento` é `null`.
 
 `situacao` ∈ `publicado` (emitido agora), `ja_publicado` (`RN-33`), `falha` (com `motivo`, `RF-09`). Códigos HTTP: `401` chave ausente ou inválida; `400` corpo inválido; `404` `QRY-13` sem linhas; `502` nenhum certificado pôde ser publicado (todos `falha`); `200` quando ao menos um tem link. Um `GET /v1/saude` autenticado devolve `{"ok": true, "versao": ...}` para o portal testar a chave. O contrato OpenAPI é o gerado pelo FastAPI em `/docs`.
 
@@ -1532,11 +1553,19 @@ components:
 
 **`RN-32` — Vários certificados.** Se `QRY-13` devolver N > 1 linhas, a API emite **todos** e devolve N itens; o portal exibe um link por unidade. Nenhum é escolhido em silêncio (`ADR-04`).
 
-**`RN-33` — Já publicado.** Certificado com `link_publicado` preenchido (`RD-28`) **não** é reemitido: a API devolve o link existente com `situacao = "ja_publicado"`. Reemissão continua sendo ação do operador na tela (`UC-07`). Consequência aceita pelo usuário: o PDF publicado pode não refletir alterações posteriores no banco.
+**`RN-33` — Já publicado.** Certificado com `link_publicado` preenchido (`RD-28`) **não** é reemitido: a API devolve o link existente com `situacao = "ja_publicado"`. Reemissão continua sendo ação do operador na tela (`UC-07`). Consequência aceita pelo usuário: o PDF publicado pode não refletir alterações posteriores no banco. *(11/09/2026)* O `documento` (`RD-29`) é **relido** do JSON em `CERTGEN_PASTA_SAIDA` no caminho `RN-19`/`RN-34` esperado para aquele certificado; se o arquivo não existir (link gravado pela tela em outra pasta, ou pelo legado), o item sai como `falha` com motivo explícito e sem link — nunca se devolve link sem o documento (`ADR-04`).
 
 **`RN-34` — Cópia local.** A API grava PDF e JSON em `CERTGEN_PASTA_SAIDA` com a estrutura `RN-19`, exatamente como a emissão manual, antes de publicar. O JSON é regravado com `arquivo.link` após o upload confirmado (`RD-25`, `RF-16`). O JSON é o mesmo documento em qualquer fluxo (`RNF-08`).
 
-**`RF-19` — Processo separado.** A API sobe por `certgen api` (porta padrão `8010`), processo e aplicação FastAPI distintos da tela (`certgen web`), que continua sem autenticação e só na LAN (`RNF-10a`). A API **não** serve páginas, não expõe *Sair*/*Procurar…* e não tem os endpoints da cascata.
+**`RF-20` — Endpoint de verificação** *(`UC-13`, 11/09/2026)*. `POST /v1/segurados/verificar`, corpo JSON `{administradora, cpf_cnpj}` (mesmas normalizações de `RF-18`; **sem** vigência). Resposta **sempre** `200` quando autenticado e bem formado:
+
+```json
+{"existe": true}
+```
+
+`existe` é `true` se `QRY-14` contar ≥ 1 linha (`RN-35`), senão `false`. **Nenhum** outro campo: nem nome, nem vigências, nem chaves (decisão do usuário; o portal já tem o cadastro). Códigos: `401` chave ausente/inválida; `400` documento sem 11 ou 14 dígitos ou administradora vazia; `422` corpo malformado; `503` banco indisponível. Mesmo processo, mesma aplicação FastAPI e **mesma chave** `RN-30` do endpoint de emissão (decisão do usuário; `GAP-24` continua). Motivação: o portal autentica o segurado consultando o gerador em tempo real, em vez de receber uma cópia mensal da base. `RNF-13` se aplica: um registro de log por chamada com administradora, documento, resultado e duração — sem chave e sem nome.
+
+**`RF-19` — Processo separado.** A API sobe por `certgen api` (porta padrão `8010`), processo e aplicação FastAPI distintos da tela (`certgen web`), que continua sem autenticação e só na LAN (`RNF-10a`). A API **não** serve páginas, não expõe *Sair*/*Procurar…* e não tem os endpoints da cascata. Os dois endpoints do portal (`RF-18` emissão, `RF-20` verificação) vivem nesta mesma aplicação.
 
 **`RNF-10b`** — `certgen api` escuta em `127.0.0.1` por padrão; `--rede` liga em `0.0.0.0` para o portal chegar pela rede interna. Nesta fase roda na **máquina do usuário** (decisão de 10/09/2026). Não há TLS no processo: exposição fora da LAN exige proxy HTTPS na frente e está registrada em `GAP-23`.
 
@@ -1657,6 +1686,8 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 **Aceitação:** com a chave correta, `POST /v1/certificados/emitir` devolve link acessível e o banco tem `link_certificado_aws` preenchido só depois do upload confirmado; chave errada dá `401` sem tocar no banco; segundo pedido igual devolve `ja_publicado` sem gerar arquivo.
 
 > **Estado em 10/09/2026:** entregue conforme `11.1`; testado com adaptadores falsos (sem banco, sem S3). Validação ponta a ponta com o portal pendente.
+>
+> **Estado em 11/09/2026:** acrescentados `UC-13`/`RF-20` (`POST /v1/segurados/verificar`, `QRY-14`, `RN-35`) e `RD-29` (`documento` na resposta de emissão). Mesmos testes com adaptadores falsos; validação com o portal e o banco real pendente.
 
 ---
 
@@ -1775,6 +1806,8 @@ Verificações empíricas que alteram requisitos:
 |---|---|---|---|
 | `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
 | `GAP-24` | Chave única (`RN-30`): rotação implica janela sem serviço; sem chave por administradora. | — | Decidir se o portal terá várias chaves ou chave por administradora; então `RN-30` passa a lista. |
+| `GAP-25` *(11/09/2026)* | `RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` (`DEF-06`, confirmado em produção nos registros `15008`) **nunca** autenticam no portal. | Login desses segurados | Usuário decide: corrigir `final_vig` no banco, ou `RN-35` passa a tratar `final_vig` ausente como "sem fim" (só com `inicio_vig <= hoje`). |
+| `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`. |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
 
@@ -1845,6 +1878,7 @@ Regras derivadas das decisões de 03/09/2026:
 | Requisito novo (JSON) | `RD-10`..`RD-15`, `RD-23`, `RNF-04` |
 | Faseamento local → API | `ADR-01`, `RD-16`, `RD-18`, `RN-15`, seção 11 |
 | Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
+| Pedido do usuário (11/09/2026) — verificação de segurado + JSON na emissão | `UC-13`, `QRY-14`, `RN-35`, `RF-20`, `RD-29`, `GAP-25`, `GAP-26` |
 
 **`RD-22`** — Os dois PDFs `..._15008_381066` compartilham fatura e apólice, têm CPFs e certificados distintos e residem na mesma unidade condominial. Confirma que **`certificado` não é único por fatura** e que a chave de emissão precisa de `cpf_cnpj` para desambiguar (`RD-01`, `RD-21`).
 
@@ -2116,10 +2150,19 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `.env` | `CERTGEN_API_KEY` (gerada em 10/09/2026, entregue ao portal fora do repositório), `AWS_REGION`, `AWS_S3_BUCKET`, credenciais AWS pela cadeia padrão do boto3. |
 | `GAP-23`, `GAP-24` | TLS/URL assinada; rotação da chave única. |
 
+### 11/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `UC-13` / `RF-20` | Segunda API para o portal: `POST /v1/segurados/verificar` com `administradora` e `cpf_cnpj`, resposta `{"existe": true|false}`. O portal a usa para autenticar o segurado em tempo real, dispensando o envio mensal da base. Decisões do usuário: existe = vigência ativa hoje (`RN-35`); mesmo processo e mesma chave da emissão; resposta só com o booleano. |
+| `QRY-14` | `COUNT(*)` em `segurados_inc` por administradora, documento e `inicio_vig <= hoje <= final_vig`, com `RD-02`/`RD-19`. Bloco `existe_segurado`. |
+| `RD-29` | A resposta da emissão passa a trazer, por certificado, o campo `documento` = JSON espelho completo (`RD-10`) com `arquivo.link`. Em `ja_publicado` é relido do disco; ausente → `falha`. |
+| `GAP-25`, `GAP-26` | `final_vig` ausente nunca autentica; endpoint de verificação é oráculo de CPF sem limite de taxa. |
+
 ### Lacunas abertas em 04/09/2026
 
 `GAP-10` (rc × resp_civil), `GAP-11` (portal zero), `GAP-12` (possui_portal no fluxo em massa), `GAP-14` (produtos 0003/0005), `GAP-19` (erros de digitação nos textos legais), `GAP-21`/`GAP-22` (módulos Prestamista e Vida). Nenhuma bloqueia a Fase 5, 6 ou 7.
 
 ---
 
-*Fim do documento. Versão 0.4 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*
+*Fim do documento. Versão 0.5 — `DRAFT`. Atualize a especificação antes do código, nunca depois.*

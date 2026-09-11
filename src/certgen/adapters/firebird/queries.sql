@@ -150,3 +150,17 @@ LEFT JOIN pessoas  pes  ON pes.pessoa      = fat.administradora
 WHERE fat.status = 'A'
   /*FILTROS*/
 ORDER BY fat.administradora, fat.apolice, fat.seq, fat.fatura
+
+-- name: existe_segurado
+-- QRY-14 / RN-35 (Fase 8, UC-13) — verificacao pelo portal: o CPF/CNPJ e segurado
+-- ATIVO da administradora hoje? So a contagem sai; nenhum dado do segurado (RF-20).
+-- Parametros fixos, na ordem: administradora, cpf_cnpj, hoje, hoje.
+-- final_vig nula ou 30/12/1899 (DEF-06) nao passa em final_vig >= hoje (GAP-25).
+SELECT COUNT(*) AS qtd
+FROM segurados_inc ss
+WHERE ss.status_seg <> 'C'
+  AND ss.cpf_cnpj <> ''
+  AND ss.administradora = ?
+  AND ss.cpf_cnpj = ?
+  AND ss.inicio_vig <= ?
+  AND ss.final_vig >= ?

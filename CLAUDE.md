@@ -62,8 +62,10 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Lint: `ruff check .`
 - Verificar Firebird: `python -m certgen.cli check-conexao`
 - Tela web: `python -m certgen.cli web` (127.0.0.1:8000; `--reload` em desenvolvimento)
-- API do portal (Fase 8, secao 11.1): `python -m certgen.cli api` (127.0.0.1:8010; `--rede` para a LAN;
-  exige `CERTGEN_API_KEY` no `.env`; `POST /v1/certificados/emitir` com header `X-API-Key`)
+- APIs do portal (Fase 8, secao 11.1): `python -m certgen.cli api` (127.0.0.1:8010; `--rede` para a LAN;
+  exige `CERTGEN_API_KEY` no `.env`; header `X-API-Key`). `POST /v1/certificados/emitir` devolve
+  link + JSON espelho (RD-29); `POST /v1/segurados/verificar` devolve `{"existe": bool}` (RF-20, RN-35:
+  vigencia ativa hoje) para o login do segurado no portal.
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
 - CLI: `python -m certgen.cli --help`
 
