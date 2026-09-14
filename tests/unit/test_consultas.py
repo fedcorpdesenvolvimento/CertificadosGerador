@@ -121,10 +121,10 @@ def test_rn_07_marcador_removido_quando_nao_ha_filtros():
     assert "/*FILTROS*/" not in sql
 
 
-def test_qry_14_existe_segurado_so_conta_e_exige_vigencia_ativa():
-    """RN-35 / RF-20: COUNT, sem projetar dados do segurado; inicio_vig <= hoje <= final_vig."""
+def test_qry_14_existe_segurado_so_conta_e_nao_filtra_vigencia():
+    """RN-35 (14/09/2026) / RF-20: COUNT, sem dados do segurado, sem filtro de vigencia."""
     sql = consulta("existe_segurado")
     assert sql.upper().startswith("SELECT COUNT(*)")
     assert "ss.nome" not in sql and "ss.endereco" not in sql
-    assert "ss.inicio_vig <= ?" in sql and "ss.final_vig >= ?" in sql
-    assert sql.count("?") == 4  # administradora, cpf_cnpj, hoje, hoje
+    assert "inicio_vig" not in sql and "final_vig" not in sql
+    assert sql.count("?") == 2  # administradora, cpf_cnpj

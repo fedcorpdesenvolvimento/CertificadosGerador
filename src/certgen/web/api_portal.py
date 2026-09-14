@@ -3,6 +3,7 @@
 Dois endpoints autenticados pela mesma chave (decisao de 11/09/2026):
   POST /v1/certificados/emitir   — UC-12: emite, publica no S3, devolve link + JSON (RD-29)
   POST /v1/segurados/verificar   — UC-13: {"existe": bool}; login do segurado no portal
+                                   (qualquer linha nao cancelada, RN-35 de 14/09/2026)
 
 Aplicacao FastAPI SEPARADA da tela (`certgen web`): sem paginas, sem cascata,
 sem Sair/Procurar. Sobe por `certgen api` (RF-19).
@@ -139,7 +140,7 @@ class PedidoIn(BaseModel):
 
 
 class VerificacaoIn(BaseModel):
-    """RF-20 — sem vigencia: a pergunta e 'e segurado ativo HOJE?' (RN-35)."""
+    """RF-20 — sem vigencia: a pergunta e 'e segurado desta administradora?' (RN-35)."""
 
     administradora: str = Field(..., examples=["0000001192"], description="pessoas.pessoa")
     cpf_cnpj: str = Field(
@@ -168,13 +169,13 @@ def verificar(
     req: VerificacaoIn,
     repo: RepositorioCertificados = Depends(get_repositorio),
 ):
-    """UC-13 / RF-20 — {"existe": true|false}. Nenhum dado do segurado sai (RN-35)."""
+    """UC-13 / RF-20 — {"existe": true|false}, sem olhar vigencia (RN-35). Nada mais sai."""
     inicio = time.monotonic()
     try:
         pedido = PedidoVerificacao.criar(req.administradora, req.cpf_cnpj)
     except PedidoInvalido as exc:
         return JSONResponse({"erro": str(exc)}, status_code=400)
-    existe = verificar_segurado(repo, pedido, date.today())
+    existe = verificar_segurado(repo, pedido)
     log.info(  # RNF-13: sem chave, sem nome
         json.dumps(
             {

@@ -4,8 +4,8 @@ Guia para validar `certgen api` (Fase 8, seção 11.1 da especificação) a part
 São dois endpoints com a mesma chave:
 
 - **Verificação** (`/v1/segurados/verificar`): o portal pergunta se o CPF/CNPJ é segurado
-  ativo hoje daquela administradora e recebe só `{"existe": true|false}`. É a chamada do
-  login do segurado; só lê o banco.
+  (não cancelado) daquela administradora e recebe só `{"existe": true|false}`. É a
+  chamada do login do segurado; só lê o banco. Não olha vigência (RN-35, 14/09/2026).
 - **Emissão** (`/v1/certificados/emitir`): emite o certificado, publica o PDF no S3, grava o
   link no Firebird e devolve o link **e o JSON espelho** do certificado.
 
@@ -76,15 +76,16 @@ São dois endpoints com a mesma chave:
     "cpf_cnpj": "330.163.307-25"
   }
   ```
-  Não há vigência: a pergunta é "é segurado ativo **hoje**?" (`inicio_vig <= hoje <= final_vig`, RN-35).
+  Não há vigência: a pergunta é "este CPF/CNPJ tem alguma linha não cancelada nesta
+  administradora?" (RN-35, revista em 14/09/2026).
 - Esperado: `200` e **só** isto:
   ```json
   {"existe": true}
   ```
-  `false` quando o CPF não é da administradora, não existe, está cancelado ou a vigência
-  já terminou. Nenhum dado do segurado sai. Esta chamada não grava nada e não gera arquivo.
-- Teste também com um CPF de outra administradora (deve dar `false`) e com a mesma
-  administradora e um CPF com vigência encerrada (`false`).
+  `false` quando o CPF não é da administradora, não existe ou está cancelado. Vigência
+  encerrada **não** dá `false`. Nenhum dado do segurado sai. Esta chamada não grava nada.
+- Teste também com um CPF de outra administradora (deve dar `false`) e com um CPF
+  inventado (`false`).
 
 ### 3.3 Emitir certificado
 
@@ -140,6 +141,7 @@ São dois endpoints com a mesma chave:
 | 3 | `vigencia` como `01/07/2026` | `422` (validação do FastAPI, corpo inválido) |
 | 4 | Corpo sem `cpf_cnpj` | `422` |
 | 5 | `cpf_cnpj` com letras ou tamanho errado (nos dois endpoints) | `400` `{"erro": "..."}` |
+| 5a | `administradora` com mais de 10 caracteres, por exemplo `"{0000000019}"` com chaves digitadas no body | `400`. No Postman, variável é `{{nome}}` com **duas** chaves; com uma só vira texto literal. Use `"{{administradora}}"` ou o código puro `"0000000019"` |
 | 6 | CPF que existe, mas `vigencia` de outro mês | `404` `{"erro": "...", "pedido": {...}}` |
 | 7 | Administradora inexistente | `404` |
 | 8 | Firebird parado ou `FB_*` errado | `500`/`503`, e nada publicado |
@@ -223,3 +225,131 @@ pm.test("saude ok", () => pm.expect(pm.response.json().ok).to.be.true);
 Exporte a Collection e o Environment (**...** → *Export*) **removendo o valor**
 de `api_key` antes. A chave vai por canal seguro, nunca junto com o arquivo
 exportado nem pelo repositório (RN-30, SEC-01).
+
+---
+
+## 9. Esta máquina como servidora das duas APIs (LAN)
+
+Levantado em 11/09/2026: computador `TI-Alberto`, IP `192.168.10.101` (adaptador Wi-Fi).
+O portal e o Postman de outras máquinas chegam por `http://192.168.10.101:8010`.
+
+### 9.1 IP fixo
+
+O IP muda se o roteador redistribuir o DHCP; o portal precisa de um endereço estável.
+Peça ao responsável pela rede uma **reserva de DHCP** para o MAC desta máquina, ou fixe
+o IP em *Configurações → Rede e Internet → Wi-Fi → Propriedades → Atribuição de IP →
+Manual*. Prefira cabo (Ethernet) a Wi-Fi para um servidor.
+
+### 9.2 Firewall do Windows (uma vez, PowerShell como administrador)
+
+```powershell
+New-NetFirewallRule -DisplayName "Certgen API 8010" -Direction Inbound -Protocol TCP `
+  -LocalPort 8010 -Action Allow -Profile Private,Domain -RemoteAddress LocalSubnet
+```
+
+`-RemoteAddress LocalSubnet` limita a regra à rede interna (GAP-23: sem TLS, nunca abrir
+para a internet). Se o perfil da rede estiver como *Público*, mude para *Privado* em
+*Configurações → Rede → Propriedades da rede*, senão a regra não se aplica.
+
+### 9.3 Subir a API aceitando a rede
+
+Manual, no PowerShell:
+
+```powershell
+cd "U:\--2021\05-Gerador Certificados"
+.\.venv\Scripts\Activate.ps1
+python -m certgen.cli api --rede
+```
+
+Ou pelo script, que reinicia sozinho se o processo cair e grava o log em `logs\api-AAAA-MM-DD.log`:
+
+```powershell
+.\scripts\iniciar_api.ps1
+```
+
+**Primeira subida é lenta.** O projeto e a `.venv` ficam na pasta de rede `U:`; só
+carregar os módulos leva de 30 s a mais de 2 min a frio (medido em 14/09/2026: 34 s de
+importação). A janela parece travada e não imprime nada nesse tempo. Espere a linha
+`Uvicorn running on http://0.0.0.0:8010`. Nas subidas seguintes, com o cache do Windows
+quente, leva 2 a 5 s.
+
+Confirme na própria máquina: `http://127.0.0.1:8010/docs` deve abrir. De outra máquina
+da rede, no navegador: `http://192.168.10.101:8010/docs`. Se não abrir de fora mas abrir
+localmente, o problema é firewall (9.2) ou perfil de rede.
+
+**Perfil de rede Público bloqueia tudo.** A regra de 9.2 vale só para *Privado* e
+*Domínio*. Verifique e corrija (PowerShell como administrador):
+
+```powershell
+Get-NetConnectionProfile | Select-Object Name, NetworkCategory, InterfaceAlias
+Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private
+```
+
+Em 14/09/2026 a rede `FEDCORPWF 3` desta máquina estava como **Public**: nenhuma máquina
+da rede conseguia chegar, embora a API respondesse `200` localmente e pelo IP
+`192.168.10.101` a partir da própria máquina.
+
+### 9.4 Subir junto com o Windows (Agendador de Tarefas)
+
+1. *Agendador de Tarefas → Criar Tarefa*.
+2. Geral: nome `Certgen API`; marcar *Executar estando o usuário conectado ou não* e
+   *Executar com privilégios mais altos* desmarcado (não precisa).
+3. Disparadores: *Ao fazer logon* (ou *Na inicialização*, se a unidade `U:` estiver
+   mapeada por GPO antes do logon; se não, use logon).
+4. Ações: *Iniciar um programa*
+   - Programa: `powershell.exe`
+   - Argumentos: `-ExecutionPolicy Bypass -WindowStyle Hidden -File "U:\--2021\05-Gerador Certificados\scripts\iniciar_api.ps1"`
+5. Condições: desmarcar *Iniciar a tarefa somente se o computador estiver ligado à rede elétrica*.
+6. Configurações: marcar *Se a tarefa falhar, reiniciar a cada 1 minuto*.
+
+Atenção: o projeto roda direto da pasta de rede `U:`. Se a unidade não estiver mapeada
+quando a tarefa disparar, a API não sobe. Para um servidor definitivo, copiar o projeto
+para um disco local é o caminho.
+
+### 9.5 O que precisa estar de pé
+
+| Dependência | Onde | Se faltar |
+|---|---|---|
+| Firebird 2.5 | `192.168.0.6` (FATURA.GDB) | verificação e emissão respondem `5xx`; o script reinicia a API |
+| Chromium do Playwright | `python -m playwright install chromium` nesta máquina | emissão falha (`503`); verificação continua |
+| Credenciais AWS | `.env` (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) | emissão sai `502` com `falha`; nada gravado no banco |
+| `CERTGEN_API_KEY` | `.env` | a API recusa subir |
+| Pasta `CERTGEN_PASTA_SAIDA` | disco local ou rede acessível a este usuário | emissão falha antes de publicar |
+
+Esta máquina precisa ficar ligada e sem suspender: *Configurações → Sistema → Energia →
+Tela e suspensão → Nunca* quando conectado.
+
+## 10. Postman apontando para o servidor da rede
+
+1. Duplique o environment `Certgen local` como `Certgen rede` e troque `base_url` para
+   `http://192.168.10.101:8010`. A `api_key` é a mesma.
+2. Com o environment `Certgen rede` selecionado, rode primeiro `GET /v1/saude` (3.1).
+   `200` prova chave, firewall e rota de rede de uma vez.
+3. Rode a verificação (3.2) com um CPF ativo e um inativo; depois a emissão (3.3) e a
+   repetição (3.4). A ordem importa: a emissão grava no banco e no S3.
+4. Use *Collection Runner* (botão *Run* na Collection) para executar as quatro requests em
+   sequência com os testes da seção 7. Para repetir sem efeitos, mantenha só saúde e
+   verificação no runner.
+5. Para entregar ao portal, exporte Collection e Environment sem o valor de `api_key`
+   (seção 8) e informe separadamente o endereço `http://192.168.10.101:8010` e a chave.
+
+## 11. Importar tudo pronto
+
+Em vez de criar Collection e Environments à mão (seções 2 e 3), importe os arquivos de
+`docs/postman/`:
+
+| Arquivo | O que é |
+|---|---|
+| `Certgen-API.postman_collection.json` | Collection com as 4 requests em ordem, a pasta *Erros esperados* e os testes automáticos |
+| `Certgen-local.postman_environment.json` | Environment `Certgen local` (`http://127.0.0.1:8010`) |
+| `Certgen-rede.postman_environment.json` | Environment `Certgen rede` (`http://192.168.10.101:8010`) |
+
+1. Postman → *Import* → arraste os três arquivos (ou *Upload Files*).
+2. Selecione o environment desejado e preencha `api_key` com a chave do `.env`
+   (*Current value*; o arquivo vem com o valor vazio de propósito, RN-30).
+3. Ajuste `administradora`, `cpf_cnpj` e `vigencia` para o segurado de teste. As requests
+   usam essas variáveis; não é preciso editar o body.
+4. Rode na ordem 1 → 2 → 3 → 4. A request 3 grava no S3 e no banco. Os testes de cada
+   request aparecem na aba *Test Results*.
+5. *Run collection* executa tudo em sequência; desmarque as requests 3 e 4 para repetir sem
+   efeito.

@@ -713,13 +713,11 @@ WHERE ss.status_seg <> 'C'
   AND ss.cpf_cnpj <> ''
   AND ss.administradora = :administradora
   AND ss.cpf_cnpj = :cpf_cnpj
-  AND ss.inicio_vig <= :hoje
-  AND ss.final_vig >= :hoje
 ```
 
-Não é a consulta canônica: devolve só a contagem, porque a resposta é um booleano (`RF-20`) e nenhum dado do segurado sai. Bloco `-- name: existe_segurado` em `queries.sql` (`RD-17`), com os filtros fixos `RD-02`/`RD-19`.
+Não é a consulta canônica: devolve só a contagem, porque a resposta é um booleano (`RF-20`) e nenhum dado do segurado sai. Bloco `-- name: existe_segurado` em `queries.sql` (`RD-17`), com os filtros fixos `RD-02`/`RD-19`. Sem filtro de vigência (`RN-35`, 14/09/2026).
 
-**`RN-35` — Existência = vigência ativa hoje.** "O CPF/CNPJ existe na base da administradora" significa: ao menos uma linha não cancelada dessa administradora com esse documento cuja vigência **inclui a data de hoje** (`inicio_vig <= hoje <= final_vig`). Segurado com vigência encerrada **não** autentica (decisão do usuário; alternativas "qualquer linha não cancelada" e "encerrada há até 12 meses" rejeitadas). `hoje` é a data local do servidor no momento da chamada. Consequência: linha com `final_vig` nula ou igual ao zero-Delphi (`DEF-06`) **não** conta como ativa — registrado em `GAP-25`.
+**`RN-35` — Existência = qualquer linha não cancelada** *(revisto em 14/09/2026)*. "O CPF/CNPJ existe na base da administradora" significa: ao menos uma linha `status_seg <> 'C'` dessa administradora com esse documento, **sem** filtro de vigência. Histórico: em 11/09 a regra era "vigência ativa hoje" (`inicio_vig <= hoje <= final_vig`); no primeiro teste real (14/09) constatou-se que as vigências em `segurados_inc` são **mensais, uma linha por fatura**, e a fatura do mês corrente entra no banco com atraso — em 14/09/2026 a administradora `0000000019` só tinha linhas até 08/2026. Com a regra antiga, nenhum segurado dela entrava no portal até a fatura de setembro ser lançada, todo mês. O usuário escolheu "qualquer linha não cancelada" (alternativas rejeitadas: tolerância de 60 dias; últimos 12 meses; manter ativa hoje). Consequência aceita: ex-segurado continua autenticando enquanto tiver linha não cancelada. `GAP-25` fecha por consequência: `final_vig` ausente não influi.
 
 ---
 ### 6.12 `RN-03` — Derivação do produto *(`GAP-07` fechado)*
@@ -1563,7 +1561,7 @@ components:
 {"existe": true}
 ```
 
-`existe` é `true` se `QRY-14` contar ≥ 1 linha (`RN-35`), senão `false`. **Nenhum** outro campo: nem nome, nem vigências, nem chaves (decisão do usuário; o portal já tem o cadastro). Códigos: `401` chave ausente/inválida; `400` documento sem 11 ou 14 dígitos ou administradora vazia; `422` corpo malformado; `503` banco indisponível. Mesmo processo, mesma aplicação FastAPI e **mesma chave** `RN-30` do endpoint de emissão (decisão do usuário; `GAP-24` continua). Motivação: o portal autentica o segurado consultando o gerador em tempo real, em vez de receber uma cópia mensal da base. `RNF-13` se aplica: um registro de log por chamada com administradora, documento, resultado e duração — sem chave e sem nome.
+`existe` é `true` se `QRY-14` contar ≥ 1 linha (`RN-35`), senão `false`. **Nenhum** outro campo: nem nome, nem vigências, nem chaves (decisão do usuário; o portal já tem o cadastro). Códigos: `401` chave ausente/inválida; `400` documento sem 11 ou 14 dígitos, administradora vazia ou administradora com mais de 10 caracteres (`pessoas.pessoa` é `CHAR(10)`, seção 4.2 — vale também para `RF-18`; visto em 14/09/2026 quando o Postman enviou `{0000000019}` com chaves literais e o driver devolvia `500`); `422` corpo malformado; `503` banco indisponível. Mesmo processo, mesma aplicação FastAPI e **mesma chave** `RN-30` do endpoint de emissão (decisão do usuário; `GAP-24` continua). Motivação: o portal autentica o segurado consultando o gerador em tempo real, em vez de receber uma cópia mensal da base. `RNF-13` se aplica: um registro de log por chamada com administradora, documento, resultado e duração — sem chave e sem nome.
 
 **`RF-19` — Processo separado.** A API sobe por `certgen api` (porta padrão `8010`), processo e aplicação FastAPI distintos da tela (`certgen web`), que continua sem autenticação e só na LAN (`RNF-10a`). A API **não** serve páginas, não expõe *Sair*/*Procurar…* e não tem os endpoints da cascata. Os dois endpoints do portal (`RF-18` emissão, `RF-20` verificação) vivem nesta mesma aplicação.
 
@@ -1806,7 +1804,7 @@ Verificações empíricas que alteram requisitos:
 |---|---|---|---|
 | `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
 | `GAP-24` | Chave única (`RN-30`): rotação implica janela sem serviço; sem chave por administradora. | — | Decidir se o portal terá várias chaves ou chave por administradora; então `RN-30` passa a lista. |
-| `GAP-25` *(11/09/2026)* | `RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` (`DEF-06`, confirmado em produção nos registros `15008`) **nunca** autenticam no portal. | Login desses segurados | Usuário decide: corrigir `final_vig` no banco, ou `RN-35` passa a tratar `final_vig` ausente como "sem fim" (só com `inicio_vig <= hoje`). |
+| `GAP-25` *(11/09/2026)* | ~~`RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` nunca autenticam.~~ **Fechado em 14/09/2026:** `RN-35` deixou de filtrar vigência; `final_vig` não influi na verificação. (Eram 4.332 linhas iniciadas com `final_vig` ausente, num total de 35.232 vigentes.) | — | — |
 | `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`. |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
@@ -2155,9 +2153,17 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | Item | Decisão / entrega |
 |---|---|
 | `UC-13` / `RF-20` | Segunda API para o portal: `POST /v1/segurados/verificar` com `administradora` e `cpf_cnpj`, resposta `{"existe": true|false}`. O portal a usa para autenticar o segurado em tempo real, dispensando o envio mensal da base. Decisões do usuário: existe = vigência ativa hoje (`RN-35`); mesmo processo e mesma chave da emissão; resposta só com o booleano. |
-| `QRY-14` | `COUNT(*)` em `segurados_inc` por administradora, documento e `inicio_vig <= hoje <= final_vig`, com `RD-02`/`RD-19`. Bloco `existe_segurado`. |
+| `QRY-14` | `COUNT(*)` em `segurados_inc` por administradora, documento e `inicio_vig <= hoje <= final_vig`, com `RD-02`/`RD-19`. Bloco `existe_segurado`. *(filtro de vigência removido em 14/09 — ver abaixo)* |
 | `RD-29` | A resposta da emissão passa a trazer, por certificado, o campo `documento` = JSON espelho completo (`RD-10`) com `arquivo.link`. Em `ja_publicado` é relido do disco; ausente → `falha`. |
 | `GAP-25`, `GAP-26` | `final_vig` ausente nunca autentica; endpoint de verificação é oráculo de CPF sem limite de taxa. |
+
+### 14/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `RF-18` / `RF-20` | `administradora` com mais de 10 caracteres passa a ser `400` (antes o driver `fdb` levantava `ValueError` e a API devolvia `500`). Achado no primeiro teste com o Postman. |
+| Operação | `scripts/iniciar_api.ps1` (reinício automático, log diário), `docs/postman/` (Collection + Environments importáveis), seções 9–11 do guia `docs/TESTE-API-POSTMAN.md`. Diagnóstico: subida a frio da pasta de rede leva >30 s; perfil de rede *Público* bloqueava o firewall. |
+| `RN-35` / `QRY-14` / `GAP-25` | Primeiro teste real: `0000000019`/`05554363733` devolvia `existe=false` porque a última vigência carregada era 08/2026 (vigências mensais, uma por fatura; fatura do mês entra com atraso). Usuário decidiu: existe = **qualquer linha não cancelada**, sem vigência. `QRY-14` perde os dois filtros de data; `existe_segurado(administradora, cpf_cnpj)` sem `hoje`. `GAP-25` fechado por consequência. |
 
 ### Lacunas abertas em 04/09/2026
 

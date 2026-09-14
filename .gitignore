@@ -16,6 +16,7 @@ certificados/
 *.json
 !docs/legado/referencia/*.pdf
 !docs/schema/*.json
+!docs/postman/*.json
 !.claude/settings.json
 
 # Legado (70 MB de .dfm) — fica no compartilhamento, nao no historico
@@ -28,3 +29,6 @@ Delphi/
 # backups de editor do .env (credenciais)
 .env.*
 !.env.example
+
+# log da API (scripts/iniciar_api.ps1)
+logs/

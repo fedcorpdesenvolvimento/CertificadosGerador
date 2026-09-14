@@ -127,35 +127,18 @@ def test_rn_30_sem_api_key_configurada_recusa():
 VERIFICACAO = {"administradora": "0000001192", "cpf_cnpj": "330.163.307-25"}
 
 
-def _fixar_hoje(monkeypatch, ano, mes, dia):
-    from datetime import date as _date
-
-    class Hoje(_date):
-        @classmethod
-        def today(cls):
-            return cls(ano, mes, dia)
-
-    monkeypatch.setattr(api_portal, "date", Hoje)
-
-
 def test_rf_20_verificar_exige_chave(cliente):
     assert cliente.post("/v1/segurados/verificar", json=VERIFICACAO).status_code == 401
     r = cliente.post("/v1/segurados/verificar", json=VERIFICACAO, headers={"X-API-Key": "x"})
     assert r.status_code == 401 and CHAVE not in r.text
 
 
-def test_rf_20_verificar_devolve_so_o_booleano(cliente, monkeypatch):
-    # LINHA_13008 vigora de 2026-07-01 a 2026-07-31 (RN-35: hoje dentro/fora)
-    _fixar_hoje(monkeypatch, 2026, 7, 15)
+def test_rf_20_verificar_devolve_so_o_booleano(cliente):
+    # LINHA_13008: vigencia 07/2026 ja encerrada; RN-35 (14/09/2026) nao olha vigencia
     r = cliente.post("/v1/segurados/verificar", json=VERIFICACAO, headers={"X-API-Key": CHAVE})
     assert r.status_code == 200
     assert r.json() == {"existe": True}  # nada alem do booleano
 
-    _fixar_hoje(monkeypatch, 2026, 8, 1)
-    r = cliente.post("/v1/segurados/verificar", json=VERIFICACAO, headers={"X-API-Key": CHAVE})
-    assert r.status_code == 200 and r.json() == {"existe": False}
-
-    _fixar_hoje(monkeypatch, 2026, 7, 15)
     r = cliente.post(
         "/v1/segurados/verificar",
         json={**VERIFICACAO, "cpf_cnpj": "055.543.637-33"},
@@ -176,3 +159,10 @@ def test_rf_20_verificar_corpo_invalido(cliente):
         "/v1/segurados/verificar", json={"administradora": "x"}, headers={"X-API-Key": CHAVE}
     )
     assert r.status_code == 422
+    # administradora maior que CHAR(10) (ex.: chaves literais) e 400, nao 500
+    r = cliente.post(
+        "/v1/segurados/verificar",
+        json={"administradora": "{0000000019}", "cpf_cnpj": "{05554363733}"},
+        headers={"X-API-Key": CHAVE},
+    )
+    assert r.status_code == 400 and "10 caracteres" in r.json()["erro"]

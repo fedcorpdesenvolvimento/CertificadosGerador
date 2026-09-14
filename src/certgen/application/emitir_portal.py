@@ -10,7 +10,8 @@ com motivo; os demais seguem (RF-09, RN-32). Nunca se devolve link cuja
 gravacao no banco nao foi confirmada, nem link sem documento.
 
 UC-13 (RF-20, RN-35): `verificar_segurado` devolve so um booleano — o CPF/CNPJ
-e segurado ativo hoje daquela administradora? Nenhum dado do segurado sai.
+e segurado (nao cancelado) daquela administradora? Sem filtro de vigencia
+(decisao de 14/09/2026). Nenhum dado do segurado sai.
 
 O passo de emissao e o mesmo da tela e da CLI (`emitir_um`, RF-11); os
 arquivos ficam em CERTGEN_PASTA_SAIDA com a estrutura RN-19 (RN-34).
@@ -42,6 +43,7 @@ from certgen.domain.produto import ProdutoIndeterminado
 from certgen.serialize.json_certificado import JsonInvalido, serializar
 
 _NAO_DIGITO = re.compile(r"\D")
+_TAM_ADMINISTRADORA = 10  # pessoas.pessoa CHAR(10), secao 4.2 da especificacao
 
 
 class PedidoInvalido(ValueError):
@@ -59,6 +61,12 @@ def _normalizar(administradora: str, cpf_cnpj: str) -> tuple[str, str]:
     doc = _NAO_DIGITO.sub("", cpf_cnpj or "")
     if not adm:
         raise PedidoInvalido("administradora obrigatoria")
+    if len(adm) > _TAM_ADMINISTRADORA:
+        # pessoas.pessoa e CHAR(10) (secao 4.2); o driver recusaria o bind com 500
+        raise PedidoInvalido(
+            f"administradora deve ter ate {_TAM_ADMINISTRADORA} caracteres "
+            f"(codigo CHAR(10) com zeros a esquerda, ex.: 0000001192); recebido {adm!r}"
+        )
     if len(doc) not in (11, 14):
         raise PedidoInvalido("cpf_cnpj deve ter 11 (CPF) ou 14 (CNPJ) digitos")
     return adm, doc
@@ -88,7 +96,7 @@ class PedidoPortal:
 
 @dataclass(frozen=True)
 class PedidoVerificacao:
-    """RF-20 — o portal pergunta se o documento e segurado ativo da administradora."""
+    """RF-20 — o portal pergunta se o documento e segurado da administradora."""
 
     administradora: str
     cpf_cnpj: str  # apenas digitos
@@ -101,11 +109,9 @@ class PedidoVerificacao:
         return {"administradora": self.administradora, "cpf_cnpj": self.cpf_cnpj}
 
 
-def verificar_segurado(
-    repositorio: RepositorioCertificados, pedido: PedidoVerificacao, hoje: date
-) -> bool:
-    """UC-13 / RN-35 — True se ha linha ativa hoje (QRY-14). So o booleano; nada mais sai."""
-    return bool(repositorio.existe_segurado(pedido.administradora, pedido.cpf_cnpj, hoje))
+def verificar_segurado(repositorio: RepositorioCertificados, pedido: PedidoVerificacao) -> bool:
+    """UC-13 / RN-35 — True se ha linha nao cancelada (QRY-14). So o booleano; nada mais sai."""
+    return bool(repositorio.existe_segurado(pedido.administradora, pedido.cpf_cnpj))
 
 
 @dataclass(frozen=True)

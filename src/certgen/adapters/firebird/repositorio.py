@@ -202,14 +202,14 @@ class RepositorioFirebird:
         )
         return [self._montar(r) for r in self._executar("certificado_base", f)]
 
-    def existe_segurado(self, administradora: str, cpf_cnpj: str, hoje: date) -> bool:
-        """QRY-14 / RN-35 — contagem de linhas ativas hoje; so o booleano sai (RF-20)."""
-        if not (administradora and cpf_cnpj and hoje):
-            raise ValueError("administradora, cpf_cnpj e hoje sao obrigatorios (RF-20)")
+    def existe_segurado(self, administradora: str, cpf_cnpj: str) -> bool:
+        """QRY-14 / RN-35 — contagem de linhas nao canceladas; so o booleano sai (RF-20)."""
+        if not (administradora and cpf_cnpj):
+            raise ValueError("administradora e cpf_cnpj sao obrigatorios (RF-20)")
         sql, _ = montar("existe_segurado")
         with conexao.conectar() as con:
             cur = con.cursor()
-            cur.execute(sql, [administradora, cpf_cnpj, hoje, hoje])
+            cur.execute(sql, [administradora, cpf_cnpj])
             (qtd,) = cur.fetchone()
             cur.close()
         return int(qtd or 0) >= 1

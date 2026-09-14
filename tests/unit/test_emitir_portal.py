@@ -43,13 +43,11 @@ class RepoFalso:
         self.verificacoes = []
         self._m = RepositorioFirebird()
 
-    def existe_segurado(self, administradora, cpf_cnpj, hoje):
-        """QRY-14 / RN-35 em memoria: nao cancelado, mesma adm e doc, vigencia inclui hoje."""
-        self.verificacoes.append((administradora, cpf_cnpj, hoje))
+    def existe_segurado(self, administradora, cpf_cnpj):
+        """QRY-14 / RN-35 em memoria: mesma adm e doc, sem olhar vigencia (14/09/2026)."""
+        self.verificacoes.append((administradora, cpf_cnpj))
         return any(
-            li["administradora"] == administradora
-            and li["documento_seg"] == cpf_cnpj
-            and li["inicio_vig"] <= hoje <= li["final_vig"]
+            li["administradora"] == administradora and li["documento_seg"] == cpf_cnpj
             for li in self.linhas
         )
 
@@ -231,29 +229,31 @@ def test_rf_20_pedido_verificacao_normaliza_e_valida():
         PedidoVerificacao.criar("0000001192", "1234")
     with pytest.raises(PedidoInvalido):
         PedidoVerificacao.criar("", "33016330725")
+    # 14/09/2026: chaves literais no Postman -> 13 caracteres numa CHAR(10); era 500 no driver
+    with pytest.raises(PedidoInvalido, match="ate 10 caracteres"):
+        PedidoVerificacao.criar("{0000000019}", "{05554363733}")
+    with pytest.raises(PedidoInvalido, match="ate 10 caracteres"):
+        PedidoPortal.criar("00000000019X", "05554363733", date(2026, 7, 1))
 
 
-def test_rn_35_existe_so_com_vigencia_ativa_hoje():
-    repo = RepoFalso([LINHA_13008])  # inicio 2026-07-01, final 2026-07-31
+def test_rn_35_existe_sem_olhar_vigencia():
+    # 14/09/2026: vigencias sao mensais (uma por fatura) e a fatura do mes entra com
+    # atraso; segurado com a ultima vigencia encerrada continua existindo para o portal.
+    repo = RepoFalso([LINHA_13008])  # vigencia 07/2026, ja encerrada
     v = PedidoVerificacao.criar("0000001192", "33016330725")
-    assert verificar_segurado(repo, v, date(2026, 7, 15)) is True
-    assert verificar_segurado(repo, v, date(2026, 7, 1)) is True  # inclusivo
-    assert verificar_segurado(repo, v, date(2026, 7, 31)) is True  # inclusivo
-    assert verificar_segurado(repo, v, date(2026, 8, 1)) is False  # encerrada
-    assert verificar_segurado(repo, v, date(2026, 6, 30)) is False  # ainda nao comecou
-    assert repo.verificacoes[0] == ("0000001192", "33016330725", date(2026, 7, 15))
+    assert verificar_segurado(repo, v) is True
+    assert repo.verificacoes == [("0000001192", "33016330725")]
 
 
 def test_rn_35_outra_administradora_ou_outro_documento_nao_existe():
     repo = RepoFalso([LINHA_13008])
-    hoje = date(2026, 7, 15)
     outra_adm = PedidoVerificacao.criar("0000000019", "33016330725")
     outro_doc = PedidoVerificacao.criar("0000001192", "05554363733")
-    assert verificar_segurado(repo, outra_adm, hoje) is False
-    assert verificar_segurado(repo, outro_doc, hoje) is False
+    assert verificar_segurado(repo, outra_adm) is False
+    assert verificar_segurado(repo, outro_doc) is False
 
 
-def test_gap_25_final_vig_zero_delphi_nao_autentica():
+def test_gap_25_fechado_final_vig_zero_delphi_nao_impede():
     linha = {**LINHA_13008, "final_vig": date(1899, 12, 30)}  # DEF-06
     v = PedidoVerificacao.criar("0000001192", "33016330725")
-    assert verificar_segurado(RepoFalso([linha]), v, date(2026, 7, 15)) is False
+    assert verificar_segurado(RepoFalso([linha]), v) is True

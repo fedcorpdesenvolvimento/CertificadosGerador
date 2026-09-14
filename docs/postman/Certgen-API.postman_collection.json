@@ -1,0 +1,432 @@
+{
+  "info": {
+    "_postman_id": "953c87ba-9ee7-4b3a-906f-ed6c44176424",
+    "name": "Certgen API (portal)",
+    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura) -> 3. Emitir certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (ja_publicado).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{api_key}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('api_key')) {",
+          "  console.warn('api_key vazia no environment: as chamadas vao dar 401');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [],
+  "item": [
+    {
+      "name": "1. Saude (testa a chave)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/v1/saude",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "saude"
+          ]
+        },
+        "description": "RF-18. 200 = chave, firewall e rota de rede funcionando."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('ok true', () => pm.expect(pm.response.json().ok).to.be.true);",
+              "pm.test('sem a chave na resposta', () => {",
+              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Verificar segurado (login do portal)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/segurados/verificar",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "segurados",
+            "verificar"
+          ]
+        },
+        "description": "RF-20 / RN-35. {existe: true} so se o CPF/CNPJ tem vigencia ATIVA HOJE na administradora (inicio_vig <= hoje <= final_vig). Nao grava nada.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const v = pm.response.json();",
+              "pm.test('so o campo existe', () => pm.expect(Object.keys(v)).to.eql(['existe']));",
+              "pm.test('existe e boolean', () => pm.expect(v.existe).to.be.a('boolean'));",
+              "pm.test('sem a chave na resposta', () => {",
+              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Emitir certificado (GRAVA S3 + banco)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/certificados/emitir",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "certificados",
+            "emitir"
+          ]
+        },
+        "description": "UC-12 / RF-18 / RD-29. ATENCAO: emissao real - gera PDF e JSON na pasta de saida, publica no S3 e grava link_certificado_aws no Firebird. vigencia = inicio_vig exato (RN-31). Pode levar alguns segundos (Chromium).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('cpf so digitos', () => pm.expect(r.pedido.cpf_cnpj).to.match(/^\\d+$/));",
+              "pm.test('tem certificados', () => pm.expect(r.quantidade).to.be.above(0));",
+              "pm.test('todo item tem link+documento ou motivo', () => {",
+              "  r.certificados.forEach(c => {",
+              "    if (c.situacao === 'falha') { pm.expect(c.motivo).to.be.a('string'); return; }",
+              "    pm.expect(c.link).to.match(/^https:\\/\\/.+\\.pdf$/);",
+              "    pm.expect(c.documento).to.be.an('object');",
+              "    pm.expect(c.documento.arquivo.link).to.eql(c.link);",
+              "  });",
+              "});",
+              "if (r.certificados[0] && r.certificados[0].link) {",
+              "  pm.environment.set('ultimo_link', r.certificados[0].link);",
+              "}",
+              "pm.test('sem a chave na resposta', () => {",
+              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Repetir emissao (ja_publicado)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/certificados/emitir",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "certificados",
+            "emitir"
+          ]
+        },
+        "description": "RN-33 / RD-29. Mesmo pedido de novo: devolve link e documento sem reemitir.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('ja_publicado', () => pm.expect(r.certificados[0].situacao).to.eql('ja_publicado'));",
+              "pm.test('mesmo link da emissao anterior', () => {",
+              "  const anterior = pm.environment.get('ultimo_link');",
+              "  if (anterior) pm.expect(r.certificados[0].link).to.eql(anterior);",
+              "});",
+              "pm.test('documento relido do disco', () => pm.expect(r.certificados[0].documento).to.be.an('object'));",
+              "pm.test('sem a chave na resposta', () => {",
+              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Erros esperados",
+      "item": [
+        {
+          "name": "401 - sem chave",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/saude",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "saude"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('sem a chave na resposta', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 - cpf invalido (verificar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/segurados/verificar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "segurados",
+                "verificar"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('tem erro', () => pm.expect(pm.response.json().erro).to.be.a('string'));",
+                  "pm.test('sem a chave na resposta', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - vigencia dd/MM/yyyy (emitir)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/certificados/emitir",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "certificados",
+                "emitir"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"01/07/2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('sem a chave na resposta', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 - vigencia sem certificado (emitir)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/certificados/emitir",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "certificados",
+                "emitir"
+              ]
+            },
+            "description": "RD-27: QRY-13 sem linhas. Nada e gravado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"1999-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('sem a chave na resposta', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
