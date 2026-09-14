@@ -32,3 +32,6 @@ Delphi/
 
 # log da API (scripts/iniciar_api.ps1)
 logs/
+
+# chaves de acesso baixadas do IAM (SEC-01): guardar fora do projeto
+*accessKeys*.csv
