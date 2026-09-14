@@ -17,10 +17,14 @@ $logs = Join-Path $raiz "logs"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $log = Join-Path $logs ("api-{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
 
+# O uvicorn escreve os logs em stderr; no PowerShell 5.1, com ErrorActionPreference=Stop,
+# isso viraria NativeCommandError e abortaria o script. Daqui em diante stderr e texto comum.
+$ErrorActionPreference = "Continue"
+
 # Reinicia sozinho se o processo cair (ex.: banco fora no momento de subir).
 while ($true) {
     "$(Get-Date -Format s) iniciando certgen api --rede" | Tee-Object -FilePath $log -Append
-    & $python -m certgen.cli api --rede 2>&1 | Tee-Object -FilePath $log -Append
+    & $python -m certgen.cli api --rede 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $log -Append
     "$(Get-Date -Format s) processo encerrou (codigo $LASTEXITCODE); nova tentativa em 15 s" | Tee-Object -FilePath $log -Append
     Start-Sleep -Seconds 15
 }
