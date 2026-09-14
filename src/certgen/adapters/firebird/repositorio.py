@@ -36,6 +36,7 @@ from certgen.domain.certificado import (
 from certgen.domain.cobertura import montar_coberturas
 from certgen.domain.dinheiro import para_dinheiro
 from certgen.domain.documento import Documento
+from certgen.domain.portal import EnderecoPortal, ProdutoPortal, VigenciaPortal
 from certgen.domain.produto import CatalogoProdutos
 from certgen.domain.seguradora import CatalogoSeguradoras
 
@@ -189,9 +190,15 @@ class RepositorioFirebird:
         return self._montar(linhas[0])
 
     def localizar_por_portal(
-        self, administradora: str, cpf_cnpj: str, vigencia: date
+        self,
+        administradora: str,
+        cpf_cnpj: str,
+        vigencia: date,
+        fatura: int | None = None,
+        certificado: str | None = None,
     ) -> list[Certificado]:
-        """QRY-13 / RD-27 — administradora + cpf_cnpj + inicio_vig exato (RN-31)."""
+        """QRY-13 / RD-27 — administradora + cpf_cnpj + inicio_vig exato (RN-31);
+        fatura e certificado opcionais (RD-31), so entram quando informados (RN-07)."""
         if not (administradora and cpf_cnpj and vigencia):
             raise ValueError("administradora, cpf_cnpj e vigencia sao obrigatorios (RD-27)")
         f = (
@@ -199,20 +206,52 @@ class RepositorioFirebird:
             .igual("ss.administradora", administradora)
             .igual("ss.cpf_cnpj", cpf_cnpj)
             .igual("ss.inicio_vig", vigencia)
+            .igual("ss.fatura", fatura)
+            .igual("ss.certificado", certificado)
         )
         return [self._montar(r) for r in self._executar("certificado_base", f)]
 
-    def existe_segurado(self, administradora: str, cpf_cnpj: str) -> bool:
-        """QRY-14 / RN-35 — contagem de linhas nao canceladas; so o booleano sai (RF-20)."""
+    def listar_vigencias_portal(self, administradora: str, cpf_cnpj: str) -> list[VigenciaPortal]:
+        """QRY-14 / RD-30 — linhas nao canceladas do documento, mais recentes primeiro."""
         if not (administradora and cpf_cnpj):
             raise ValueError("administradora e cpf_cnpj sao obrigatorios (RF-20)")
-        sql, _ = montar("existe_segurado")
+        sql, _ = montar("vigencias_portal")
         with conexao.conectar() as con:
             cur = con.cursor()
             cur.execute(sql, [administradora, cpf_cnpj])
-            (qtd,) = cur.fetchone()
+            linhas = list(_linhas_como_dicts(cur))
             cur.close()
-        return int(qtd or 0) >= 1
+        return [self._montar_vigencia(r) for r in linhas]
+
+    @staticmethod
+    def _montar_vigencia(r: Mapping[str, Any]) -> VigenciaPortal:
+        """RD-30 — mapeia uma linha de QRY-14. final_vig zero-Delphi vira None no dict."""
+        return VigenciaPortal(
+            administradora=str(r["administradora"]).strip(),
+            cpf_cnpj=str(r["cpf_cnpj"]).strip(),
+            nome=_txt(r.get("nome")),
+            endereco=EnderecoPortal(
+                logradouro=_txt(r.get("endereco")),
+                unidade=_txt(r.get("unidade")),
+                bairro=_txt(r.get("bairro")),
+                cidade=_txt(r.get("cidade")),
+                uf=_txt(r.get("uf")),
+                cep=_txt(r.get("cep")),
+                condominio=_txt(r.get("nome_cond")),
+            ),
+            inicio_vig=r.get("inicio_vig"),
+            final_vig=r.get("final_vig"),
+            apolice=str(r["apolice"]).strip(),
+            seq=_inteiro(r.get("seq")) or 0,
+            fatura=int(r["fatura"]),
+            certificado=str(r["certificado"]).strip(),
+            produto=ProdutoPortal(
+                codigo=_txt(r.get("cod_produto")),
+                nome=_txt(r.get("nom_produto")),
+                descricao_fatura=_txt(r.get("des_prod")),
+                descricao_master=_txt(r.get("des_prod_master")),
+            ),
+        )
 
     # ------------------------------------------------------------ escrita (RD-20)
     def registrar_link(self, chave: ChaveCertificado, link: str, quando: datetime) -> None:

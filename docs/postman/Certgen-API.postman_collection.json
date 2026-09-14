@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "73b80734-0578-46f9-bb63-f2038e4007c7",
+    "_postman_id": "1a71362d-76dc-4ea6-a811-00d888ec5bee",
     "name": "Certgen API (portal)",
-    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura) -> 3. Emitir certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
+    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura; preenche vigencia/fatura/certificado) -> 3. Emitir por vigencia ou 3b. Emitir apontando fatura + certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -95,7 +95,7 @@
             "verificar"
           ]
         },
-        "description": "RF-20 / RN-35 (14/09/2026). {existe: true} se o CPF/CNPJ tem alguma linha nao cancelada na administradora, sem olhar vigencia. Nao grava nada.",
+        "description": "RF-20 / RN-35 / RD-30 / RN-35a (14/09/2026). existe=true se o CPF/CNPJ tem alguma linha nao cancelada na administradora (sem olhar vigencia); certificados = as 3 vigencias mais recentes com nome, endereco, apolice, seq, fatura, certificado e produto. O script de teste copia inicio_vig/fatura/certificado do primeiro item para as variaveis vigencia/fatura/certificado, usadas pela request 3b. Nao grava nada.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\"\n}",
@@ -115,8 +115,33 @@
             "exec": [
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const v = pm.response.json();",
-              "pm.test('so o campo existe', () => pm.expect(Object.keys(v)).to.eql(['existe']));",
+              "pm.test('campos existe, quantidade, certificados', () =>",
+              "  pm.expect(Object.keys(v).sort()).to.eql(['certificados', 'existe', 'quantidade']));",
               "pm.test('existe e boolean', () => pm.expect(v.existe).to.be.a('boolean'));",
+              "pm.test('quantidade bate com a lista', () => pm.expect(v.quantidade).to.eql(v.certificados.length));",
+              "pm.test('existe=false vem vazio', () => { if (!v.existe) pm.expect(v.certificados).to.be.empty; });",
+              "pm.test('no maximo 3 vigencias distintas (RN-35a)', () => {",
+              "  const meses = new Set(v.certificados.map(c => c.inicio_vig));",
+              "  pm.expect(meses.size).to.be.at.most(3);",
+              "});",
+              "pm.test('cada item tem os campos RD-30', () => {",
+              "  v.certificados.forEach(c => {",
+              "    ['nome','endereco','inicio_vig','final_vig','apolice','seq','fatura','certificado','produto']",
+              "      .forEach(k => pm.expect(c, k).to.have.property(k));",
+              "    ['logradouro','unidade','bairro','cidade','uf','cep','condominio']",
+              "      .forEach(k => pm.expect(c.endereco, 'endereco.' + k).to.have.property(k));",
+              "    ['codigo','nome','descricao_fatura','descricao_master']",
+              "      .forEach(k => pm.expect(c.produto, 'produto.' + k).to.have.property(k));",
+              "  });",
+              "});",
+              "// Alimenta a emissao (RD-31) com a vigencia mais recente devolvida",
+              "if (v.existe && v.certificados.length) {",
+              "  const c = v.certificados[0];",
+              "  pm.environment.set('vigencia', c.inicio_vig);",
+              "  pm.environment.set('fatura', String(c.fatura));",
+              "  pm.environment.set('certificado', c.certificado);",
+              "  console.log('emissao apontada para', c.inicio_vig, c.fatura, c.certificado);",
+              "}",
               "pm.test('sem a chave na resposta', () => {",
               "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
               "});"
@@ -179,6 +204,67 @@
               "if (r.certificados[0] && r.certificados[0].link) {",
               "  pm.environment.set('ultimo_link', r.certificados[0].link);",
               "}",
+              "pm.test('sem a chave na resposta', () => {",
+              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3b. Emitir apontando fatura + certificado (RD-31; GRAVA)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/certificados/emitir",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "certificados",
+            "emitir"
+          ]
+        },
+        "description": "RF-18 + RD-31. Usa vigencia/fatura/certificado preenchidos pela request 2 para emitir so a unidade escolhida (util quando o CPF tem mais de uma unidade no mes, RD-22). ATENCAO: emissao real (S3 + banco).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\",\n  \"fatura\": {{fatura}},\n  \"certificado\": \"{{certificado}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('pedido ecoa fatura e certificado', () => {",
+              "  pm.expect(String(r.pedido.fatura)).to.eql(pm.environment.get('fatura'));",
+              "  pm.expect(r.pedido.certificado).to.eql(pm.environment.get('certificado'));",
+              "});",
+              "pm.test('exatamente 1 certificado', () => pm.expect(r.quantidade).to.eql(1));",
+              "pm.test('publicado com link e documento', () => {",
+              "  const c = r.certificados[0];",
+              "  pm.expect(c.situacao).to.eql('publicado');",
+              "  pm.expect(c.link).to.match(/^https:\\/\\/.+\\.pdf$/);",
+              "  pm.expect(c.documento.arquivo.link).to.eql(c.link);",
+              "  pm.expect(c.chave.certificado).to.eql(pm.environment.get('certificado'));",
+              "});",
               "pm.test('sem a chave na resposta', () => {",
               "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
               "});"

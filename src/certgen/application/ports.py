@@ -20,6 +20,7 @@ from certgen.domain.certificado import (
     ChaveLote,
     ContextoEndosso,
 )
+from certgen.domain.portal import VigenciaPortal
 
 
 class ErroRepositorio(RuntimeError):
@@ -78,16 +79,22 @@ class RepositorioCertificados(Protocol):
         ...
 
     def localizar_por_portal(
-        self, administradora: str, cpf_cnpj: str, vigencia: date
+        self,
+        administradora: str,
+        cpf_cnpj: str,
+        vigencia: date,
+        fatura: int | None = None,
+        certificado: str | None = None,
     ) -> list[Certificado]:
         """QRY-13 / RD-27 — consulta canonica filtrada por administradora, cpf_cnpj e
-        inicio_vig exato (RN-31). 0, 1 ou N linhas; quem chama decide (RN-32)."""
+        inicio_vig exato (RN-31); fatura e certificado opcionais (RD-31) para o portal
+        apontar uma unidade. 0, 1 ou N linhas; quem chama decide (RN-32)."""
         ...
 
-    def existe_segurado(self, administradora: str, cpf_cnpj: str) -> bool:
-        """QRY-14 / RN-35 (UC-13) — True se houver ao menos uma linha nao cancelada da
-        administradora com esse documento, sem olhar vigencia (decisao de 14/09/2026).
-        Nenhum dado do segurado e devolvido (RF-20)."""
+    def listar_vigencias_portal(self, administradora: str, cpf_cnpj: str) -> list[VigenciaPortal]:
+        """QRY-14 / RD-30 (UC-13) — todas as linhas nao canceladas do documento na
+        administradora, sem filtro de vigencia (RN-35), mais recentes primeiro. Lista vazia
+        = nao existe. Quem chama recorta as 3 vigencias mais recentes (RN-35a)."""
         ...
 
 

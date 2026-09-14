@@ -14,7 +14,7 @@ from certgen.adapters.firebird.consultas import (
 def test_rd_17_blocos_esperados_existem():
     assert set(nomes()) >= {
         "administradoras", "apolices", "faturas", "certificado_base",
-        "endosso_por_fatura", "faturamento", "registrar_link", "existe_segurado",
+        "endosso_por_fatura", "faturamento", "registrar_link", "vigencias_portal",
     }  # fmt: skip
 
 
@@ -24,7 +24,7 @@ def test_rd_17_bloco_desconhecido_falha():
 
 
 def test_rd_02_rd_19_toda_consulta_a_segurados_inc_filtra_status_e_cpf():
-    for nome in ("apolices", "faturas", "certificado_base", "existe_segurado"):
+    for nome in ("apolices", "faturas", "certificado_base", "vigencias_portal"):
         sql = consulta(nome)
         assert "ss.status_seg <> 'C'" in sql, nome
         assert "ss.cpf_cnpj <> ''" in sql, nome
@@ -121,10 +121,17 @@ def test_rn_07_marcador_removido_quando_nao_ha_filtros():
     assert "/*FILTROS*/" not in sql
 
 
-def test_qry_14_existe_segurado_so_conta_e_nao_filtra_vigencia():
-    """RN-35 (14/09/2026) / RF-20: COUNT, sem dados do segurado, sem filtro de vigencia."""
-    sql = consulta("existe_segurado")
-    assert sql.upper().startswith("SELECT COUNT(*)")
-    assert "ss.nome" not in sql and "ss.endereco" not in sql
-    assert "inicio_vig" not in sql and "final_vig" not in sql
+def test_qry_14_vigencias_portal_projeta_rd_30_sem_filtrar_vigencia():
+    """RN-35 / RD-30 (14/09/2026): dados do segurado + produto, sem filtro de data,
+    mais recentes primeiro; produto por cod_produto e por fatura (fatura_dsc_prod)."""
+    sql = consulta("vigencias_portal")
+    for col in ("ss.nome", "ss.endereco", "ss.inicio_vig", "ss.final_vig", "ss.apolice",
+                "ss.seq", "ss.fatura", "ss.certificado", "ss.cod_produto",
+                "prd.nom_produto", "fdp.des_prod"):
+        assert col in sql, col
+    assert "LEFT JOIN produto" in sql
+    assert "FROM fatura_dsc_prod d GROUP BY d.fatura" in sql  # 39 faturas duplicadas: agrega
+    where = sql.split("WHERE", 1)[1].split("ORDER BY", 1)[0]
+    assert "inicio_vig" not in where and "final_vig" not in where  # RN-35
+    assert "ORDER BY ss.inicio_vig DESC" in sql
     assert sql.count("?") == 2  # administradora, cpf_cnpj

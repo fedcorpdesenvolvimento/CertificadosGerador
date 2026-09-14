@@ -704,18 +704,30 @@ Consulta canônica (`6.0`) com os filtros `ss.administradora = :administradora`,
 
 **`RD-28`** — A projeção da consulta canônica passa a incluir `ss.link_certificado_aws`, mapeado em `Certificado.link_publicado`. É metadado de publicação: **NÃO** entra no JSON (`RD-10`) nem no PDF; serve a `RN-33`.
 
-### 6.14 `QRY-14` — Verificação de segurado pelo portal *(Fase 8, decisão do usuário em 11/09/2026)*
+### 6.14 `QRY-14` — Verificação de segurado pelo portal *(Fase 8; decisões do usuário em 11 e 14/09/2026)*
 
 ```sql
-SELECT COUNT(*) AS qtd
+SELECT ss.administradora, ss.cpf_cnpj, ss.nome,
+       ss.endereco, ss.unidade, ss.bairro, ss.cidade, ss.uf, ss.cep, ss.nome_cond,
+       ss.inicio_vig, ss.final_vig,
+       ss.apolice, ss.seq, ss.fatura, ss.certificado,
+       ss.cod_produto, prd.nom_produto, fdp.des_prod, fdp.des_prod_master
 FROM segurados_inc ss
+LEFT JOIN produto prd ON prd.cod_produto = ss.cod_produto
+LEFT JOIN (SELECT d.fatura, MAX(d.des_prod) AS des_prod, MAX(d.des_prod_master) AS des_prod_master
+           FROM fatura_dsc_prod d GROUP BY d.fatura) fdp ON fdp.fatura = ss.fatura
 WHERE ss.status_seg <> 'C'
   AND ss.cpf_cnpj <> ''
   AND ss.administradora = :administradora
   AND ss.cpf_cnpj = :cpf_cnpj
+ORDER BY ss.inicio_vig DESC, ss.fatura DESC, ss.certificado
 ```
 
-Não é a consulta canônica: devolve só a contagem, porque a resposta é um booleano (`RF-20`) e nenhum dado do segurado sai. Bloco `-- name: existe_segurado` em `queries.sql` (`RD-17`), com os filtros fixos `RD-02`/`RD-19`. Sem filtro de vigência (`RN-35`, 14/09/2026).
+Não é a consulta canônica: projeta só o que o portal precisa (`RD-30`). Bloco `-- name: vigencias_portal` em `queries.sql` (`RD-17`), com os filtros fixos `RD-02`/`RD-19`. Sem filtro de vigência (`RN-35`); o recorte das 3 vigências mais recentes é feito em Python (`RN-35a`). *(Até 14/09/2026 era um `COUNT(*)` chamado `existe_segurado`, porque a resposta era só um booleano.)*
+
+**`RD-30` — Resumo da vigência para o portal** *(14/09/2026)*. Cada linha de `QRY-14` vira um item com `nome`, `endereco` {`logradouro`, `unidade`, `bairro`, `cidade`, `uf`, `cep`, `condominio`}, `inicio_vig`, `final_vig` (ISO 8601; nula ou zero-Delphi → `null`, `DEF-06`), `apolice`, `seq`, `fatura`, `certificado` e `produto` {`codigo`, `nome`, `descricao_fatura`, `descricao_master`}. O `produto` daqui **não** é o produto `RN-03` (derivado da apólice, catálogo de 7 usado no PDF e no JSON): é `segurados_inc.cod_produto` (ex.: `0117`, `0271`; 379 códigos em `produto`), com `nome` = `produto.nom_produto` e as descrições vindas de `fatura_dsc_prod` pela fatura (`des_prod`, `des_prod_master`; a tabela tem 39 faturas duplicadas, por isso o `MAX` agrupado). Decisão do usuário: o portal usa esses campos para chamar `RF-18` já apontando `fatura` e `certificado` (`RD-31`). O CPF não se repete no item: o portal já o tem.
+
+**`RN-35a` — Três vigências mais recentes** *(14/09/2026)*. A resposta traz as linhas das **3 datas `inicio_vig` distintas mais recentes** do documento na administradora — todas as linhas de cada data (`RD-22`: mesmo CPF em mais de uma unidade), ordem `inicio_vig` desc, `fatura` desc, `certificado`. Alternativas rejeitadas pelo usuário: janela de 90 dias; mês corrente e dois anteriores — ambas podiam vir vazias com a fatura do mês atrasada. `inicio_vig` ausente conta como uma vigência e vai para o fim.
 
 **`RN-35` — Existência = qualquer linha não cancelada** *(revisto em 14/09/2026)*. "O CPF/CNPJ existe na base da administradora" significa: ao menos uma linha `status_seg <> 'C'` dessa administradora com esse documento, **sem** filtro de vigência. Histórico: em 11/09 a regra era "vigência ativa hoje" (`inicio_vig <= hoje <= final_vig`); no primeiro teste real (14/09) constatou-se que as vigências em `segurados_inc` são **mensais, uma linha por fatura**, e a fatura do mês corrente entra no banco com atraso — em 14/09/2026 a administradora `0000000019` só tinha linhas até 08/2026. Com a regra antiga, nenhum segurado dela entrava no portal até a fatura de setembro ser lançada, todo mês. O usuário escolheu "qualquer linha não cancelada" (alternativas rejeitadas: tolerância de 60 dias; últimos 12 meses; manter ativa hoje). Consequência aceita: ex-segurado continua autenticando enquanto tiver linha não cancelada. `GAP-25` fecha por consequência: `final_vig` ausente não influi.
 
@@ -1521,7 +1533,7 @@ components:
 
 **Contexto.** O portal do Grupo FedCorp precisa oferecer ao segurado o certificado sem operador. Ele chama o gerador com uma chave de autenticação, o código da administradora, o CPF/CNPJ do segurado e a vigência; o gerador localiza (`QRY-13`), emite (`UC-01` para um certificado), publica no S3 (`RN-29`), grava o link (`RF-16`, `RD-20a`) e devolve o link na mesma resposta (síncrono — decisão do usuário; um PDF leva poucos segundos).
 
-**`RF-18` — Endpoint.** `POST /v1/certificados/emitir`, corpo JSON `{administradora, cpf_cnpj, vigencia}`; `vigencia` em ISO 8601 (`RD-06`); `cpf_cnpj` aceita pontuação e é reduzido a dígitos antes da consulta (a coluna guarda só dígitos). Resposta `200`:
+**`RF-18` — Endpoint.** `POST /v1/certificados/emitir`, corpo JSON `{administradora, cpf_cnpj, vigencia, fatura?, certificado?}`; `vigencia` em ISO 8601 (`RD-06`); `cpf_cnpj` aceita pontuação e é reduzido a dígitos antes da consulta (a coluna guarda só dígitos). **`RD-31`** *(14/09/2026)*: `fatura` (inteiro positivo) e `certificado` são **opcionais** e, quando informados, entram como filtros de igualdade em `QRY-13` (`RN-07`), para o portal apontar exatamente a unidade escolhida na verificação (`RF-20`/`RD-30`) em vez de emitir todas as de `RN-32`; sem eles, o comportamento é o original. A resposta ecoa os dois em `pedido`. Resposta `200`:
 
 ```json
 {
@@ -1555,13 +1567,27 @@ components:
 
 **`RN-34` — Cópia local.** A API grava PDF e JSON em `CERTGEN_PASTA_SAIDA` com a estrutura `RN-19`, exatamente como a emissão manual, antes de publicar. O JSON é regravado com `arquivo.link` após o upload confirmado (`RD-25`, `RF-16`). O JSON é o mesmo documento em qualquer fluxo (`RNF-08`).
 
-**`RF-20` — Endpoint de verificação** *(`UC-13`, 11/09/2026)*. `POST /v1/segurados/verificar`, corpo JSON `{administradora, cpf_cnpj}` (mesmas normalizações de `RF-18`; **sem** vigência). Resposta **sempre** `200` quando autenticado e bem formado:
+**`RF-20` — Endpoint de verificação** *(`UC-13`, 11/09/2026; resposta ampliada em 14/09/2026)*. `POST /v1/segurados/verificar`, corpo JSON `{administradora, cpf_cnpj}` (mesmas normalizações de `RF-18`; **sem** vigência). Resposta **sempre** `200` quando autenticado e bem formado:
 
 ```json
-{"existe": true}
+{
+  "existe": true,
+  "quantidade": 1,
+  "certificados": [
+    {
+      "nome": "JORGE EDUARDO MONT SERRAT",
+      "endereco": {"logradouro": "AV LUCIO COSTA, 3300 BLOCO 2", "unidade": "AP.602", "bairro": "BARRA DA TIJUCA",
+                   "cidade": "RIO DE JANEIRO", "uf": "RJ", "cep": "22630010", "condominio": "DIRETORIA IMODATA"},
+      "inicio_vig": "2026-07-01", "final_vig": "2026-07-31",
+      "apolice": "13008", "seq": 1, "fatura": 380819, "certificado": "CF1DI/AP.602",
+      "produto": {"codigo": "0271", "nome": "...", "descricao_fatura": "TOTAL PROTEÇÃO RESIDENCIAL / FAZ TUDO / SEM AP | ...",
+                  "descricao_master": "TOTAL CONTEÚDO"}
+    }
+  ]
+}
 ```
 
-`existe` é `true` se `QRY-14` contar ≥ 1 linha (`RN-35`), senão `false`. **Nenhum** outro campo: nem nome, nem vigências, nem chaves (decisão do usuário; o portal já tem o cadastro). Códigos: `401` chave ausente/inválida; `400` documento sem 11 ou 14 dígitos, administradora vazia ou administradora com mais de 10 caracteres (`pessoas.pessoa` é `CHAR(10)`, seção 4.2 — vale também para `RF-18`; visto em 14/09/2026 quando o Postman enviou `{0000000019}` com chaves literais e o driver devolvia `500`); `422` corpo malformado; `503` banco indisponível. Mesmo processo, mesma aplicação FastAPI e **mesma chave** `RN-30` do endpoint de emissão (decisão do usuário; `GAP-24` continua). Motivação: o portal autentica o segurado consultando o gerador em tempo real, em vez de receber uma cópia mensal da base. `RNF-13` se aplica: um registro de log por chamada com administradora, documento, resultado e duração — sem chave e sem nome.
+`existe` é `true` se `QRY-14` devolver ≥ 1 linha (`RN-35`), senão `false` com `quantidade` 0 e `certificados` vazio. `certificados` são as 3 vigências mais recentes (`RN-35a`), cada uma no formato `RD-30`. *(De 11 a 14/09/2026 a resposta era só `{"existe": bool}`; o usuário pediu os dados para o portal alimentar a emissão com `fatura` e `certificado` — `RD-31`.)* Códigos: `401` chave ausente/inválida; `400` documento sem 11 ou 14 dígitos, administradora vazia ou administradora com mais de 10 caracteres (`pessoas.pessoa` é `CHAR(10)`, seção 4.2 — vale também para `RF-18`; visto em 14/09/2026 quando o Postman enviou `{0000000019}` com chaves literais e o driver devolvia `500`); `422` corpo malformado; `503` banco indisponível. Mesmo processo, mesma aplicação FastAPI e **mesma chave** `RN-30` do endpoint de emissão (decisão do usuário; `GAP-24` continua). Motivação: o portal autentica o segurado consultando o gerador em tempo real, em vez de receber uma cópia mensal da base. `RNF-13` se aplica: um registro de log por chamada com administradora, documento, resultado e duração — sem chave e sem nome.
 
 **`RF-19` — Processo separado.** A API sobe por `certgen api` (porta padrão `8010`), processo e aplicação FastAPI distintos da tela (`certgen web`), que continua sem autenticação e só na LAN (`RNF-10a`). A API **não** serve páginas, não expõe *Sair*/*Procurar…* e não tem os endpoints da cascata. Os dois endpoints do portal (`RF-18` emissão, `RF-20` verificação) vivem nesta mesma aplicação.
 
@@ -1805,7 +1831,7 @@ Verificações empíricas que alteram requisitos:
 | `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
 | `GAP-24` | Chave única (`RN-30`): rotação implica janela sem serviço; sem chave por administradora. | — | Decidir se o portal terá várias chaves ou chave por administradora; então `RN-30` passa a lista. |
 | `GAP-25` *(11/09/2026)* | ~~`RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` nunca autenticam.~~ **Fechado em 14/09/2026:** `RN-35` deixou de filtrar vigência; `final_vig` não influi na verificação. (Eram 4.332 linhas iniciadas com `final_vig` ausente, num total de 35.232 vigentes.) | — | — |
-| `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`. |
+| `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. **Agravado em 14/09/2026:** a resposta passou a devolver nome e endereço do segurado (`RD-30`), então CPF + chave dão acesso a dados pessoais. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`; TLS obrigatório antes de sair da LAN. |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
 
@@ -1877,6 +1903,7 @@ Regras derivadas das decisões de 03/09/2026:
 | Faseamento local → API | `ADR-01`, `RD-16`, `RD-18`, `RN-15`, seção 11 |
 | Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
 | Pedido do usuário (11/09/2026) — verificação de segurado + JSON na emissão | `UC-13`, `QRY-14`, `RN-35`, `RF-20`, `RD-29`, `GAP-25`, `GAP-26` |
+| Pedido do usuário (14/09/2026) — verificação com dados para alimentar a emissão | `RD-30`, `RN-35a`, `RD-31`, `RF-20` e `RF-18` revistos, `RN-33` revista |
 
 **`RD-22`** — Os dois PDFs `..._15008_381066` compartilham fatura e apólice, têm CPFs e certificados distintos e residem na mesma unidade condominial. Confirma que **`certificado` não é único por fatura** e que a chave de emissão precisa de `cpf_cnpj` para desambiguar (`RD-01`, `RD-21`).
 
@@ -2163,6 +2190,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 |---|---|
 | `RF-18` / `RF-20` | `administradora` com mais de 10 caracteres passa a ser `400` (antes o driver `fdb` levantava `ValueError` e a API devolvia `500`). Achado no primeiro teste com o Postman. |
 | Operação | `scripts/iniciar_api.ps1` (reinício automático, log diário), `docs/postman/` (Collection + Environments importáveis), seções 9–11 do guia `docs/TESTE-API-POSTMAN.md`. Diagnóstico: subida a frio da pasta de rede leva >30 s; perfil de rede *Público* bloqueava o firewall. |
+| `RF-20` ampliado / `RD-30` / `RN-35a` / `RD-31` | Pedido do usuário: a verificação devolve, além de `existe`, as 3 vigências mais recentes com nome, endereço, vigência, apólice, seq, fatura, certificado e produto (`cod_produto` + `produto.nom_produto` + descrições de `fatura_dsc_prod`). Decisão: "3 vigências mais recentes" = 3 `inicio_vig` distintos, todas as unidades. A emissão aceita `fatura` e `certificado` opcionais. Porta `existe_segurado` substituída por `listar_vigencias_portal`; novo módulo `domain/portal.py`. |
 | `RN-33` revista | Emissão pela API de `0000000019`/`05554363733`/07-2026 devolveu `falha` `DocumentoAusente`: a linha já tinha link do Delphi (03/09/2026, formato `0000000019//072026/…`, DEF-09) e não há JSON em disco. Levantamento: 930.134 linhas com link do legado. Usuário decidiu: **a API sempre reemite**; `ja_publicado` retirado; aviso `REEMISSAO`; arquivos locais sobrescritos no mesmo nome (`gravar_json(..., sobrescrever=True)`). |
 | `RN-35` / `QRY-14` / `GAP-25` | Primeiro teste real: `0000000019`/`05554363733` devolvia `existe=false` porque a última vigência carregada era 08/2026 (vigências mensais, uma por fatura; fatura do mês entra com atraso). Usuário decidiu: existe = **qualquer linha não cancelada**, sem vigência. `QRY-14` perde os dois filtros de data; `existe_segurado(administradora, cpf_cnpj)` sem `hoje`. `GAP-25` fechado por consequência. |
 

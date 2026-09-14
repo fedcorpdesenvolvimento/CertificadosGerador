@@ -2,8 +2,9 @@
 
 Dois endpoints autenticados pela mesma chave (decisao de 11/09/2026):
   POST /v1/certificados/emitir   — UC-12: emite, publica no S3, devolve link + JSON (RD-29)
-  POST /v1/segurados/verificar   — UC-13: {"existe": bool}; login do segurado no portal
-                                   (qualquer linha nao cancelada, RN-35 de 14/09/2026)
+  POST /v1/segurados/verificar   — UC-13: {"existe", "quantidade", "certificados": [...]}
+                                   login do segurado no portal; qualquer linha nao
+                                   cancelada (RN-35); 3 vigencias mais recentes (RN-35a, RD-30)
 
 Aplicacao FastAPI SEPARADA da tela (`certgen web`): sem paginas, sem cascata,
 sem Sair/Procurar. Sobe por `certgen api` (RF-19).
@@ -49,7 +50,8 @@ app = FastAPI(
     version=__version__,
     description=(
         "UC-12 — emite, publica no S3 e devolve link + JSON. "
-        "UC-13 — verifica se o CPF/CNPJ e segurado ativo da administradora. "
+        "UC-13 — verifica se o CPF/CNPJ e segurado da administradora e devolve as 3 "
+        "vigencias mais recentes (fatura, certificado, produto) para alimentar a emissao. "
         "Autenticacao por X-API-Key."
     ),
 )
@@ -137,19 +139,21 @@ class PedidoIn(BaseModel):
     vigencia: date = Field(
         ..., examples=["2026-07-01"], description="= inicio_vig (RN-31), ISO 8601"
     )
+    fatura: int | None = Field(
+        None, examples=[380819], description="RD-31 — opcional; vem da verificacao"
+    )
+    certificado: str | None = Field(
+        None, examples=["CF1DI/AP.602"], description="RD-31 — opcional; vem da verificacao"
+    )
 
 
 class VerificacaoIn(BaseModel):
-    """RF-20 — sem vigencia: a pergunta e 'e segurado desta administradora?' (RN-35)."""
+    """RF-20 — sem vigencia: 'e segurado desta administradora?' + 3 vigencias (RN-35a)."""
 
     administradora: str = Field(..., examples=["0000001192"], description="pessoas.pessoa")
     cpf_cnpj: str = Field(
         ..., examples=["330.163.307-25"], description="CPF ou CNPJ; pontuacao aceita"
     )
-
-
-class VerificacaoOut(BaseModel):
-    existe: bool
 
 
 # ------------------------------------------------------------------ endpoints
@@ -162,33 +166,45 @@ def saude() -> dict:
 @app.post(
     "/v1/segurados/verificar",
     dependencies=[Depends(autenticar)],
-    response_model=VerificacaoOut,
     responses={400: {"description": "administradora vazia ou documento sem 11/14 digitos"}},
 )
 def verificar(
     req: VerificacaoIn,
     repo: RepositorioCertificados = Depends(get_repositorio),
 ):
-    """UC-13 / RF-20 — {"existe": true|false}, sem olhar vigencia (RN-35). Nada mais sai."""
+    """UC-13 / RF-20 — {"existe", "quantidade", "certificados": [RD-30...]}.
+
+    existe = qualquer linha nao cancelada (RN-35); certificados = as 3 vigencias mais
+    recentes (RN-35a) com nome, endereco, vigencia, apolice, seq, fatura, certificado e
+    produto, para o portal chamar /v1/certificados/emitir apontando fatura e certificado.
+    """
     inicio = time.monotonic()
     try:
         pedido = PedidoVerificacao.criar(req.administradora, req.cpf_cnpj)
     except PedidoInvalido as exc:
         return JSONResponse({"erro": str(exc)}, status_code=400)
-    existe = verificar_segurado(repo, pedido)
-    log.info(  # RNF-13: sem chave, sem nome
+    resposta = verificar_segurado(repo, pedido)
+    log.info(  # RNF-13: sem chave, sem nome, sem endereco — so as chaves
         json.dumps(
             {
                 "evento": "verificacao_portal",
                 "pedido": pedido.para_dict(),
-                "existe": existe,
+                "existe": resposta.existe,
+                "vigencias": [
+                    {
+                        "inicio_vig": v.inicio_vig.isoformat() if v.inicio_vig else None,
+                        "fatura": v.fatura,
+                        "certificado": v.certificado,
+                    }
+                    for v in resposta.vigencias
+                ],
                 "http": 200,
                 "duracao_ms": round((time.monotonic() - inicio) * 1000),
             },
             ensure_ascii=False,
         )
     )
-    return VerificacaoOut(existe=existe)
+    return JSONResponse(resposta.para_dict(), status_code=200)
 
 
 @app.post("/v1/certificados/emitir", dependencies=[Depends(autenticar)])
@@ -203,7 +219,9 @@ def emitir(
     """UC-12 / RF-18. 200 com ao menos um link; 404 sem certificado; 502 todos falharam."""
     inicio = time.monotonic()
     try:
-        pedido = PedidoPortal.criar(req.administradora, req.cpf_cnpj, req.vigencia)
+        pedido = PedidoPortal.criar(
+            req.administradora, req.cpf_cnpj, req.vigencia, req.fatura, req.certificado
+        )
     except PedidoInvalido as exc:
         return JSONResponse({"erro": str(exc)}, status_code=400)
 

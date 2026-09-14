@@ -44,15 +44,20 @@ class RepoFalso:
         self.verificacoes = []
         self._m = RepositorioFirebird()
 
-    def existe_segurado(self, administradora, cpf_cnpj):
-        """QRY-14 / RN-35 em memoria: mesma adm e doc, sem olhar vigencia (14/09/2026)."""
+    def listar_vigencias_portal(self, administradora, cpf_cnpj):
+        """QRY-14 / RD-30 em memoria: mesma adm e doc, sem olhar vigencia (RN-35)."""
         self.verificacoes.append((administradora, cpf_cnpj))
-        return any(
-            li["administradora"] == administradora and li["documento_seg"] == cpf_cnpj
+        return [
+            RepositorioFirebird._montar_vigencia(
+                {**li, "cpf_cnpj": li["documento_seg"], "nome": li["beneficiario"]}
+            )
             for li in self.linhas
-        )
+            if li["administradora"] == administradora and li["documento_seg"] == cpf_cnpj
+        ]
 
-    def localizar_por_portal(self, administradora, cpf_cnpj, vigencia):
+    def localizar_por_portal(
+        self, administradora, cpf_cnpj, vigencia, fatura=None, certificado=None
+    ):
         self.chamadas.append((administradora, cpf_cnpj, vigencia))
         return [
             self._m._montar(li)
@@ -60,6 +65,8 @@ class RepoFalso:
             if li["administradora"] == administradora
             and li["documento_seg"] == cpf_cnpj
             and li["inicio_vig"] == vigencia
+            and (fatura is None or li["fatura"] == fatura)
+            and (certificado is None or li["certificado"] == certificado)
         ]
 
 
@@ -242,24 +249,110 @@ def test_rf_20_pedido_verificacao_normaliza_e_valida():
         PedidoPortal.criar("00000000019X", "05554363733", date(2026, 7, 1))
 
 
-def test_rn_35_existe_sem_olhar_vigencia():
+VERIF = PedidoVerificacao.criar("0000001192", "33016330725")
+
+
+def _mes(linha, ano, mes, fatura, **extra):
+    from calendar import monthrange
+
+    return {
+        **linha,
+        "inicio_vig": date(ano, mes, 1),
+        "final_vig": date(ano, mes, monthrange(ano, mes)[1]),
+        "fatura": fatura,
+        **extra,
+    }
+
+
+def test_rn_35_existe_sem_olhar_vigencia_e_devolve_rd_30():
     # 14/09/2026: vigencias sao mensais (uma por fatura) e a fatura do mes entra com
     # atraso; segurado com a ultima vigencia encerrada continua existindo para o portal.
-    repo = RepoFalso([LINHA_13008])  # vigencia 07/2026, ja encerrada
-    v = PedidoVerificacao.criar("0000001192", "33016330725")
-    assert verificar_segurado(repo, v) is True
+    linha = {
+        **LINHA_13008,
+        "cod_produto": "0271",
+        "nom_produto": "TOTAL PROTECAO",
+        "des_prod": "TOTAL PROTECAO RESIDENCIAL / FAZ TUDO",
+        "des_prod_master": "TOTAL CONTEUDO",
+    }
+    repo = RepoFalso([linha])  # vigencia 07/2026, ja encerrada
+    resp = verificar_segurado(repo, VERIF)
+    assert resp.existe is True
     assert repo.verificacoes == [("0000001192", "33016330725")]
+    d = resp.para_dict()
+    assert d["existe"] is True and d["quantidade"] == 1
+    [c] = d["certificados"]
+    assert c == {
+        "nome": "JORGE EDUARDO MONT SERRAT",
+        "endereco": {
+            "logradouro": "AV LUCIO COSTA, 3300 BLOCO 2", "unidade": "AP.602",
+            "bairro": "BARRA DA TIJUA", "cidade": "RIO DE JANEIRO", "uf": "RJ",
+            "cep": "22630010", "condominio": "DIRETORIA IMODATA",
+        },
+        "inicio_vig": "2026-07-01", "final_vig": "2026-07-31",
+        "apolice": "13008", "seq": 0, "fatura": 380819, "certificado": "CF1DI/AP.602",
+        "produto": {
+            "codigo": "0271", "nome": "TOTAL PROTECAO",
+            "descricao_fatura": "TOTAL PROTECAO RESIDENCIAL / FAZ TUDO",
+            "descricao_master": "TOTAL CONTEUDO",
+        },
+    }  # fmt: skip
+    assert "cpf_cnpj" not in c  # o portal ja tem o documento; nao repete
 
 
-def test_rn_35_outra_administradora_ou_outro_documento_nao_existe():
+def test_rn_35_nao_existe_e_lista_vazia():
     repo = RepoFalso([LINHA_13008])
     outra_adm = PedidoVerificacao.criar("0000000019", "33016330725")
     outro_doc = PedidoVerificacao.criar("0000001192", "05554363733")
-    assert verificar_segurado(repo, outra_adm) is False
-    assert verificar_segurado(repo, outro_doc) is False
+    for pedido in (outra_adm, outro_doc):
+        resp = verificar_segurado(repo, pedido)
+        assert resp.existe is False
+        assert resp.para_dict() == {"existe": False, "quantidade": 0, "certificados": []}
 
 
-def test_gap_25_fechado_final_vig_zero_delphi_nao_impede():
+def test_rn_35a_tres_vigencias_mais_recentes_com_todas_as_unidades():
+    # 5 meses; em 07/2026 ha duas unidades (RD-22). Devolve 07, 06 e 05 = 4 linhas.
+    linhas = [
+        _mes(LINHA_13008, 2026, 3, 379000),
+        _mes(LINHA_13008, 2026, 4, 379500),
+        _mes(LINHA_13008, 2026, 5, 380000),
+        _mes(LINHA_13008, 2026, 6, 380400),
+        _mes(LINHA_13008, 2026, 7, 380819),
+        _mes(LINHA_13008, 2026, 7, 380819, certificado="CF1DI/AP.701", unidade="AP.701"),
+    ]
+    resp = verificar_segurado(RepoFalso(linhas), VERIF)
+    got = [(v.inicio_vig.isoformat(), v.fatura, v.certificado) for v in resp.vigencias]
+    assert got == [
+        ("2026-07-01", 380819, "CF1DI/AP.602"),
+        ("2026-07-01", 380819, "CF1DI/AP.701"),
+        ("2026-06-01", 380400, "CF1DI/AP.602"),
+        ("2026-05-01", 380000, "CF1DI/AP.602"),
+    ]
+    assert resp.para_dict()["quantidade"] == 4
+
+
+def test_gap_25_fechado_final_vig_zero_delphi_nao_impede_e_sai_null():
     linha = {**LINHA_13008, "final_vig": date(1899, 12, 30)}  # DEF-06
-    v = PedidoVerificacao.criar("0000001192", "33016330725")
-    assert verificar_segurado(RepoFalso([linha]), v) is True
+    resp = verificar_segurado(RepoFalso([linha]), VERIF)
+    assert resp.existe is True
+    assert resp.para_dict()["certificados"][0]["final_vig"] is None
+
+
+def test_rd_31_emitir_aponta_fatura_e_certificado(opcoes):
+    # Duas unidades na mesma vigencia (RD-22): com certificado no pedido, emite so uma.
+    repo = RepoFalso([LINHA_13008, LINHA_B])
+    pedido = PedidoPortal.criar(
+        "0000001192", "33016330725", date(2026, 7, 1), fatura=380819, certificado="CF1DI/AP.701"
+    )
+    assert pedido.para_dict()["fatura"] == 380819
+    assert pedido.para_dict()["certificado"] == "CF1DI/AP.701"
+    resp = emitir_para_portal(
+        repo, PublicadorFalso(), RegistroFalso(), pedido, opcoes, render_falso
+    )
+    [item] = resp.certificados
+    assert item.chave.certificado == "CF1DI/AP.701" and item.situacao == "publicado"
+    # fatura errada: nada encontrado (404)
+    errado = PedidoPortal.criar("0000001192", "33016330725", date(2026, 7, 1), fatura=1)
+    with pytest.raises(NenhumCertificado, match="fatura 1"):
+        emitir_para_portal(repo, PublicadorFalso(), RegistroFalso(), errado, opcoes, render_falso)
+    with pytest.raises(PedidoInvalido):
+        PedidoPortal.criar("0000001192", "33016330725", date(2026, 7, 1), fatura=-5)

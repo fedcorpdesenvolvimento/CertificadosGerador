@@ -133,19 +133,49 @@ def test_rf_20_verificar_exige_chave(cliente):
     assert r.status_code == 401 and CHAVE not in r.text
 
 
-def test_rf_20_verificar_devolve_so_o_booleano(cliente):
+def test_rf_20_verificar_devolve_existe_e_vigencias_rd_30(cliente):
     # LINHA_13008: vigencia 07/2026 ja encerrada; RN-35 (14/09/2026) nao olha vigencia
     r = cliente.post("/v1/segurados/verificar", json=VERIFICACAO, headers={"X-API-Key": CHAVE})
-    assert r.status_code == 200
-    assert r.json() == {"existe": True}  # nada alem do booleano
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["existe"] is True and corpo["quantidade"] == 1
+    [c] = corpo["certificados"]
+    assert c["nome"] == "JORGE EDUARDO MONT SERRAT"
+    assert c["endereco"]["unidade"] == "AP.602" and c["endereco"]["uf"] == "RJ"
+    assert (c["inicio_vig"], c["apolice"], c["seq"], c["fatura"], c["certificado"]) == (
+        "2026-07-01", "13008", 0, 380819, "CF1DI/AP.602"
+    )
+    assert set(c["produto"]) == {"codigo", "nome", "descricao_fatura", "descricao_master"}
 
     r = cliente.post(
         "/v1/segurados/verificar",
         json={**VERIFICACAO, "cpf_cnpj": "055.543.637-33"},
         headers={"X-API-Key": CHAVE},
     )
-    assert r.status_code == 200 and r.json() == {"existe": False}
+    assert r.status_code == 200
+    assert r.json() == {"existe": False, "quantidade": 0, "certificados": []}
     assert cliente.pub.publicados == [] and cliente.reg.registros == []  # so leitura
+
+
+def test_rd_31_emitir_com_fatura_e_certificado(cliente):
+    r = cliente.post(
+        "/v1/certificados/emitir",
+        json={**PEDIDO, "fatura": 380819, "certificado": "CF1DI/AP.602"},
+        headers={"X-API-Key": CHAVE},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["pedido"]["fatura"] == 380819
+    assert r.json()["certificados"][0]["situacao"] == "publicado"
+    r = cliente.post(
+        "/v1/certificados/emitir",
+        json={**PEDIDO, "fatura": 380819, "certificado": "NAO-EXISTE"},
+        headers={"X-API-Key": CHAVE},
+    )
+    assert r.status_code == 404
+    r = cliente.post(
+        "/v1/certificados/emitir", json={**PEDIDO, "fatura": "abc"}, headers={"X-API-Key": CHAVE}
+    )
+    assert r.status_code == 422
 
 
 def test_rf_20_verificar_corpo_invalido(cliente):

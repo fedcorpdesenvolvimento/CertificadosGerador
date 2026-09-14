@@ -11,9 +11,10 @@ Falha em qualquer passo interrompe AQUELE certificado, que sai como `falha`
 com motivo; os demais seguem (RF-09, RN-32). Nunca se devolve link cuja
 gravacao no banco nao foi confirmada, nem link sem documento.
 
-UC-13 (RF-20, RN-35): `verificar_segurado` devolve so um booleano — o CPF/CNPJ
-e segurado (nao cancelado) daquela administradora? Sem filtro de vigencia
-(decisao de 14/09/2026). Nenhum dado do segurado sai.
+UC-13 (RF-20, RN-35, RN-35a, RD-30): `verificar_segurado` devolve `existe` e, quando
+existe, as 3 vigencias mais recentes do documento na administradora (nome, endereco,
+vigencia, apolice, seq, fatura, certificado, produto) para o portal chamar a emissao
+ja apontando fatura e certificado (RD-31). Sem filtro de vigencia (RN-35).
 
 O passo de emissao e o mesmo da tela e da CLI (`emitir_um`, RF-11); os
 arquivos ficam em CERTGEN_PASTA_SAIDA com a estrutura RN-19 (RN-34).
@@ -40,6 +41,7 @@ from certgen.application.ports import (
 )
 from certgen.domain.certificado import Certificado, ChaveCertificado
 from certgen.domain.nomes_arquivo import NomeArquivoInvalido, caminho_publicacao
+from certgen.domain.portal import VigenciaPortal, ultimas_vigencias
 from certgen.domain.produto import ProdutoIndeterminado
 from certgen.serialize.json_certificado import JsonInvalido, serializar
 
@@ -79,20 +81,34 @@ class PedidoPortal:
     administradora: str
     cpf_cnpj: str  # apenas digitos
     vigencia: date  # = segurados_inc.inicio_vig (RN-31)
+    fatura: int | None = None  # RD-31 — opcional, vindo da verificacao
+    certificado: str | None = None  # RD-31 — opcional, vindo da verificacao
 
     @classmethod
-    def criar(cls, administradora: str, cpf_cnpj: str, vigencia: date) -> PedidoPortal:
+    def criar(
+        cls,
+        administradora: str,
+        cpf_cnpj: str,
+        vigencia: date,
+        fatura: int | None = None,
+        certificado: str | None = None,
+    ) -> PedidoPortal:
         """RF-18 — normaliza e valida o pedido de emissao."""
         adm, doc = _normalizar(administradora, cpf_cnpj)
         if not isinstance(vigencia, date):
             raise PedidoInvalido("vigencia deve ser uma data ISO 8601 (RD-06)")
-        return cls(adm, doc, vigencia)
+        if fatura is not None and (not isinstance(fatura, int) or fatura <= 0):
+            raise PedidoInvalido("fatura deve ser um inteiro positivo (RD-31)")
+        cert = (certificado or "").strip() or None
+        return cls(adm, doc, vigencia, fatura, cert)
 
     def para_dict(self) -> dict:
         return {
             "administradora": self.administradora,
             "cpf_cnpj": self.cpf_cnpj,
             "vigencia": self.vigencia.isoformat(),
+            "fatura": self.fatura,
+            "certificado": self.certificado,
         }
 
 
@@ -111,9 +127,28 @@ class PedidoVerificacao:
         return {"administradora": self.administradora, "cpf_cnpj": self.cpf_cnpj}
 
 
-def verificar_segurado(repositorio: RepositorioCertificados, pedido: PedidoVerificacao) -> bool:
-    """UC-13 / RN-35 — True se ha linha nao cancelada (QRY-14). So o booleano; nada mais sai."""
-    return bool(repositorio.existe_segurado(pedido.administradora, pedido.cpf_cnpj))
+@dataclass(frozen=True)
+class RespostaVerificacao:
+    """RF-20 (14/09/2026) — existe + as 3 vigencias mais recentes (RD-30, RN-35a)."""
+
+    existe: bool
+    vigencias: tuple[VigenciaPortal, ...] = ()
+
+    def para_dict(self) -> dict:
+        return {
+            "existe": self.existe,
+            "quantidade": len(self.vigencias),
+            "certificados": [v.para_dict() for v in self.vigencias],
+        }
+
+
+def verificar_segurado(
+    repositorio: RepositorioCertificados, pedido: PedidoVerificacao
+) -> RespostaVerificacao:
+    """UC-13 / RN-35 — existe se ha linha nao cancelada (QRY-14); devolve as 3 vigencias
+    mais recentes (RN-35a) com os dados RD-30. Lista vazia => existe=False."""
+    linhas = repositorio.listar_vigencias_portal(pedido.administradora, pedido.cpf_cnpj)
+    return RespostaVerificacao(bool(linhas), tuple(ultimas_vigencias(linhas)))
 
 
 @dataclass(frozen=True)
@@ -164,15 +199,21 @@ def emitir_para_portal(
     """UC-12. Levanta NenhumCertificado quando QRY-13 nao encontra nada (404)."""
     try:
         certificados = repositorio.localizar_por_portal(
-            pedido.administradora, pedido.cpf_cnpj, pedido.vigencia
+            pedido.administradora,
+            pedido.cpf_cnpj,
+            pedido.vigencia,
+            fatura=pedido.fatura,
+            certificado=pedido.certificado,
         )
     except ProdutoIndeterminado as exc:
         # RN-03.3 — apolice sem produto: nenhum certificado desse pedido emite
         raise NenhumCertificado(str(exc)) from exc
     if not certificados:
+        filtros = (("fatura", pedido.fatura), ("certificado", pedido.certificado))
+        extra = "".join(f", {k} {v}" for k, v in filtros if v is not None)
         raise NenhumCertificado(
             f"nenhum certificado para administradora {pedido.administradora}, documento "
-            f"{pedido.cpf_cnpj} e vigencia {pedido.vigencia.isoformat()} (RD-27)"
+            f"{pedido.cpf_cnpj}, vigencia {pedido.vigencia.isoformat()}{extra} (RD-27/RD-31)"
         )
     resposta = RespostaPortal(pedido=pedido)
     for cert in certificados:  # RN-32: todos

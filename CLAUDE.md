@@ -64,8 +64,9 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Tela web: `python -m certgen.cli web` (127.0.0.1:8000; `--reload` em desenvolvimento)
 - APIs do portal (Fase 8, secao 11.1): `python -m certgen.cli api` (127.0.0.1:8010; `--rede` para a LAN;
   exige `CERTGEN_API_KEY` no `.env`; header `X-API-Key`). `POST /v1/certificados/emitir` devolve
-  link + JSON espelho (RD-29); `POST /v1/segurados/verificar` devolve `{"existe": bool}` (RF-20, RN-35:
-  vigencia ativa hoje) para o login do segurado no portal.
+  link + JSON espelho (RD-29) e aceita `fatura`/`certificado` opcionais (RD-31); `POST /v1/segurados/verificar`
+  devolve `existe` + as 3 vigencias mais recentes com nome, endereco, chaves e produto (RF-20, RD-30, RN-35a;
+  RN-35: qualquer linha nao cancelada) para o login do segurado no portal. A API sempre reemite (RN-33).
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
 - CLI: `python -m certgen.cli --help`
 

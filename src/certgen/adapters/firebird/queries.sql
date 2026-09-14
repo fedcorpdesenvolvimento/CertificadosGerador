@@ -151,14 +151,24 @@ WHERE fat.status = 'A'
   /*FILTROS*/
 ORDER BY fat.administradora, fat.apolice, fat.seq, fat.fatura
 
--- name: existe_segurado
--- QRY-14 / RN-35 (Fase 8, UC-13) — verificacao pelo portal: o CPF/CNPJ e segurado
--- (nao cancelado) da administradora? SEM filtro de vigencia (decisao de 14/09/2026:
--- as vigencias sao mensais, uma por fatura, e a fatura do mes entra com atraso).
--- So a contagem sai; nenhum dado do segurado (RF-20). Parametros: administradora, cpf_cnpj.
-SELECT COUNT(*) AS qtd
+-- name: vigencias_portal
+-- QRY-14 / RD-30 / RN-35 (Fase 8, UC-13; revisao de 14/09/2026) — verificacao pelo portal.
+-- Todas as linhas nao canceladas do documento na administradora, SEM filtro de vigencia
+-- (RN-35); o Python fica com as 3 vigencias mais recentes (RN-35a). Produto: ss.cod_produto
+-- -> produto.nom_produto; descricao por fatura em fatura_dsc_prod, agregada por fatura
+-- (a tabela tem 39 faturas duplicadas em 14/09/2026; MAX evita repetir linhas do segurado).
+-- Parametros fixos: administradora, cpf_cnpj.
+SELECT ss.administradora, ss.cpf_cnpj, ss.nome,
+       ss.endereco, ss.unidade, ss.bairro, ss.cidade, ss.uf, ss.cep, ss.nome_cond,
+       ss.inicio_vig, ss.final_vig,
+       ss.apolice, ss.seq, ss.fatura, ss.certificado,
+       ss.cod_produto, prd.nom_produto, fdp.des_prod, fdp.des_prod_master
 FROM segurados_inc ss
+LEFT JOIN produto prd ON prd.cod_produto = ss.cod_produto
+LEFT JOIN (SELECT d.fatura, MAX(d.des_prod) AS des_prod, MAX(d.des_prod_master) AS des_prod_master
+           FROM fatura_dsc_prod d GROUP BY d.fatura) fdp ON fdp.fatura = ss.fatura
 WHERE ss.status_seg <> 'C'
   AND ss.cpf_cnpj <> ''
   AND ss.administradora = ?
   AND ss.cpf_cnpj = ?
+ORDER BY ss.inicio_vig DESC, ss.fatura DESC, ss.certificado

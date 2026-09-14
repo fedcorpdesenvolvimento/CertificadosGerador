@@ -4,8 +4,9 @@ Guia para validar `certgen api` (Fase 8, seção 11.1 da especificação) a part
 São dois endpoints com a mesma chave:
 
 - **Verificação** (`/v1/segurados/verificar`): o portal pergunta se o CPF/CNPJ é segurado
-  (não cancelado) daquela administradora e recebe só `{"existe": true|false}`. É a
-  chamada do login do segurado; só lê o banco. Não olha vigência (RN-35, 14/09/2026).
+  (não cancelado) daquela administradora e recebe `existe` mais as 3 vigências mais
+  recentes, com nome, endereço, apólice, seq, fatura, certificado e produto. É a chamada
+  do login do segurado; só lê o banco. Não olha vigência (RN-35, 14/09/2026).
 - **Emissão** (`/v1/certificados/emitir`): emite o certificado, publica o PDF no S3, grava o
   link no Firebird e devolve o link **e o JSON espelho** do certificado.
 
@@ -78,13 +79,32 @@ São dois endpoints com a mesma chave:
   ```
   Não há vigência: a pergunta é "este CPF/CNPJ tem alguma linha não cancelada nesta
   administradora?" (RN-35, revista em 14/09/2026).
-- Esperado: `200` e **só** isto:
+- Esperado: `200` com `existe`, `quantidade` e a lista `certificados` das 3 vigências mais
+  recentes (todas as unidades de cada mês):
   ```json
-  {"existe": true}
+  {
+    "existe": true,
+    "quantidade": 3,
+    "certificados": [
+      {
+        "nome": "...",
+        "endereco": {"logradouro": "...", "unidade": "AP 1302", "bairro": "...", "cidade": "...",
+                     "uf": "RJ", "cep": "...", "condominio": "..."},
+        "inicio_vig": "2026-08-01", "final_vig": "2026-08-31",
+        "apolice": "15008", "seq": 1, "fatura": 381529, "certificado": "3082/01/AP 1302",
+        "produto": {"codigo": "0117", "nome": "...", "descricao_fatura": "INCENDIO CONTEUDO RESIDENCIAL ...",
+                    "descricao_master": "TOTAL CONTEÚDO"}
+      }
+    ]
+  }
   ```
-  `false` quando o CPF não é da administradora, não existe ou está cancelado. Vigência
-  encerrada **não** dá `false`. Nenhum dado do segurado sai. Esta chamada não grava nada.
-- Teste também com um CPF de outra administradora (deve dar `false`) e com um CPF
+  `existe: false` vem com `quantidade: 0` e lista vazia, quando o CPF não é da
+  administradora, não existe ou está cancelado. Vigência encerrada **não** dá `false`.
+  Esta chamada não grava nada.
+- Guarde `inicio_vig`, `fatura` e `certificado` do item escolhido: são exatamente os
+  campos que a emissão (3.3) aceita para apontar aquela unidade. A Collection importada
+  faz isso sozinha (variáveis `vigencia`, `fatura`, `certificado`).
+- Teste também com um CPF de outra administradora (`existe: false`) e com um CPF
   inventado (`false`).
 
 ### 3.3 Emitir certificado
@@ -102,6 +122,9 @@ São dois endpoints com a mesma chave:
   - `cpf_cnpj`: pontuação é aceita e removida antes da consulta.
   - `vigencia`: ISO 8601 (`AAAA-MM-DD`) e **igual** a `segurados_inc.inicio_vig` (RN-31).
     Não é "data dentro do período".
+  - `fatura` e `certificado` (opcionais, RD-31): valores vindos da verificação, para
+    emitir só aquela unidade quando o CPF tem mais de uma no mesmo mês. Acrescente
+    `"fatura": 380819, "certificado": "CF1DI/AP.602"` ao body.
 - Esperado na primeira chamada: `200`
   ```json
   {
@@ -342,16 +365,17 @@ Em vez de criar Collection e Environments à mão (seções 2 e 3), importe os a
 
 | Arquivo | O que é |
 |---|---|
-| `Certgen-API.postman_collection.json` | Collection com as 4 requests em ordem, a pasta *Erros esperados* e os testes automáticos |
+| `Certgen-API.postman_collection.json` | Collection com as requests em ordem (saúde, verificação, emissão por vigência, emissão apontando fatura + certificado, repetição), a pasta *Erros esperados* e os testes automáticos |
 | `Certgen-local.postman_environment.json` | Environment `Certgen local` (`http://127.0.0.1:8010`) |
 | `Certgen-rede.postman_environment.json` | Environment `Certgen rede` (`http://192.168.10.101:8010`) |
 
 1. Postman → *Import* → arraste os três arquivos (ou *Upload Files*).
 2. Selecione o environment desejado e preencha `api_key` com a chave do `.env`
    (*Current value*; o arquivo vem com o valor vazio de propósito, RN-30).
-3. Ajuste `administradora`, `cpf_cnpj` e `vigencia` para o segurado de teste. As requests
-   usam essas variáveis; não é preciso editar o body.
-4. Rode na ordem 1 → 2 → 3 → 4. A request 3 grava no S3 e no banco. Os testes de cada
-   request aparecem na aba *Test Results*.
-5. *Run collection* executa tudo em sequência; desmarque as requests 3 e 4 para repetir sem
-   efeito.
+3. Ajuste `administradora` e `cpf_cnpj` para o segurado de teste. As requests usam essas
+   variáveis; não é preciso editar o body. A request 2 (verificação) preenche sozinha
+   `vigencia`, `fatura` e `certificado` com a vigência mais recente devolvida.
+4. Rode na ordem 1 → 2 → 3 (ou 3b) → 4. As requests 3, 3b e 4 gravam no S3 e no banco.
+   Os testes de cada request aparecem na aba *Test Results*.
+5. *Run collection* executa tudo em sequência; desmarque as requests 3, 3b e 4 para
+   repetir sem efeito.
