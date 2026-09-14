@@ -24,6 +24,22 @@ São dois endpoints com a mesma chave:
 3. Confirme o `.env`: `FB_*` preenchidos, `CERTGEN_API_KEY` com 32 caracteres
    hexadecimais, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (ou perfil AWS),
    `AWS_REGION`, `AWS_S3_BUCKET`, `CERTGEN_PASTA_SAIDA`.
+   Atenção: o `.env` herdado do EnvioPorto **não tem a seção AWS** (constatado em
+   14/09/2026). Sem ela a verificação funciona, mas a emissão devolve `502` com motivo
+   `Unable to locate credentials` depois de ~90 s. Acrescente ao final do arquivo:
+   ```
+   AWS_REGION=us-east-2
+   AWS_S3_BUCKET=certincendioaws
+   AWS_ACCESS_KEY_ID=AKIA...
+   AWS_SECRET_ACCESS_KEY=...
+   ```
+   O segredo só aparece na criação da chave no IAM; se não foi guardado, crie uma chave
+   nova (limite de 2 ativas por usuário) e elimine a antiga do fonte Delphi (SEC-01).
+   O `.env` é lido só na subida: depois de editar, reinicie a API.
+   Para conferir a credencial sem emitir nada:
+   ```powershell
+   python -c "import boto3; from certgen.config.settings import carregar_dotenv; carregar_dotenv(); print(boto3.client('sts').get_caller_identity()['Arn']); boto3.client('s3', region_name='us-east-2').head_bucket(Bucket='certincendioaws'); print('bucket OK')"
+   ```
    Para gerar uma chave nova:
    ```powershell
    python -c "import secrets; print(secrets.token_hex(16))"
@@ -171,6 +187,7 @@ São dois endpoints com a mesma chave:
 | 7 | Administradora inexistente | `404` |
 | 8 | Firebird parado ou `FB_*` errado | `500`/`503`, e nada publicado |
 | 9 | Credenciais AWS inválidas | `502`: item com `situacao` = `"falha"` e `motivo` do S3; banco **não** recebe link |
+| 9a | Credenciais AWS **ausentes** no `.env` | `502` após ~90 s, `motivo` termina em `Unable to locate credentials`; o teste da collection avisa no console. Preencher `AWS_*` (seção 1, passo 3) e reiniciar a API |
 
 O código `502` só aparece quando **nenhum** certificado do pedido pôde ser
 publicado. Se um CPF tiver duas unidades (RD-22) e uma falhar, a resposta é
@@ -337,7 +354,7 @@ para um disco local é o caminho.
 |---|---|---|
 | Firebird 2.5 | `192.168.0.6` (FATURA.GDB) | verificação e emissão respondem `5xx`; o script reinicia a API |
 | Chromium do Playwright | `python -m playwright install chromium` nesta máquina | emissão falha (`503`); verificação continua |
-| Credenciais AWS | `.env` (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) | emissão sai `502` com `falha`; nada gravado no banco |
+| Credenciais AWS | `.env` (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`); o `.env` do EnvioPorto não as traz | emissão sai `502` com `falha` (`Unable to locate credentials`, ~90 s); nada gravado no banco |
 | `CERTGEN_API_KEY` | `.env` | a API recusa subir |
 | Pasta `CERTGEN_PASTA_SAIDA` | disco local ou rede acessível a este usuário | emissão falha antes de publicar |
 

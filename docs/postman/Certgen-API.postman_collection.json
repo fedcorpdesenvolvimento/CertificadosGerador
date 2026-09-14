@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "1a71362d-76dc-4ea6-a811-00d888ec5bee",
     "name": "Certgen API (portal)",
-    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura; preenche vigencia/fatura/certificado) -> 3. Emitir por vigencia ou 3b. Emitir apontando fatura + certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
+    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura; preenche vigencia/fatura/certificado) -> 3. Emitir por vigencia ou 3b. Emitir apontando fatura + certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md\n\nSe 'Emitir' devolver 502 com motivo 'Unable to locate credentials': faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor (o .env herdado do EnvioPorto nao tem a secao AWS). Preencher e reiniciar a API (Ctrl+C no iniciar_api.ps1 e rodar de novo). Ver guia, secoes 1 e 4.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -171,7 +171,7 @@
             "emitir"
           ]
         },
-        "description": "UC-12 / RF-18 / RD-29. ATENCAO: emissao real - gera PDF e JSON na pasta de saida, publica no S3 e grava link_certificado_aws no Firebird. vigencia = inicio_vig exato (RN-31). Pode levar alguns segundos (Chromium).",
+        "description": "UC-12 / RF-18 / RD-29. ATENCAO: emissao real - gera PDF e JSON na pasta de saida, publica no S3 e grava link_certificado_aws no Firebird. vigencia = inicio_vig exato (RN-31). Pode levar alguns segundos (Chromium). Se vier 502 com motivo 'Unable to locate credentials', faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor: preencher e reiniciar a API (demora ~90 s ate o erro porque o boto3 procura perfil e metadados EC2).",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
@@ -189,6 +189,14 @@
           "script": {
             "type": "text/javascript",
             "exec": [
+              "if (pm.response.code === 502) {",
+              "  const txt = pm.response.text();",
+              "  if (txt.includes('Unable to locate credentials')) {",
+              "    console.warn('502: credenciais AWS ausentes no servidor. Preencher AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env e reiniciar a API (guia, secao 1 passo 3).');",
+              "  } else if (txt.includes('ErroPublicacao')) {",
+              "    console.warn('502: falha ao publicar no S3 (credencial invalida, sem permissao no bucket ou rede). Ver motivo no corpo.');",
+              "  }",
+              "}",
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const r = pm.response.json();",
               "pm.test('cpf so digitos', () => pm.expect(r.pedido.cpf_cnpj).to.match(/^\\d+$/));",
@@ -233,7 +241,7 @@
             "emitir"
           ]
         },
-        "description": "RF-18 + RD-31. Usa vigencia/fatura/certificado preenchidos pela request 2 para emitir so a unidade escolhida (util quando o CPF tem mais de uma unidade no mes, RD-22). ATENCAO: emissao real (S3 + banco).",
+        "description": "RF-18 + RD-31. Usa vigencia/fatura/certificado preenchidos pela request 2 para emitir so a unidade escolhida (util quando o CPF tem mais de uma unidade no mes, RD-22). ATENCAO: emissao real (S3 + banco). Se vier 502 com motivo 'Unable to locate credentials', faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor: preencher e reiniciar a API (demora ~90 s ate o erro porque o boto3 procura perfil e metadados EC2).",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\",\n  \"fatura\": {{fatura}},\n  \"certificado\": \"{{certificado}}\"\n}",
@@ -251,6 +259,14 @@
           "script": {
             "type": "text/javascript",
             "exec": [
+              "if (pm.response.code === 502) {",
+              "  const txt = pm.response.text();",
+              "  if (txt.includes('Unable to locate credentials')) {",
+              "    console.warn('502: credenciais AWS ausentes no servidor. Preencher AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env e reiniciar a API (guia, secao 1 passo 3).');",
+              "  } else if (txt.includes('ErroPublicacao')) {",
+              "    console.warn('502: falha ao publicar no S3 (credencial invalida, sem permissao no bucket ou rede). Ver motivo no corpo.');",
+              "  }",
+              "}",
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const r = pm.response.json();",
               "pm.test('pedido ecoa fatura e certificado', () => {",
