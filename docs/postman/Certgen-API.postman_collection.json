@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "953c87ba-9ee7-4b3a-906f-ed6c44176424",
+    "_postman_id": "3a716a01-015d-42fd-a919-c5a26999151c",
     "name": "Certgen API (portal)",
     "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura) -> 3. Emitir certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (ja_publicado).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -95,7 +95,7 @@
             "verificar"
           ]
         },
-        "description": "RF-20 / RN-35. {existe: true} so se o CPF/CNPJ tem vigencia ATIVA HOJE na administradora (inicio_vig <= hoje <= final_vig). Nao grava nada.",
+        "description": "RF-20 / RN-35 (14/09/2026). {existe: true} se o CPF/CNPJ tem alguma linha nao cancelada na administradora, sem olhar vigencia. Nao grava nada.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\"\n}",
