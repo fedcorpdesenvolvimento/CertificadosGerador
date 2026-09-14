@@ -1543,7 +1543,7 @@ components:
 
 **`RD-29`** *(11/09/2026)* — Cada item da resposta carrega em `documento` o **mesmo** JSON gravado em disco (`RN-34`, `RNF-08`), já com `arquivo.link`. Não é um resumo nem outro schema: é o documento `RD-10` tal como validado por `RD-15`. Em `falha`, `documento` é `null`.
 
-`situacao` ∈ `publicado` (emitido agora), `ja_publicado` (`RN-33`), `falha` (com `motivo`, `RF-09`). Códigos HTTP: `401` chave ausente ou inválida; `400` corpo inválido; `404` `QRY-13` sem linhas; `502` nenhum certificado pôde ser publicado (todos `falha`); `200` quando ao menos um tem link. Um `GET /v1/saude` autenticado devolve `{"ok": true, "versao": ...}` para o portal testar a chave. O contrato OpenAPI é o gerado pelo FastAPI em `/docs`.
+`situacao` ∈ `publicado` (emitido agora; com aviso `REEMISSAO` quando já havia link, `RN-33`), `falha` (com `motivo`, `RF-09`). *(O valor `ja_publicado` existiu de 10 a 14/09/2026 e foi retirado.)* Códigos HTTP: `401` chave ausente ou inválida; `400` corpo inválido; `404` `QRY-13` sem linhas; `502` nenhum certificado pôde ser publicado (todos `falha`); `200` quando ao menos um tem link. Um `GET /v1/saude` autenticado devolve `{"ok": true, "versao": ...}` para o portal testar a chave. O contrato OpenAPI é o gerado pelo FastAPI em `/docs`.
 
 **`RN-30` — Autenticação.** Chave **única** de 128 bits, gerada com `secrets.token_hex(16)` (32 caracteres hexadecimais), guardada em `CERTGEN_API_KEY` no `.env` (`RNF-06`) e entregue ao portal por canal seguro. O portal envia no header `X-API-Key`. A comparação **DEVE** ser em tempo constante (`hmac.compare_digest`). A chave **nunca** aparece em log, resposta ou mensagem de erro. Sem `CERTGEN_API_KEY`, o processo da API **recusa subir**. Rotação: gerar nova, trocar no `.env` e no portal; não há duas chaves simultâneas (`GAP-24`).
 
@@ -1551,7 +1551,7 @@ components:
 
 **`RN-32` — Vários certificados.** Se `QRY-13` devolver N > 1 linhas, a API emite **todos** e devolve N itens; o portal exibe um link por unidade. Nenhum é escolhido em silêncio (`ADR-04`).
 
-**`RN-33` — Já publicado.** Certificado com `link_publicado` preenchido (`RD-28`) **não** é reemitido: a API devolve o link existente com `situacao = "ja_publicado"`. Reemissão continua sendo ação do operador na tela (`UC-07`). Consequência aceita pelo usuário: o PDF publicado pode não refletir alterações posteriores no banco. *(11/09/2026)* O `documento` (`RD-29`) é **relido** do JSON em `CERTGEN_PASTA_SAIDA` no caminho `RN-19`/`RN-34` esperado para aquele certificado; se o arquivo não existir (link gravado pela tela em outra pasta, ou pelo legado), o item sai como `falha` com motivo explícito e sem link — nunca se devolve link sem o documento (`ADR-04`).
+**`RN-33` — A API sempre reemite** *(revista em 14/09/2026)*. Toda chamada de `RF-18` gera JSON e PDF, publica e grava o link, **mesmo** que `link_publicado` (`RD-28`) já esteja preenchido. Quando havia link, o item sai `publicado` com o aviso `REEMISSAO` em `avisos`; o link anterior é substituído no banco e o objeto anterior fica órfão no S3 (mesma chave `RN-29` se era do sistema novo; chave diferente se era do legado). Os arquivos locais em `RN-19` são **sobrescritos** no mesmo nome — `RN-13` não se aplica porque a sobrescrita é intencional e registrada no aviso, não silenciosa (`RNF-09`). Motivo da revisão: no primeiro teste real, o banco tinha **930.134** linhas não canceladas com `link_certificado_aws` gravado pelo Delphi (de 24/05/2022 a 03/09/2026), todas sem JSON em disco; com a regra original ("com link, não reemite; devolve `ja_publicado` relendo o JSON") a API devolvia `falha` `DocumentoAusente` para praticamente toda a base. Alternativas rejeitadas pelo usuário: reemitir só quando falta o JSON em disco; data de corte em `dt_cria_link`; devolver o link do legado sem documento. Custo aceito: cada chamada do portal renderiza no Chromium e envia ao S3. `UC-07` (reemissão pela tela) continua existindo.
 
 **`RN-34` — Cópia local.** A API grava PDF e JSON em `CERTGEN_PASTA_SAIDA` com a estrutura `RN-19`, exatamente como a emissão manual, antes de publicar. O JSON é regravado com `arquivo.link` após o upload confirmado (`RD-25`, `RF-16`). O JSON é o mesmo documento em qualquer fluxo (`RNF-08`).
 
@@ -1569,7 +1569,7 @@ components:
 
 **`RNF-13`** — Toda chamada da API gera um registro de log estruturado (`RNF-07`) com pedido, chaves localizadas, situação por certificado e duração — **sem** a chave de autenticação e sem o nome do segurado.
 
-**Sequência por certificado (`RF-16` aplicado):** localizar → se `link_publicado`: devolver → gerar JSON (validar `RD-15`) → gerar PDF → `publicar` (S3, confirmado) → `registrar_link` (Firebird, 1 linha) → regravar JSON com o link → item `publicado`. Falha em qualquer passo interrompe **aquele** certificado, que sai como `falha` com o motivo; os demais seguem (`RF-09`). Se o S3 confirmou e o `UPDATE` falhou, o objeto fica no bucket e o item sai como `falha` com motivo explícito: nunca se devolve link cuja gravação não foi confirmada.
+**Sequência por certificado (`RF-16` aplicado):** localizar → gerar JSON (validar `RD-15`) → gerar PDF → `publicar` (S3, confirmado) → `registrar_link` (Firebird, 1 linha) → regravar JSON com o link → item `publicado`. Falha em qualquer passo interrompe **aquele** certificado, que sai como `falha` com o motivo; os demais seguem (`RF-09`). Se o S3 confirmou e o `UPDATE` falhou, o objeto fica no bucket e o item sai como `falha` com motivo explícito: nunca se devolve link cuja gravação não foi confirmada.
 
 ---
 
@@ -1681,7 +1681,7 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 
 ### Fase 8 — API de emissão para o portal *(pré-requisito: Fase 7 parcial; decisões de 10/09/2026)*
 `web/api_portal.py` (aplicação FastAPI própria), `application/emitir_portal.py` (`UC-12`), `QRY-13`, `certgen api`. Contrato em `11.1`.
-**Aceitação:** com a chave correta, `POST /v1/certificados/emitir` devolve link acessível e o banco tem `link_certificado_aws` preenchido só depois do upload confirmado; chave errada dá `401` sem tocar no banco; segundo pedido igual devolve `ja_publicado` sem gerar arquivo.
+**Aceitação:** com a chave correta, `POST /v1/certificados/emitir` devolve link acessível e o banco tem `link_certificado_aws` preenchido só depois do upload confirmado; chave errada dá `401` sem tocar no banco; segundo pedido igual reemite, sobrescreve os arquivos locais no mesmo nome, grava o link de novo e devolve `publicado` com aviso `REEMISSAO`.
 
 > **Estado em 10/09/2026:** entregue conforme `11.1`; testado com adaptadores falsos (sem banco, sem S3). Validação ponta a ponta com o portal pendente.
 >
@@ -2154,7 +2154,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 |---|---|
 | `UC-13` / `RF-20` | Segunda API para o portal: `POST /v1/segurados/verificar` com `administradora` e `cpf_cnpj`, resposta `{"existe": true|false}`. O portal a usa para autenticar o segurado em tempo real, dispensando o envio mensal da base. Decisões do usuário: existe = vigência ativa hoje (`RN-35`); mesmo processo e mesma chave da emissão; resposta só com o booleano. |
 | `QRY-14` | `COUNT(*)` em `segurados_inc` por administradora, documento e `inicio_vig <= hoje <= final_vig`, com `RD-02`/`RD-19`. Bloco `existe_segurado`. *(filtro de vigência removido em 14/09 — ver abaixo)* |
-| `RD-29` | A resposta da emissão passa a trazer, por certificado, o campo `documento` = JSON espelho completo (`RD-10`) com `arquivo.link`. Em `ja_publicado` é relido do disco; ausente → `falha`. |
+| `RD-29` | A resposta da emissão passa a trazer, por certificado, o campo `documento` = JSON espelho completo (`RD-10`) com `arquivo.link`. ~~Em `ja_publicado` é relido do disco; ausente → `falha`.~~ *(caiu com a revisão de `RN-33` em 14/09)* |
 | `GAP-25`, `GAP-26` | `final_vig` ausente nunca autentica; endpoint de verificação é oráculo de CPF sem limite de taxa. |
 
 ### 14/09/2026
@@ -2163,6 +2163,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 |---|---|
 | `RF-18` / `RF-20` | `administradora` com mais de 10 caracteres passa a ser `400` (antes o driver `fdb` levantava `ValueError` e a API devolvia `500`). Achado no primeiro teste com o Postman. |
 | Operação | `scripts/iniciar_api.ps1` (reinício automático, log diário), `docs/postman/` (Collection + Environments importáveis), seções 9–11 do guia `docs/TESTE-API-POSTMAN.md`. Diagnóstico: subida a frio da pasta de rede leva >30 s; perfil de rede *Público* bloqueava o firewall. |
+| `RN-33` revista | Emissão pela API de `0000000019`/`05554363733`/07-2026 devolveu `falha` `DocumentoAusente`: a linha já tinha link do Delphi (03/09/2026, formato `0000000019//072026/…`, DEF-09) e não há JSON em disco. Levantamento: 930.134 linhas com link do legado. Usuário decidiu: **a API sempre reemite**; `ja_publicado` retirado; aviso `REEMISSAO`; arquivos locais sobrescritos no mesmo nome (`gravar_json(..., sobrescrever=True)`). |
 | `RN-35` / `QRY-14` / `GAP-25` | Primeiro teste real: `0000000019`/`05554363733` devolvia `existe=false` porque a última vigência carregada era 08/2026 (vigências mensais, uma por fatura; fatura do mês entra com atraso). Usuário decidiu: existe = **qualquer linha não cancelada**, sem vigência. `QRY-14` perde os dois filtros de data; `existe_segurado(administradora, cpf_cnpj)` sem `hoje`. `GAP-25` fechado por consequência. |
 
 ### Lacunas abertas em 04/09/2026

@@ -14,6 +14,7 @@ import pytest
 from certgen.adapters.firebird.repositorio import RepositorioFirebird
 from certgen.application.emitir_certificados import OpcoesEmissao
 from certgen.application.emitir_portal import (
+    AVISO_REEMISSAO,
     NenhumCertificado,
     PedidoInvalido,
     PedidoPortal,
@@ -146,33 +147,38 @@ def test_rn_32_varios_certificados_emite_todos(opcoes):
     assert len(pub.publicados) == 2
 
 
-def test_rn_33_ja_publicado_devolve_link_e_documento_do_disco_sem_reemitir(opcoes, tmp_path):
-    # 1a emissao grava o JSON; depois simula o banco ja com o link
+def test_rn_33_revista_segundo_pedido_reemite_e_sobrescreve(opcoes, tmp_path):
+    # 14/09/2026: a API sempre reemite. Mesmos nomes de arquivo (sem ' (1)'), mesma chave
+    # no S3, UPDATE de novo, aviso REEMISSAO quando ja havia link.
     pub, reg = PublicadorFalso(), RegistroFalso()
     primeira = emitir_para_portal(
         RepoFalso([LINHA_13008]), pub, reg, PEDIDO, opcoes, render_falso
     ).certificados[0]
+    assert AVISO_REEMISSAO not in primeira.avisos
     antes = sorted(p.name for p in tmp_path.rglob("*") if p.is_file())
 
     linha = {**LINHA_13008, "link_certificado_aws": primeira.link}
     resp = emitir_para_portal(RepoFalso([linha]), pub, reg, PEDIDO, opcoes, render_falso)
     [item] = resp.certificados
-    assert item.situacao == "ja_publicado" and item.link == primeira.link
-    assert item.documento == primeira.documento  # RD-29: relido do disco
-    assert len(pub.publicados) == 1 and len(reg.registros) == 1  # nada novo
-    assert sorted(p.name for p in tmp_path.rglob("*") if p.is_file()) == antes
+    assert item.situacao == "publicado" and item.link == primeira.link
+    assert AVISO_REEMISSAO in item.avisos
+    assert item.documento["arquivo"]["link"] == item.link
+    assert len(pub.publicados) == 2 and len(reg.registros) == 2  # publicou e gravou de novo
+    assert sorted(p.name for p in tmp_path.rglob("*") if p.is_file()) == antes  # sem copias
 
 
-def test_rn_33_rd_29_ja_publicado_sem_json_no_disco_e_falha(opcoes, tmp_path):
-    linha = {**LINHA_13008, "link_certificado_aws": "https://x/ja.pdf"}
+def test_rn_33_revista_link_do_legado_e_substituido(opcoes, tmp_path):
+    # Banco com 930 mil links do Delphi (sem JSON em disco): a API emite e troca o link.
+    legado = "https://certincendioaws.s3.us-east-2.amazonaws.com/0000001192//072026/380819/0_x.pdf"
+    linha = {**LINHA_13008, "link_certificado_aws": legado}
     pub, reg = PublicadorFalso(), RegistroFalso()
     resp = emitir_para_portal(RepoFalso([linha]), pub, reg, PEDIDO, opcoes, render_falso)
     [item] = resp.certificados
-    assert item.situacao == "falha" and item.link is None and item.documento is None
-    assert "DocumentoAusente" in item.motivo and "https://x/ja.pdf" in item.motivo
-    assert pub.publicados == [] and reg.registros == []
-    assert not list(tmp_path.rglob("*"))  # nada gravado
-    assert not resp.algum_link  # -> 502 na API
+    assert item.situacao == "publicado" and item.link != legado and item.documento
+    assert AVISO_REEMISSAO in item.avisos
+    [(_, link_gravado, _)] = reg.registros
+    assert link_gravado == item.link  # o UPDATE substituiu o link do legado
+    assert list(tmp_path.rglob("*.json")) and list(tmp_path.rglob("*.pdf"))
 
 
 def test_rf_16_falha_no_s3_nao_grava_link(opcoes):

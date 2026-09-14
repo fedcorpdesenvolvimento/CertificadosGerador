@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "3a716a01-015d-42fd-a919-c5a26999151c",
+    "_postman_id": "73b80734-0578-46f9-bb63-f2038e4007c7",
     "name": "Certgen API (portal)",
-    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura) -> 3. Emitir certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (ja_publicado).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
+    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura) -> 3. Emitir certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -188,7 +188,7 @@
       ]
     },
     {
-      "name": "4. Repetir emissao (ja_publicado)",
+      "name": "4. Repetir emissao (reemite, aviso REEMISSAO)",
       "request": {
         "method": "POST",
         "header": [
@@ -208,7 +208,7 @@
             "emitir"
           ]
         },
-        "description": "RN-33 / RD-29. Mesmo pedido de novo: devolve link e documento sem reemitir.",
+        "description": "RN-33 revista (14/09/2026). Mesmo pedido de novo: a API SEMPRE reemite; sobrescreve PDF/JSON e o objeto no S3; aviso REEMISSAO.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
@@ -228,12 +228,13 @@
             "exec": [
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const r = pm.response.json();",
-              "pm.test('ja_publicado', () => pm.expect(r.certificados[0].situacao).to.eql('ja_publicado'));",
-              "pm.test('mesmo link da emissao anterior', () => {",
+              "pm.test('publicado de novo', () => pm.expect(r.certificados[0].situacao).to.eql('publicado'));",
+              "pm.test('aviso REEMISSAO', () => pm.expect(r.certificados[0].avisos).to.include('REEMISSAO'));",
+              "pm.test('mesmo link da emissao anterior (mesma chave no S3)', () => {",
               "  const anterior = pm.environment.get('ultimo_link');",
               "  if (anterior) pm.expect(r.certificados[0].link).to.eql(anterior);",
               "});",
-              "pm.test('documento relido do disco', () => pm.expect(r.certificados[0].documento).to.be.an('object'));",
+              "pm.test('documento novo', () => pm.expect(r.certificados[0].documento).to.be.an('object'));",
               "pm.test('sem a chave na resposta', () => {",
               "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
               "});"

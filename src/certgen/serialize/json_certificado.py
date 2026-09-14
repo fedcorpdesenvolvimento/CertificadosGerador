@@ -236,11 +236,16 @@ def serializar(doc: dict) -> str:
     return json.dumps(doc, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
 
 
-def gravar_json(doc: dict, caminho: Path) -> tuple[Path, bool]:
-    """Valida (RD-15), resolve colisao (RN-13) e grava. Retorna (caminho_final, colidiu)."""
+def gravar_json(doc: dict, caminho: Path, sobrescrever: bool = False) -> tuple[Path, bool]:
+    """Valida (RD-15), resolve colisao (RN-13) e grava. Retorna (caminho_final, colidiu).
+
+    `sobrescrever=True` (RN-33 revista, 14/09/2026): reemissao intencional pela API do
+    portal — grava no mesmo caminho, sem sufixo ` (n)`. Nao e silencioso: quem chama
+    registra o aviso REEMISSAO na resposta.
+    """
     validar(doc)
     texto = serializar(doc)
     caminho.parent.mkdir(parents=True, exist_ok=True)
-    destino, colidiu = resolver_colisao(caminho)
+    destino, colidiu = (caminho, False) if sobrescrever else resolver_colisao(caminho)
     destino.write_text(texto, encoding="utf-8")
     return destino, colidiu

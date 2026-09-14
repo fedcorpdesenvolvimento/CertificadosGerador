@@ -311,11 +311,14 @@ def emitir_um(
     opcoes: OpcoesEmissao,
     renderizar_pdf: RenderizadorPdf | None,
     gravar_json: bool = True,
+    sobrescrever: bool = False,
 ) -> tuple[Emitido, dict]:
     """Emite um certificado. Devolve o registro e o documento JSON (ja validado).
 
     `gravar_json=False` (RD-26): valida mas nao grava o JSON individual — o lote grava
     um unico arquivo depois. A validacao continua acontecendo ANTES do PDF (RF-16).
+    `sobrescrever=True` (RN-33 revista): reemissao intencional — JSON e PDF no mesmo
+    caminho, sem sufixo RN-13; a API registra o aviso REEMISSAO.
     Publico desde a Fase 8: `emitir_portal` (UC-12) emite um certificado por vez com o
     MESMO passo da emissao em lote (RF-11).
     """
@@ -331,7 +334,7 @@ def emitir_um(
     doc = certificado_para_dict(cert, meta)
     # RD-15 valida antes de qualquer escrita; RF-16: PDF so depois do JSON valido
     if gravar_json:
-        json_path, colidiu = gravar_json_arquivo(doc, pasta / f"{base}.json")
+        json_path, colidiu = gravar_json_arquivo(doc, pasta / f"{base}.json", sobrescrever)
     else:
         validar(doc)
         json_path, colidiu = None, False

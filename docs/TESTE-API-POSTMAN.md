@@ -126,11 +126,13 @@ São dois endpoints com a mesma chave:
 ### 3.4 Repetir o mesmo pedido
 
 - Reenvie a request 3.3 sem alterar nada.
-- Esperado: `200`, `situacao` = `"ja_publicado"`, mesmo `link`, mesmo `documento`
-  (relido do JSON em disco) e **nenhum** arquivo novo em `CERTGEN_PASTA_SAIDA` (RN-33).
-- Se o link já estava no banco mas o JSON não está na pasta de saída (emitido pela tela
-  em outra pasta, ou pelo legado), o item sai como `falha` com motivo `DocumentoAusente`
-  e a resposta é `502`. Reemita pela tela para regravar o JSON.
+- Esperado (RN-33 revista em 14/09/2026): `200`, `situacao` = `"publicado"` de novo, o
+  **mesmo** `link` (mesma chave no S3, objeto sobrescrito), `documento` novo e o aviso
+  `"REEMISSAO"` em `avisos`. Em `CERTGEN_PASTA_SAIDA` o PDF e o JSON são sobrescritos no
+  mesmo nome, sem cópia ` (1)`.
+- Segurado cujo link no banco veio do Delphi (formato `.../0000000019//072026/...`, sem
+  produto) também sai `publicado` com `REEMISSAO`, e o link passa a ser o novo. O PDF antigo
+  fica órfão no S3.
 
 ## 4. Casos de erro a verificar
 

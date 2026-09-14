@@ -1,10 +1,12 @@
 """UC-12 / UC-13 — emissao e verificacao a pedido do portal (Fase 8, secao 11.1).
 
-UC-12, sequencia por certificado (RF-16 aplicado, RN-33..RN-34, RD-29):
-  localizar (QRY-13) -> se link_publicado: reler o JSON do disco e devolver (RN-33)
-  -> gerar JSON (validar RD-15) -> gerar PDF -> publicar (S3, confirmado)
-  -> registrar_link (Firebird, exatamente 1 linha) -> regravar JSON com o link
-  -> item `publicado` com o `documento` (RD-29).
+UC-12, sequencia por certificado (RF-16 aplicado, RN-33 revista, RN-34, RD-29):
+  localizar (QRY-13) -> gerar JSON (validar RD-15) -> gerar PDF -> publicar (S3,
+  confirmado) -> registrar_link (Firebird, exatamente 1 linha) -> regravar JSON com o
+  link -> item `publicado` com o `documento` (RD-29).
+RN-33 (14/09/2026): a API SEMPRE reemite, mesmo com link ja gravado (o banco tem
+930 mil links do legado Delphi, sem JSON). Arquivos locais e objeto S3 sao
+sobrescritos de proposito; o item leva o aviso REEMISSAO quando havia link antes.
 Falha em qualquer passo interrompe AQUELE certificado, que sai como `falha`
 com motivo; os demais seguem (RF-09, RN-32). Nunca se devolve link cuja
 gravacao no banco nao foi confirmada, nem link sem documento.
@@ -27,7 +29,6 @@ from datetime import date
 from certgen.application.emitir_certificados import (
     OpcoesEmissao,
     RenderizadorPdf,
-    destino_emissao,
     emitir_um,
 )
 from certgen.application.ports import (
@@ -44,6 +45,7 @@ from certgen.serialize.json_certificado import JsonInvalido, serializar
 
 _NAO_DIGITO = re.compile(r"\D")
 _TAM_ADMINISTRADORA = 10  # pessoas.pessoa CHAR(10), secao 4.2 da especificacao
+AVISO_REEMISSAO = "REEMISSAO"  # RN-33 revista: havia link gravado; foi substituido
 
 
 class PedidoInvalido(ValueError):
@@ -117,7 +119,7 @@ def verificar_segurado(repositorio: RepositorioCertificados, pedido: PedidoVerif
 @dataclass(frozen=True)
 class ItemPortal:
     chave: ChaveCertificado
-    situacao: str  # publicado | ja_publicado | falha
+    situacao: str  # publicado | falha
     link: str | None = None
     documento: dict | None = None  # RD-29: o JSON espelho (RD-10), com arquivo.link
     avisos: tuple[str, ...] = ()
@@ -187,10 +189,9 @@ def _tratar_um(
     opcoes: OpcoesEmissao,
     renderizar_pdf: RenderizadorPdf,
 ) -> ItemPortal:
-    if cert.link_publicado:  # RN-33
-        return _ja_publicado(cert, opcoes)
     try:
-        emitido, doc = emitir_um(cert, opcoes, renderizar_pdf)  # JSON valido -> PDF (RF-16)
+        # RN-33 revista: sempre reemite; sobrescreve JSON/PDF locais (sem sufixo RN-13)
+        emitido, doc = emitir_um(cert, opcoes, renderizar_pdf, sobrescrever=True)
         if emitido.pdf_path is None or emitido.json_path is None:
             raise ErroPublicacao("emissao nao produziu PDF e JSON")
         destino = caminho_publicacao(  # RN-29
@@ -205,9 +206,12 @@ def _tratar_um(
         doc["arquivo"]["link"] = link  # RD-25: JSON regravado apos upload confirmado
         texto = serializar(doc)
         emitido.json_path.write_text(texto, encoding="utf-8")
+        avisos = emitido.avisos
+        if cert.link_publicado:  # RD-28: havia link (novo ou do legado) — foi substituido
+            avisos = (*avisos, AVISO_REEMISSAO)
         # RD-29: o documento da resposta e EXATAMENTE o que foi gravado (RNF-08)
         return ItemPortal(
-            cert.chave, "publicado", link=link, documento=json.loads(texto), avisos=emitido.avisos
+            cert.chave, "publicado", link=link, documento=json.loads(texto), avisos=avisos
         )
     except (
         JsonInvalido,
@@ -218,25 +222,4 @@ def _tratar_um(
         OSError,
         json.JSONDecodeError,
     ) as exc:
-        return ItemPortal(cert.chave, "falha", motivo=f"[{type(exc).__name__}] {exc}")
-
-
-def _ja_publicado(cert: Certificado, opcoes: OpcoesEmissao) -> ItemPortal:
-    """RN-33 + RD-29 — sem reemitir: o documento e relido do JSON gravado na emissao
-    anterior (caminho RN-19/RN-34). Sem o arquivo, sai `falha` e sem link (ADR-04)."""
-    try:
-        _, pasta, base = destino_emissao(cert, opcoes)
-        caminho = pasta / f"{base}.json"
-        if not caminho.is_file():
-            return ItemPortal(
-                cert.chave,
-                "falha",
-                motivo=(
-                    f"[DocumentoAusente] link ja gravado ({cert.link_publicado}) mas o JSON "
-                    f"nao esta em {caminho}; reemita pela tela (UC-07) — RN-33/RD-29"
-                ),
-            )
-        doc = json.loads(caminho.read_text(encoding="utf-8"))
-        return ItemPortal(cert.chave, "ja_publicado", link=cert.link_publicado, documento=doc)
-    except (NomeArquivoInvalido, ProdutoIndeterminado, OSError, json.JSONDecodeError) as exc:
         return ItemPortal(cert.chave, "falha", motivo=f"[{type(exc).__name__}] {exc}")
