@@ -3,6 +3,8 @@
 RD-01 / RD-21 / RD-22: chave de identidade + cpf_cnpj para desambiguar.
 RN-04:  cod_cat in {'3','4'} => locacao.
 RN-18:  codigo_assist_mondial == '1003' => Faz Tudo Lar.
+RN-18a: rup_encanamento > 0 tambem deriva Faz Tudo Lar (15/09/2026).
+RN-23:  PLANO = 'RES' se tipo_categoria == 'R', 'COM' para outro codigo, 'INC' se nulo (15/09/2026).
 RN-20:  COD_0800 = certificado + ' ' + abrev; abrev ausente gera aviso.
 DEF-06: final_vig nula ou 30/12/1899 (zero do TDateTime) e AUSENTE.
 ADR-05: ContextoTemplate governa o template unico; matriz de 7.3.
@@ -28,6 +30,10 @@ UFS = frozenset(
     "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split()
 )
 CODIGO_ASSIST_FAZ_TUDO = "1003"  # RN-18
+TIPO_CATEGORIA_RESIDENCIAL = "R"  # RN-23
+PLANO_RESIDENCIAL = "RES"  # RN-23
+PLANO_COMERCIAL = "COM"  # RN-23
+PLANO_INCENDIO = "INC"  # RN-23 — tipo_categoria nula ou vazia: nome generico do produto
 COD_CAT_LOCACAO = frozenset({"3", "4"})  # RN-04
 APOLICE_MARCA_ALTERNATIVA = "15008"  # 7.3, linhas 889 e 907 do .pas
 
@@ -70,6 +76,16 @@ class ChaveCertificado:
 
 
 # --------------------------------------------------------- objetos de valor
+def plano_para_tipo_categoria(tipo_categoria: str | None) -> str:
+    """RN-23 (revista em 15/09/2026) — PLANO do certificado a partir de
+    segurados_inc.tipo_categoria: 'R' => RES; qualquer outro codigo preenchido => COM;
+    nulo/vazio => INC (nome generico do produto Incendio; decisao do usuario)."""
+    codigo = (tipo_categoria or "").strip().upper()
+    if not codigo:
+        return PLANO_INCENDIO
+    return PLANO_RESIDENCIAL if codigo == TIPO_CATEGORIA_RESIDENCIAL else PLANO_COMERCIAL
+
+
 @dataclass(frozen=True, slots=True)
 class Administradora:
     codigo: str
@@ -166,7 +182,7 @@ class Contrato:
     processo_susep: str | None
     codigo_pedido_porto: int | None  # portal; nulo gera PORTAL_AUSENTE
     sucursal: str | None = None  # RN-26 — apolices.sucursal, rotulo SUC.
-    plano: str | None = None  # RN-23 — vazio nesta fase
+    plano: str | None = None  # RN-23 — RES | COM | INC (plano_para_tipo_categoria)
     susep_corretora: str = SUSEP_CORRETORA_PADRAO  # RN-25
     seguradora: Seguradora | None = None  # RN-28 — resolvida por cod_seguradora; None = sem logo
 
@@ -262,19 +278,26 @@ class Certificado:
         abrev = self.administradora.abreviacao_normalizada
         return f"{self.numero} {abrev}" if abrev else self.numero
 
+    @property
+    def faz_tudo_lar_derivado(self) -> bool:
+        """RN-18 OU RN-18a — codigo_assist_mondial = '1003' ou Cobertura Ruptura de
+        Encanamento > 0 (decisao do usuario, 15/09/2026). Pre-marca o checkbox RF-13a."""
+        return self.endosso.faz_tudo_lar or self.exibe_bloco_ruptura
+
     def faz_tudo_lar_efetivo(self, escolha: bool | None = None) -> bool:
         """ADR-06 — o bloco Faz Tudo Lar e opcional: a escolha do operador prevalece;
-        sem escolha, vale a derivacao RN-18 (codigo_assist_mondial = '1003')."""
-        return self.endosso.faz_tudo_lar if escolha is None else escolha
+        sem escolha, vale a derivacao RN-18/RN-18a."""
+        return self.faz_tudo_lar_derivado if escolha is None else escolha
 
     def aviso_faz_tudo_lar(self, escolha: bool | None) -> Aviso | None:
         """RD-23 — registra quando o operador divergiu da derivacao."""
-        if escolha is None or escolha == self.endosso.faz_tudo_lar:
+        if escolha is None or escolha == self.faz_tudo_lar_derivado:
             return None
         return Aviso(
             CodigoAviso.FAZ_TUDO_LAR_MANUAL,
-            f"operador marcou {escolha}; derivacao RN-18 (mondial="
-            f"{self.endosso.codigo_assist_mondial!r}) indicava {self.endosso.faz_tudo_lar}",
+            f"operador marcou {escolha}; derivacao RN-18/RN-18a (mondial="
+            f"{self.endosso.codigo_assist_mondial!r}, ruptura={self.exibe_bloco_ruptura}) "
+            f"indicava {self.faz_tudo_lar_derivado}",
         )
 
     def contexto_template(

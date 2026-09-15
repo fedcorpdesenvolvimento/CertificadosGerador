@@ -98,7 +98,9 @@ body {
   column-gap: 5mm;
 }
 .cartao .campo .rotulo { font-size: 7.5pt; font-weight: bold; color: var(--azul-claro); }  /* +1pt, 04/09/2026 */
-.cartao .campo .valor { font-size: 5.5pt; font-weight: bold; color: #111; line-height: 1.2; }
+/* RD-33 (15/09/2026): valores +2 pt; so ENDERECO mantem 5,5 pt */
+.cartao .campo .valor { font-size: 7.5pt; font-weight: bold; color: #111; line-height: 1.2; overflow-wrap: anywhere; }
+.cartao .campo .valor.endereco { font-size: 5.5pt; }
 .cartao .campo.vig .valor span + span { margin-left: 3mm; }
 
 /* ----------------------------------------------------------- seguro incendio */

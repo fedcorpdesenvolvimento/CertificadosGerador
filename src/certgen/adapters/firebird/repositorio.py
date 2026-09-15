@@ -32,6 +32,7 @@ from certgen.domain.certificado import (
     Contrato,
     LocalRisco,
     Vigencia,
+    plano_para_tipo_categoria,
 )
 from certgen.domain.cobertura import montar_coberturas
 from certgen.domain.dinheiro import para_dinheiro
@@ -315,6 +316,8 @@ class RepositorioFirebird:
         )
         avisos.extend(avisos_cob)
 
+        plano = plano_para_tipo_categoria(_txt(r.get("tipo_categoria")))  # RN-23
+
         certificado = str(r["certificado"])  # sem strip: participa da chave
         apolice = str(r["apolice"]).strip()
         seq, fatura = int(r["seq"]), int(r["fatura"])
@@ -339,7 +342,7 @@ class RepositorioFirebird:
                 processo_susep=_txt(r["proc_susep"]),
                 codigo_pedido_porto=_inteiro(r["codigo_pedido_port"]),
                 sucursal=(_txt(r.get("sucursal")) or "").upper() or None,  # RN-26
-                plano=None,  # RN-23
+                plano=plano,  # RN-23
                 susep_corretora=self._susep_corretora,  # RN-25
                 seguradora=self._seguradoras.resolver(_txt(r["cod_seguradora"])),  # RN-28
             ),

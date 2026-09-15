@@ -43,7 +43,7 @@
         <div class="valor"><span>{{ cert.vigencia.inicio | data_br }}</span><span>{{ cert.vigencia.fim | data_br }}</span></div></div>
       <div class="campo"><div class="rotulo">BENEFICIÁRIO</div><div class="valor">{{ cert.segurado_nome }}</div></div>
       <div class="campo"><div class="rotulo">{{ cert.documento.tipo if cert.documento.tipo != 'INDEFINIDO' else 'CPF' }}</div><div class="valor">{{ cert.documento | documento }}</div></div>
-      <div class="campo"><div class="rotulo">ENDEREÇO</div><div class="valor">{{ cert.local_risco.endereco | texto }}</div></div>
+      <div class="campo"><div class="rotulo">ENDEREÇO</div><div class="valor endereco">{{ cert.local_risco.endereco | texto }}</div></div>
       <div class="campo"><div class="rotulo">BAIRRO</div><div class="valor">{{ cert.local_risco.bairro | texto }}</div></div>
       <div class="campo"><div class="rotulo">CIDADE</div><div class="valor">{{ cert.local_risco.cidade | texto }}</div></div>
       <div class="campo"><div class="rotulo">UF</div><div class="valor">{{ cert.local_risco.uf | texto }}</div></div>
@@ -81,15 +81,18 @@
       <div class="caixa"><div class="rotulo">Cobertura Ruptura de Encanamento</div>
         <div class="valor">{% if cob.RUP_ENCANAMENTO.contratada %}{{ cob.RUP_ENCANAMENTO.importancia_segurada | moeda }}{% endif %}</div></div>
 
-      {# linha 5 #}
+      {# linha 5 — RD-32 (15/09/2026): Cobertura Incendio Predio, mesma largura da Cobertura
+         Incendio; vazia quando inc_predio e nulo/zero (RN-01). Cobertura RC fica na 5a coluna. #}
+      <div class="caixa" style="grid-column: 1 / span 2;"><div class="rotulo">Cobertura Incêndio Prédio</div>
+        <div class="valor">{% if cob.INC_PREDIO.contratada %}{{ cob.INC_PREDIO.importancia_segurada | moeda }}{% endif %}</div></div>
+      <div class="caixa" style="grid-column: 5 / span 1;"><div class="rotulo">Cobertura RC</div>
+        <div class="valor">{% if cob.RC.contratada %}{{ cob.RC.importancia_segurada | moeda }}{% endif %}</div></div>
+
+      {# linha 6 — a caixa da Assistencia 0800 desceu uma linha (RD-32) #}
       <div class="caixa cod0800" style="grid-column: 1 / span 4;">
         <div class="rotulo">Ao solicitar a Assitência 0800, favor informar o código:</div>
         <div class="valor">{{ cert.cod_0800 }}</div>
       </div>
-      <div class="caixa"><div class="rotulo">Cobertura RC</div>
-        <div class="valor">{% if cob.RC.contratada %}{{ cob.RC.importancia_segurada | moeda }}{% endif %}</div></div>
-
-      {# linha 6 #}
       <div class="caixa" style="grid-column: 5 / span 1;"><div class="rotulo">Código SUSEP da Corretora</div><div class="valor">{{ cert.contrato.susep_corretora }}</div></div>
     </div>
 

@@ -18,6 +18,7 @@ from certgen.domain.certificado import (
     Marca,
     Vigencia,
     marca_para_apolice,
+    plano_para_tipo_categoria,
 )
 from certgen.domain.cobertura import montar_coberturas
 from certgen.domain.documento import Documento
@@ -185,8 +186,25 @@ def test_rn_25_susep_corretora_fixo_por_padrao():
     assert _certificado_13008().contrato.susep_corretora == "00000202049583"
 
 
-def test_rn_23_plano_vazio_nesta_fase():
-    assert _certificado_13008().contrato.plano is None
+def test_rn_23_plano_res_ou_com():
+    assert plano_para_tipo_categoria("R") == "RES"
+    assert plano_para_tipo_categoria("C") == "COM"
+    assert plano_para_tipo_categoria("S") == "COM"
+    assert plano_para_tipo_categoria(None) == "INC"
+    assert plano_para_tipo_categoria(" ") == "INC"
+    assert _certificado_13008().contrato.plano is None  # fixture sem tipo_categoria
+
+
+def test_rn_18a_ruptura_deriva_faz_tudo_lar_e_operador_pode_desmarcar():
+    c = _certificado_13008(
+        endosso=ContextoEndosso(endosso="380819", cod_cat=None, codigo_assist_mondial="1002")
+    )
+    assert c.exibe_bloco_ruptura and c.faz_tudo_lar_derivado  # RN-18a
+    assert c.faz_tudo_lar_efetivo() is True
+    assert c.aviso_faz_tudo_lar(True) is None
+    aviso = c.aviso_faz_tudo_lar(False)
+    assert aviso is not None and aviso.codigo == CodigoAviso.FAZ_TUDO_LAR_MANUAL
+    assert c.contexto_template(exibe_premio=False).nome == "incendio_ruptura_faz_tudo"
 
 
 @pytest.mark.parametrize("ruim", [None, "", ".", "RK", "sp "])

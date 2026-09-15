@@ -31,6 +31,7 @@ LINHA_13008 = {
     "cidade": "RIO DE JANEIRO",
     "bairro": "BARRA DA TIJUA",
     "nome_cond": "DIRETORIA IMODATA",
+    "tipo_categoria": "R",  # RN-23 -> PLANO RES
     "apolice_seguradora": "40150116/R-ESP",
     "proc_susep": "15.414.901282/2014-83",
     "sucursal": "RJ",
@@ -106,6 +107,7 @@ def test_rn_03_1_referencia_15008_da_administradora_19_emite_0001_com_aviso(repo
         "documento_seg": "05554363733",
         "final_vig": date(1899, 12, 30),
         "codigo_assist_mondial": None,
+        "rup_encanamento": None,  # a referencia 15008 nao tem ruptura (RN-18a nao dispara)
     }
     c = repo._montar(linha)
     assert c.produto.codigo == "0001"
@@ -148,3 +150,24 @@ def test_rd_12_documento_com_mascara_e_normalizado_na_chave(repo):
     c = repo._montar({**LINHA_13008, "documento_seg": "330.163.307-25"})
     assert c.chave.cpf_cnpj == "33016330725"
     assert c.documento.formatado == "330.163.307-25"
+
+
+@pytest.mark.parametrize(
+    ("tipo", "plano"), [("R", "RES"), ("C", "COM"), ("S", "COM"), ("x", "COM"), (" r ", "RES")]
+)
+def test_rn_23_plano_deriva_de_tipo_categoria(repo, tipo, plano):
+    c = repo._montar({**LINHA_13008, "tipo_categoria": tipo})
+    assert c.contrato.plano == plano
+
+
+@pytest.mark.parametrize("tipo", [None, "", "  "])
+def test_rn_23_tipo_categoria_ausente_imprime_inc(repo, tipo):
+    c = repo._montar({**LINHA_13008, "tipo_categoria": tipo})
+    assert c.contrato.plano == "INC"  # nome generico do produto Incendio
+
+
+def test_rn_18a_ruptura_pre_marca_faz_tudo_lar_sem_mondial_1003(repo):
+    c = repo._montar({**LINHA_13008, "codigo_assist_mondial": "1002"})  # rup_encanamento 5.000
+    assert not c.endosso.faz_tudo_lar and c.faz_tudo_lar_derivado
+    sem = repo._montar({**LINHA_13008, "codigo_assist_mondial": "1002", "rup_encanamento": None})
+    assert not sem.faz_tudo_lar_derivado

@@ -79,7 +79,8 @@ def test_rnf_04_espelhamento_pdf_json(render, cert, tmp_path):
 
 def test_adr_06_faz_tudo_opcional_no_pdf(render, tmp_path):
     repo = RepositorioFirebird()
-    sem = repo._montar({**LINHA_13008, "codigo_assist_mondial": None})
+    # RN-18 e RN-18a: sem mondial 1003 e sem ruptura, o bloco nao sai
+    sem = repo._montar({**LINHA_13008, "codigo_assist_mondial": None, "rup_encanamento": None})
     destino = render.pdf(renderizar_html(sem, DadosRender(date(2026, 9, 3), True)), tmp_path / "c.pdf")
     texto, _ = _texto(destino)
     assert "Faz Tudo Lar" not in texto

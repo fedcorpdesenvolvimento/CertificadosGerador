@@ -48,7 +48,8 @@ def test_rn_18_bloco_faz_tudo_lar_presente_quando_mondial_1003(html):
 
 
 def test_adr_06_bloco_faz_tudo_lar_opcional(repo):
-    sem = renderizar_html(repo._montar({**LINHA_13008, "codigo_assist_mondial": "1002"}), DADOS)
+    linha = {**LINHA_13008, "codigo_assist_mondial": "1002", "rup_encanamento": None}  # RN-18a
+    sem = renderizar_html(repo._montar(linha), DADOS)
     assert "Faz Tudo Lar" not in sem
     assert "Assistência Residencial Emergencial 24h" in sem  # o resto permanece
 
@@ -57,7 +58,9 @@ def test_adr_06_operador_pode_forcar_ou_remover_o_faz_tudo(repo):
     cert = repo._montar(LINHA_13008)  # mondial 1003 -> derivacao True
     sem = renderizar_html(cert, DadosRender(date(2026, 9, 3), True, faz_tudo_lar=False))
     assert "Assistência Faz Tudo Lar" not in sem
-    outro = repo._montar({**LINHA_13008, "codigo_assist_mondial": None})  # derivacao False
+    outro = repo._montar(
+        {**LINHA_13008, "codigo_assist_mondial": None, "rup_encanamento": None}
+    )  # derivacao False (RN-18 e RN-18a)
     com = renderizar_html(outro, DadosRender(date(2026, 9, 3), True, faz_tudo_lar=True))
     assert "KIT FIXAÇÃO" in com
 
@@ -111,7 +114,7 @@ def test_rn_27_aviso_quando_produto_0004_sem_ruptura_ou_vice_versa(repo):
 
 
 def test_rn_23_rn_25_rn_26_campos_decididos(html):
-    assert ">Plano</div><div class=\"valor\"></div>" in html  # RN-23 vazio
+    assert ">Plano</div><div class=\"valor\">RES</div>" in html  # RN-23: tipo_categoria R
     assert "Código SUSEP da Corretora" in html and "00000202049583" in html  # RN-25
     assert ">SUC.</div><div class=\"valor\">RJ</div>" in html  # RN-26
 
@@ -130,3 +133,34 @@ def test_nunca_imprime_none(html):
 def test_rnf_12_html_autocontido():
     imgs = imagens_base64()
     assert all("base64," in v for v in imgs.values())
+
+
+def test_rn_23_plano_com_para_tipo_categoria_nao_residencial(repo):
+    h = renderizar_html(repo._montar({**LINHA_13008, "tipo_categoria": "C"}), DADOS)
+    assert '>Plano</div><div class="valor">COM</div>' in h
+
+
+def test_rd_32_cobertura_incendio_predio_abaixo_da_cobertura_incendio(html, repo):
+    pos_inc = html.index(">Cobertura Incêndio</div>")
+    pos_predio = html.index(">Cobertura Incêndio Prédio</div>")
+    pos_0800 = html.index("Ao solicitar a Assitência 0800")
+    assert pos_inc < pos_predio < pos_0800  # a caixa 0800 desceu
+    caixa = html[pos_predio:].split("</div></div>")[0]
+    assert "R$ 100.000,00" in caixa  # inc_predio da referencia
+    so_conteudo = {"inc_predio": None, "inc_conteudo": "100000", "cob_incendio": "100000"}
+    sem = renderizar_html(repo._montar({**LINHA_13008, **so_conteudo}), DADOS)
+    inicio = sem.index(">Cobertura Incêndio Prédio</div>")
+    assert '<div class="valor"></div>' in sem[inicio : inicio + 120]  # caixa presente, vazia
+
+
+def test_rd_33_valores_do_cartao_maiores_exceto_endereco(html):
+    assert ".cartao .campo .valor { font-size: 7.5pt" in html
+    assert ".cartao .campo .valor.endereco { font-size: 5.5pt" in html
+    assert '<div class="valor endereco">AV LUCIO COSTA' in html
+
+
+def test_rn_18a_ruptura_imprime_faz_tudo_lar_sem_mondial_1003(repo):
+    h = renderizar_html(repo._montar({**LINHA_13008, "codigo_assist_mondial": "1002"}), DADOS)
+    assert "Assistência Faz Tudo Lar" in h
+    linha = {**LINHA_13008, "codigo_assist_mondial": "1002", "rup_encanamento": None}
+    assert "Faz Tudo Lar" not in renderizar_html(repo._montar(linha), DADOS)

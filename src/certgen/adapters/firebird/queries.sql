@@ -78,6 +78,8 @@ ORDER BY 1
 -- GAP-17: JOIN com segurados_inc_cob_aux pela PK (endosso, certificado).
 -- GAP-16: linha_branca nao e projetada.
 -- RN-26: apolices.sucursal (rotulo SUC.) pela FK (apolice, seq, administradora, cod_seguradora).
+-- RN-23 (15/09/2026): ss.tipo_categoria decide o PLANO (R -> RES, outro -> COM).
+-- RN-18/RN-18a: en.codigo_assist_mondial vem do JOIN endossos, por linha; sem consulta extra.
 SELECT pes.nome                                                 AS nome_adm,
        pes.abrev                                                 AS abrev_adm,
        ss.administradora, ss.apolice, ss.seq, ss.fatura,
@@ -88,6 +90,7 @@ SELECT pes.nome                                                 AS nome_adm,
        ss.inicio_vig, ss.final_vig,
        ss.endereco, ss.unidade, ss.cep, ss.uf, ss.cidade, ss.bairro,
        ss.nome_cond,
+       ss.tipo_categoria,                                       -- RN-23
        aps.apolice_seguradora, aps.proc_susep,
        apo.sucursal,
        ss.certificado,

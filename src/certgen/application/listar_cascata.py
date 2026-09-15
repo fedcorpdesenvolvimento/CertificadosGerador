@@ -45,7 +45,7 @@ class ItemSegurado:
             unidade=c.local_risco.unidade or "",
             produto=c.produto.codigo,
             produto_curto=c.produto.descricao_curta,
-            faz_tudo_lar=c.endosso.faz_tudo_lar,
+            faz_tudo_lar=c.faz_tudo_lar_derivado,  # RN-18 / RN-18a
             locacao=c.endosso.locacao,
             avisos=[str(a.codigo) for a in c.todos_avisos()],
         )

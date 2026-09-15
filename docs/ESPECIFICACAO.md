@@ -294,6 +294,7 @@ Projeção comum às consultas `QRY-05a`, `QRY-05b`, `QRY-06`, `QRY-09` e `QRY-1
 | 33 | `sicb.rup_encanamento` | `RUP_ENCANAMENTO` | COBERTURA RUPTURA DE ENCANAMENTO | `coberturas[]` |
 | 34 | `sicb.rup_enc_ter` | `RUP_ENC_TER` | — | `coberturas[]` |
 | 35 | `sicb.acidente_pessoal` | `ACIDENTE_PESSOAL` | — | `coberturas[]` |
+| 36 | `ss.tipo_categoria` *(novo, 15/09/2026)* | `TIPO_CATEGORIA` | PLANO — `RES` se `'R'`, `COM` se outro código, `INC` se nula (`RN-23`) | `contrato.plano` |
 
 **`RN-20` — `COD_0800` confirmado empiricamente.** No PDF `..._15008_381066` o campo traz `3082/01/AP 1302 19PAEL`: certificado `3082/01/AP 1302` + espaço + `abrev` `19PAEL`. No PDF `..._13008_380819` traz apenas `CF1DI/AP.602`, sem sufixo — a administradora IMODATA tem `abrev` nula ou vazia. O sistema novo **DEVE** recompor o código na aplicação e **DEVE** registrar aviso quando `abrev` estiver ausente, porque o código impresso fica incompleto e o segurado não consegue se identificar na central.
 
@@ -671,6 +672,8 @@ SELECT * FROM endossos en WHERE en.sequencial = :fatura
 
 **`RN-18` — Faz Tudo Lar.** `endossos.codigo_assist_mondial = '1003'` ⇒ o produto inclui a assistência *Faz Tudo Lar*, e o template ganha a seção correspondente (visível no PDF `..._13008_380819`, linhas 97-187 do texto extraído).
 
+**`RN-18a` — Faz Tudo Lar pela cobertura de ruptura** *(decisão do usuário, 15/09/2026)*. Além de `RN-18`, todo certificado cuja **Cobertura Ruptura de Encanamento é maior que zero** (o mesmo sinal de `RN-27`) tem *Faz Tudo Lar* **derivado como marcado**. A derivação completa é `codigo_assist_mondial = '1003'` **OU** `rup_encanamento > 0`; ela pré-marca o checkbox `RF-13a` da tela, e o operador continua podendo desmarcar (aviso `FAZ_TUDO_LAR_MANUAL`). Origem do `codigo_assist_mondial`: `JOIN endossos en ON en.endosso = ss.endosso` na consulta canônica (seção 6.0) — um valor por linha, sem consulta extra após a escolha da fatura; `QRY-11` continua disponível para consulta avulsa.
+
 **`RN-04` — Locação.** `endossos.cod_cat IN ('3','4')` ⇒ apólice de locação.
 
 > **`GAP-05` fechado, e a hipótese anterior estava errada.** A especificação v0.1 supunha que a flag de locação derivava da apólice estar em `{6008, 7008}` e que controlava o bloco de Perda de Aluguel. O código mostra outra coisa: a derivação por apólice existe apenas como **pré-preenchimento** nos eventos `OnExit` (linhas 1235-1237, 793-795) e é **sobrescrita no momento da emissão** pela categoria do endosso. E o efeito não é um bloco: é a **escolha do arquivo `.fr3`** (seção 7.3).
@@ -926,16 +929,18 @@ Estrutura confirmada nos PDFs de referência. O documento se intitula **DEMONSTR
 │                           │ CEP  {cep}                               │
 ├───────────────────────────┴──────────────────────────────────────────┤
 │  Seguro Incêndio                                                     │
-│  PROCESSO SUSEP Nº   │ SUC. │ PLANO │ CERTIFICADO      │ [GARANTIA]  │
-│  {proc_susep}        │ {?}  │ {?}   │ {certificado}    │             │
+│  PROCESSO SUSEP Nº   │ SUC. │ PLANO   │ CERTIFICADO    │ [logo seg.] │
+│  {proc_susep}        │ {uf} │ RES|COM │ {certificado}  │             │
 │  DATA DE EMISSÃO │ CONTRATO  │ APÓLICE              │ UNIDADE SEGU.  │
 │  {hoje}          │ {apolice} │ {apolice_seguradora} │ {unidade}      │
 │  ESTIPULANTE                    │ CO-ESTIPULANTE                     │
 │  FEDCORP ADMINISTRADORA...      │ {nome_adm}                         │
-│  COBERTURA INCÊNDIO │ COB. PERDA DE ALUGUEL │ COB. RC │ COB. RUPTURA │
-│  {cob_incendio}     │ {aluguel}             │ {rc}    │ {rup_encan.} │
-│  Ao solicitar a Assitência 0800, informe: {cod_0800}                 │
-│                                    CÓDIGO SUSEP DA CORRETORA {?}     │
+│  COBERTURA INCÊNDIO │ COB. PERDA DE ALUGUEL          │ COB. RUPTURA │
+│  {cob_incendio}     │ {aluguel}                      │ {rup_encan.} │
+│  COB. INCÊNDIO PRÉDIO (15/09/2026)  │                │ COB. RC      │
+│  {inc_predio ou vazio}              │                │ {rc}         │
+│  Ao solicitar a Assitência 0800, informe: {cod_0800} │ CÓD. SUSEP   │
+│                                                      │ CORRETORA    │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Textos legais das coberturas (fixos por produto)                    │
 │  Assistência Residencial Emergencial 24h    [Central 0800 770 4362]  │
@@ -945,6 +950,12 @@ Estrutura confirmada nos PDFs de referência. O documento se intitula **DEMONSTR
 │  PREMIO: {premio}                           (só se RF-10)            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+**Ajustes de layout de 15/09/2026** *(pedido do usuário)*:
+
+- **`RD-32` — Cobertura Incêndio Prédio.** Nova caixa **abaixo** de *Cobertura Incêndio*, com a **mesma largura** (colunas 1-2 da grade), rótulo *Cobertura Incêndio Prédio* e valor `segurados_inc.inc_predio` formatado por `RN-14`; **vazia** quando `inc_predio` é nulo ou zero (`RN-01`) — o campo é usado normalmente só nas apólices de locação. A caixa *Ao solicitar a Assistência 0800…* desce uma linha. A caixa fica sempre presente, como as demais coberturas.
+- **`RD-33` — Tamanho do texto do cartão do Beneficiário.** Os valores do cartão (condomínio, vigência, beneficiário, CPF/CNPJ, bairro, cidade, UF, CEP) passam de 5,5 pt para **7,5 pt** (+2 pt). **Apenas `ENDEREÇO` mantém 5,5 pt**, porque é o campo mais longo.
+- **PLANO** passa a ser impresso (`RN-23` revista, seção 16).
 
 **Mapeamento de rótulos que o dicionário de dados não deixa óbvio** — três rótulos do PDF não correspondem ao nome do campo, e confundi-los troca informação regulatória:
 
@@ -1176,7 +1187,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `PORTAL_AUSENTE` | `codigo_pedido_port` nulo (`GAP-11`) |
 | `PRODUTO_POR_EXCECAO` | produto resolvido por `RN-03.1` |
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
-| `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18` (`ADR-06`, `RF-13a`) |
+| `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18`/`RN-18a` (`ADR-06`, `RF-13a`) |
 | `RUPTURA_INCONSISTENTE` | produto `0004` sem `rup_encanamento > 0`, ou vice-versa (`RN-27`) |
 | `LOGO_SEGURADORA_AUSENTE` | `cod_seguradora` sem entrada em `seguradoras.toml` ou arquivo de logotipo ausente (`RN-28`) |
 
@@ -1751,7 +1762,7 @@ Registrado na seção `7.3`.
 ### `ADR-06` — Um único layout de referência: o PDF `0_33016330725_0004_13008_380819.pdf`
 **Contexto.** A matriz `7.3` tem cinco `.fr3` e só dois têm PDF de referência (`GAP-09`). Os `.fr3` estão embutidos no `.dfm` ou em um form não entregue.
 **Decisão (usuário, 03/09/2026).** O layout do sistema novo é o do PDF `0_33016330725_0004_13008_380819.pdf` (`frxReportCntRupturaFT`), para **todos** os produtos e apólices. A única variação é o bloco **Assistência Faz Tudo Lar**, que é **opcional**: hoje governado por `RN-18` (`codigo_assist_mondial = '1003'`), e a regra definitiva de opcionalidade será definida pelo negócio depois — por isso a flag `faz_tudo_lar` do `ContextoTemplate` fica isolada e trocar a regra não toca o template. Ajustes de layout serão tratados conforme surgirem.
-**Complemento (usuário, 03/09/2026) — `RF-13a`.** O checkbox **Faz Tudo Lar** da tela deixa de ser somente-leitura: decide se o bloco *Assistência Faz Tudo Lar* é impresso. Vem **pré-marcado** pela derivação `RN-18` e o operador pode alterá-lo antes de *Imprime*. A escolha vale para o lote inteiro, vai ao JSON em `_meta.faz_tudo_lar`, `produto.faz_tudo_lar` e `assistencia.faz_tudo_lar`, e quando divergir da derivação gera o aviso `FAZ_TUDO_LAR_MANUAL` (`RD-23`). Na CLI: `--faz-tudo-lar sim|nao`. **Locação** continua apenas derivada (`RF-13`). O texto do bloco é fixo por enquanto e passará a ser variável (regra a definir).
+**Complemento (usuário, 03/09/2026) — `RF-13a`.** O checkbox **Faz Tudo Lar** da tela deixa de ser somente-leitura: decide se o bloco *Assistência Faz Tudo Lar* é impresso. Vem **pré-marcado** pela derivação `RN-18` (e, desde 15/09/2026, `RN-18a`) e o operador pode alterá-lo antes de *Imprime*. A escolha vale para o lote inteiro, vai ao JSON em `_meta.faz_tudo_lar`, `produto.faz_tudo_lar` e `assistencia.faz_tudo_lar`, e quando divergir da derivação gera o aviso `FAZ_TUDO_LAR_MANUAL` (`RD-23`). Na CLI: `--faz-tudo-lar sim|nao`. **Locação** continua apenas derivada (`RF-13`). O texto do bloco é fixo por enquanto e passará a ser variável (regra a definir).
 
 **Consequências.** `GAP-09` fecha com os textos legais deste PDF (redação A de Incêndio/Raio/Explosão/Perda de Aluguel, Assistência 24h, Faz Tudo Lar, rodapé). Os textos vão ao template **como estão** no PDF, inclusive erros de digitação, até compliance decidir (`GAP-19`). Os PDFs `..._15008_381066` deixam de ser referência de layout e ficam como casos de teste de dados (`RN-03.1`, `DEF-06`, `RD-22`). Os cinco nomes da matriz `7.3` viram apenas rastreabilidade: `_meta.template` passa a ser `"demonstrativo_v1"`, com `_meta.faz_tudo_lar: true|false`. `RNF-01` (fidelidade visual) passa a comparar apenas contra este PDF.
 **Revisões de 04/09/2026 (usuário).** (1) Os textos das seções *Assistência Residencial Emergencial 24h* e *Assistência Faz Tudo Lar* foram **substituídos** pelos textos fornecidos pelo negócio — produto TOTAL ASSISTÊNCIA (bombeiro, chaveiro, eletricista, 3 intervenções/ano, site assistencia.grupofedcorp.com.br) e os 8 serviços por agendamento com coberturas e exclusões, limite de 2 serviços/ano. Vivem em `render/templates/blocos/*.html.j2`, mantidos como recebidos (`GAP-19`). O texto da 24h usa fonte maior. (2) Os títulos de seção ganharam margem superior para ficarem vinculados ao texto abaixo, não ao anterior. (3) A página deixa de ter altura fixa: mínimo 650 mm (referência) e **cresce com o conteúdo** em página única (`render/pdf.py` mede o HTML antes de gerar); com o Faz Tudo Lar novo fica em ~900 mm. `RNF-01` compara apenas as seções que não mudaram.
@@ -1854,7 +1865,7 @@ Blocos identificados nos dois textos: (a) definição de Incêndio/Raio/Explosã
 | Campo no PDF | Valor visto | Origem encontrada | Situação |
 |---|---|---|---|
 | `SUC.` | `RJ` | **`apolices.sucursal`** — `RJ` nas apólices `13008`/`0000001192` e `15008`/`0000000019`; 21.004 de 22.584 apólices são `RJ`, 1.573 `SP` (mais `sp`, `RK`, `.`, vazio — dado sujo) | **Fechado.** Projetar via `JOIN apolices ON (apolice, seq, administradora, cod_seguradora)`, que é a FK já existente. Normalizar para maiúsculas; valor fora de UF válida gera aviso `SUCURSAL_INVALIDA`. |
-| `PLANO` | `RES` no `13008`, vazio no `15008` | Nenhuma coluna `%PLANO%` no banco | **Fechado em 03/09/2026 (decisão):** o campo sai **vazio** nesta fase. O rótulo permanece no layout; o tratamento será definido depois (`RN-23`). |
+| `PLANO` | `RES` no `13008`, vazio no `15008` | Nenhuma coluna `%PLANO%` no banco | ~~Fechado em 03/09/2026: vazio nesta fase.~~ **Revisto em 15/09/2026:** deriva de `segurados_inc.tipo_categoria` — `RES`/`COM` (`RN-23`). |
 | `GARANTIA` | vazio nos dois | Nenhuma coluna `%GARANTIA%` | **Fechado em 03/09/2026 (decisão):** não é texto, é uma **imagem** (selo) que o negócio fornecerá em um segundo momento. Nesta fase o espaço fica reservado e vazio (`RN-24`). |
 | `CÓDIGO SUSEP DA CORRETORA` | `00000202049583` | Não existe no banco: `corretores.cod_susep` está vazio para todos | **Fechado em 03/09/2026 (decisão):** valor **fixo** nesta fase. Vive na configuração `CERTGEN_SUSEP_CORRETORA` com esse padrão, e vai ao JSON em `contrato.susep_corretora` (`RN-25`). |
 
@@ -1862,7 +1873,7 @@ Os `.fr3` não estão na pasta `Delphi/` como arquivos: `frxReportIncendio` e `f
 
 Regras derivadas das decisões de 03/09/2026:
 
-- **`RN-23` — PLANO.** Campo impresso **vazio** nesta fase; rótulo mantido. JSON: `contrato.plano: null`. Reabrir quando o negócio definir a regra.
+- **`RN-23` — PLANO** *(revista em 15/09/2026, decisão do usuário)*. Deriva de `segurados_inc.tipo_categoria` (FK para `tipo_categoria`: `C` COMERCIAL, `R` RESIDENCIAL, `S` SERVIÇO): `'R'` ⇒ **`RES`**; **qualquer outro código** preenchido ⇒ **`COM`**. Coluna nula ou vazia (não ocorre no banco em 15/09/2026: 7,2 mi `R`, 955 mil `C`, 40 mil `S`) ⇒ **`INC`**, o nome genérico do produto Incêndio (decisão do usuário, 15/09/2026), sem aviso. JSON: `contrato.plano: "RES" | "COM" | "INC"`. A coluna entra na consulta canônica (seção 4.3, linha 36). *Histórico: de 03 a 15/09/2026 o campo saía vazio.*
 - **`RN-24` — GARANTIA.** Espaço reservado no layout para uma **imagem** a ser fornecida; nesta fase, vazio. Não entra no JSON até existir.
 - **`RN-25` — CÓDIGO SUSEP DA CORRETORA.** Constante de configuração `CERTGEN_SUSEP_CORRETORA`, padrão `00000202049583`. Impresso no rodapé e serializado em `contrato.susep_corretora`. Nunca literal no template.
 - **`RN-27` — Bloco de texto do produto RUPTURA** *(decisão do usuário, 03/09/2026)*. As três linhas *RUPTURA DE TUBULAÇÕES HIDRÁULICAS … R$ x*, *RESPONSABILIDADE CIVIL TERCEIROS … R$ y* e *Para maiores informações … condicao_geral_fedcorp.pdf* do texto legal **só são impressas quando a Cobertura Ruptura de Encanamento é maior que zero** — o sinal confiável do produto `0004`. Caso contrário são inibidas. Produto `0004` sem valor de ruptura, ou ruptura com valor em outro produto, gera o aviso `RUPTURA_INCONSISTENTE` (`RD-23`), sem impedir a emissão.
@@ -1903,6 +1914,7 @@ Regras derivadas das decisões de 03/09/2026:
 | Faseamento local → API | `ADR-01`, `RD-16`, `RD-18`, `RN-15`, seção 11 |
 | Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
 | Pedido do usuário (11/09/2026) — verificação de segurado + JSON na emissão | `UC-13`, `QRY-14`, `RN-35`, `RF-20`, `RD-29`, `GAP-25`, `GAP-26` |
+| Pedido do usuário (15/09/2026) — PLANO, Incêndio Prédio, Faz Tudo Lar por ruptura, cartão +2 pt | `RN-23` revista, `RN-18a`, `RD-32`, `RD-33` |
 | Pedido do usuário (14/09/2026) — verificação com dados para alimentar a emissão | `RD-30`, `RN-35a`, `RD-31`, `RF-20` e `RF-18` revistos, `RN-33` revista |
 
 **`RD-22`** — Os dois PDFs `..._15008_381066` compartilham fatura e apólice, têm CPFs e certificados distintos e residem na mesma unidade condominial. Confirma que **`certificado` não é único por fatura** e que a chave de emissão precisa de `cpf_cnpj` para desambiguar (`RD-01`, `RD-21`).
@@ -2193,6 +2205,15 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `RF-20` ampliado / `RD-30` / `RN-35a` / `RD-31` | Pedido do usuário: a verificação devolve, além de `existe`, as 3 vigências mais recentes com nome, endereço, vigência, apólice, seq, fatura, certificado e produto (`cod_produto` + `produto.nom_produto` + descrições de `fatura_dsc_prod`). Decisão: "3 vigências mais recentes" = 3 `inicio_vig` distintos, todas as unidades. A emissão aceita `fatura` e `certificado` opcionais. Porta `existe_segurado` substituída por `listar_vigencias_portal`; novo módulo `domain/portal.py`. |
 | `RN-33` revista | Emissão pela API de `0000000019`/`05554363733`/07-2026 devolveu `falha` `DocumentoAusente`: a linha já tinha link do Delphi (03/09/2026, formato `0000000019//072026/…`, DEF-09) e não há JSON em disco. Levantamento: 930.134 linhas com link do legado. Usuário decidiu: **a API sempre reemite**; `ja_publicado` retirado; aviso `REEMISSAO`; arquivos locais sobrescritos no mesmo nome (`gravar_json(..., sobrescrever=True)`). |
 | `RN-35` / `QRY-14` / `GAP-25` | Primeiro teste real: `0000000019`/`05554363733` devolvia `existe=false` porque a última vigência carregada era 08/2026 (vigências mensais, uma por fatura; fatura do mês entra com atraso). Usuário decidiu: existe = **qualquer linha não cancelada**, sem vigência. `QRY-14` perde os dois filtros de data; `existe_segurado(administradora, cpf_cnpj)` sem `hoje`. `GAP-25` fechado por consequência. |
+
+### 15/09/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `RN-23` revista | PLANO deixa de sair vazio: `segurados_inc.tipo_categoria = 'R'` → `RES`; qualquer outro código → `COM`; nulo ou vazio → `INC`. Coluna projetada na consulta canônica (4.3, linha 36). |
+| `RN-18a` | *Faz Tudo Lar* também pré-marcado quando a Cobertura Ruptura de Encanamento > 0 (mesmo sinal de `RN-27`); `codigo_assist_mondial = '1003'` continua valendo. O `codigo_assist_mondial` já vem do `JOIN endossos` da consulta canônica, por fatura escolhida. |
+| `RD-32` | Caixa *Cobertura Incêndio Prédio* (`inc_predio`) abaixo de *Cobertura Incêndio*, mesma largura; vazia quando não contratada; *Assistência 0800* desce uma linha. |
+| `RD-33` | Valores do cartão do Beneficiário +2 pt (5,5 → 7,5 pt); `ENDEREÇO` mantém 5,5 pt. |
 
 ### Lacunas abertas em 04/09/2026
 

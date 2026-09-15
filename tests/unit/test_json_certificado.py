@@ -99,7 +99,7 @@ def test_rd_06_datas_iso(doc):
 def test_rd_13_nulos_aparecem_como_null_nao_omitidos(doc):
     assert doc["administradora"]["abreviacao"] is None
     assert doc["contrato"]["codigo_pedido_porto"] is None
-    assert doc["contrato"]["plano"] is None  # RN-23
+    assert doc["contrato"]["plano"] == "RES"  # RN-23: tipo_categoria R na linha de referencia
     assert '"abreviacao": null' in serializar(doc)
 
 
