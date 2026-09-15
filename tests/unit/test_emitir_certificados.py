@@ -197,12 +197,3 @@ def test_rf_21_combinacoes_invalidas_sao_recusadas_antes_de_emitir(opcoes, tmp_p
     with pytest.raises(ValueError, match="RF-21"):
         emitir_lote(RepoFalso([LINHA_13008]), LOTE, opcoes, **{**base, **kwargs})
     assert not any(tmp_path.iterdir())  # RF-16: nada foi gravado
-
-
-def test_rf_21_upload_exige_modo_individuais(tmp_path):
-    opcoes = OpcoesEmissao(pasta_saida=tmp_path, agora=lambda: AGORA, individuais=False)
-    with pytest.raises(ValueError, match="Individuais"):
-        emitir_lote(
-            RepoFalso([LINHA_13008]), LOTE, opcoes, render_falso,
-            publicador=PublicadorFalso(), registro=RegistroFalso(),
-        )  # fmt: skip

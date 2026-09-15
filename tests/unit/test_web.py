@@ -177,13 +177,11 @@ def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
     assert "nao existe" in r.json()["erro"]
 
 
-def test_rf_21_upload_aws_exige_pdf_e_individuais(cliente, tmp_path):
+def test_rf_21_upload_aws_exige_pdf(cliente, tmp_path):
     base = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
             "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
     r1 = cliente.post("/api/incendio/emitir", json={**base, "so_xml": True})
-    r2 = cliente.post("/api/incendio/emitir", json={**base, "individuais": False})
     assert r1.status_code == 400 and "RF-21" in r1.text
-    assert r2.status_code == 400 and "RF-21" in r2.text
     assert not any(tmp_path.iterdir())  # RF-16: recusado antes de emitir
 
 

@@ -274,13 +274,8 @@ def api_emitir(
         validar_pasta_destino(pasta)  # RF-06
     except NomeArquivoInvalido as exc:
         return _erro(exc)
-    if req.upload_aws and (req.so_xml or not req.individuais):
-        return _erro(
-            ValueError(
-                "Upload AWS exige PDF e modo Individuais: desmarque 'So XML' e marque "
-                "'Individuais' (RF-21)"
-            )
-        )
+    if req.upload_aws and req.so_xml:
+        return _erro(ValueError("Upload AWS exige o PDF: desmarque 'So XML de Cert.' (RF-21)"))
     publicador, registro = fabrica_publicacao() if req.upload_aws else (None, None)
 
     lote = ChaveLote(req.administradora, req.apolice, req.seq, req.fatura)

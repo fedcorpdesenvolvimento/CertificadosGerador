@@ -71,7 +71,7 @@
     <label class="check" title="PDFs continuam um por segurado; o JSON sai em um único arquivo do lote, com os certificados indexados por CPF e número do certificado">
       <input type="checkbox" id="json_unico"> JSON único <small>(um arquivo para o lote)</small></label>
     <label class="check"><input type="checkbox" id="so_xml"> Só XML de Cert. <small>(gera só o JSON, sem PDF)</small></label>
-    <label class="check" title="Publica cada PDF no S3 e grava o link no banco (RF-21); exige PDF e Individuais">
+    <label class="check" title="Publica o PDF de cada certificado no S3, grava o link no banco e no JSON (RF-21); exige PDF">
       <input type="checkbox" id="upload_aws" checked> Upload AWS</label>
   </div>
   <div class="linha">

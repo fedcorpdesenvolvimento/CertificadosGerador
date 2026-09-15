@@ -210,10 +210,9 @@
   el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
-  // RF-21: Upload AWS so com PDF (nao 'So XML') e Individuais
-  const ajustarUpload = () => { el.uploadAws.disabled = el.soXml.checked || !el.individuais.checked; };
+  // RF-21: Upload AWS so com PDF (nao 'So XML'); vale em qualquer modo, inclusive consolidado
+  const ajustarUpload = () => { el.uploadAws.disabled = el.soXml.checked; };
   el.soXml.addEventListener("change", ajustarUpload);
-  el.individuais.addEventListener("change", ajustarUpload);
   ajustarUpload();
   el.procurar?.addEventListener("click", async () => {
     el.procurar.disabled = true;

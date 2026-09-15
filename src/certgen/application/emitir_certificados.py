@@ -193,9 +193,10 @@ def emitir_lote(
 ) -> Relatorio:
     """UC-01/UC-02/UC-05 — emite JSON (e PDF, quando houver renderizador) de um lote.
 
-    RF-21: com `publicador` + `registro`, cada PDF individual e publicado (RN-29) e o
-    link gravado (RD-20a) — exige PDF e modo Individuais; a combinacao invalida e
-    recusada ANTES de qualquer emissao (RF-16).
+    RF-21: com `publicador` + `registro`, o PDF de cada certificado e publicado (RN-29),
+    o link gravado (RD-20a) e `arquivo.link` entra no JSON de cada certificado, em
+    qualquer modo (individual, JSON unico ou consolidado). Exige PDF; a combinacao
+    invalida e recusada ANTES de qualquer emissao (RF-16).
     """
     publicar = publicador is not None or registro is not None
     if publicar:
@@ -203,10 +204,6 @@ def emitir_lote(
             raise ValueError("Upload AWS exige publicador e registro de links juntos (RF-21)")
         if renderizar_pdf is None:
             raise ValueError("Upload AWS exige a geracao do PDF; desmarque 'So XML' (RF-21)")
-        if not opcoes.individuais:
-            raise ValueError(
-                "Upload AWS exige o modo Individuais: o S3 recebe um PDF por certificado (RF-21)"
-            )
     relatorio = Relatorio(lote=lote, pasta=opcoes.pasta_saida)
     try:
         certificados = repositorio.listar_segurados(lote)
@@ -242,7 +239,7 @@ def emitir_lote(
             relatorio.json_unico = _gravar_json_unico(docs, escolhidos[0], opcoes)
         return relatorio
 
-    _emitir_consolidado(escolhidos, opcoes, renderizar_pdf, relatorio)
+    _emitir_consolidado(escolhidos, opcoes, renderizar_pdf, relatorio, publicador, registro)
     return relatorio
 
 
@@ -268,11 +265,15 @@ def _emitir_consolidado(
     opcoes: OpcoesEmissao,
     renderizar_pdf: RenderizadorPdf | None,
     relatorio: Relatorio,
+    publicador: PublicadorArquivos | None = None,
+    registro: RegistroLinks | None = None,
 ) -> None:
     """RF-07 (Individuais desmarcado) — um PDF consolidado gravado + um JSON com o array.
 
     RN-12 nomeia; RF-08 mantem a ordem da consulta (RN-10); DEF-15 corrigido: grava, nao
     apenas pre-visualiza. Os individuais sao gerados numa pasta temporaria e descartados.
+    RF-21: com publicador, cada PDF individual sobe para o S3 ANTES de ser descartado e o
+    link entra no documento daquele certificado dentro do JSON consolidado.
     """
     if not certificados:
         return
@@ -299,11 +300,13 @@ def _emitir_consolidado(
                     agora=lambda: instante,
                 )
                 emitido, doc = emitir_um(cert, sub, renderizar_pdf)
+                if publicador is not None and registro is not None:  # RF-21
+                    emitido = publicar_emitido(cert, emitido, doc, sub, publicador, registro)
                 docs.append(doc)
                 if emitido.pdf_path:
                     pdfs.append(emitido.pdf_path)
                 relatorio.emitidos.append(emitido)
-            except (JsonInvalido, NomeArquivoInvalido, ProdutoIndeterminado, OSError) as exc:
+            except (JsonInvalido, ProdutoIndeterminado, *FALHAS_PUBLICACAO) as exc:
                 relatorio.falhas.append(Falha(cert.chave, str(exc), type(exc).__name__))
 
         if not docs:

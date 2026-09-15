@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from certgen.application.emitir_certificados import OpcoesEmissao, emitir_lote
 from tests.unit.test_emitir_certificados import LINHA_13008, LINHA_B, LOTE, RepoFalso
+from tests.unit.test_emitir_portal import PublicadorFalso, RegistroFalso
 
 AGORA = datetime(2026, 9, 3, 14, 22, 7, tzinfo=timezone(timedelta(hours=-3)))
 
@@ -65,3 +66,17 @@ def test_rf_07_consolidado_sem_renderizador_gera_so_json(tmp_path):
     op = OpcoesEmissao(pasta_saida=tmp_path, individuais=False, agora=lambda: AGORA)
     rel = emitir_lote(RepoFalso([LINHA_13008]), LOTE, op)
     assert rel.consolidado_json is not None and rel.consolidado_pdf is None
+
+
+def test_rf_21_consolidado_publica_cada_pdf_e_poe_o_link_no_json_de_cada_certificado(tmp_path):
+    pub, reg = PublicadorFalso(), RegistroFalso()
+    op = OpcoesEmissao(pasta_saida=tmp_path, individuais=False, agora=lambda: AGORA)
+    rel = emitir_lote(RepoFalso([LINHA_13008, LINHA_B]), LOTE, op, renderizar_pdf=_pdf_falso, publicador=pub, registro=reg)
+    assert rel.falhas == [] and len(rel.emitidos) == 2
+    env = json.loads(rel.consolidado_json.read_text(encoding="utf-8"))
+    links = [c["arquivo"]["link"] for c in env["certificados"]]
+    assert links == [e.link for e in rel.emitidos] and all(links)
+    assert all(d.startswith("0000001192/0004/072026/380819/") for d in pub.publicados)  # RN-29
+    assert len(reg.registros) == 2  # RD-20a, um por certificado
+    pasta = tmp_path / "0000001192" / "072026"
+    assert sorted(p.suffix for p in pasta.iterdir()) == [".json", ".pdf"]  # individuais descartados
