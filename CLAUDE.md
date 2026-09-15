@@ -8,7 +8,9 @@ e o JSON espelhado, lendo Firebird. Reescrita de um gerador Delphi legado
 
 `docs/ESPECIFICACAO.md` e a fonte da verdade. Todo codigo implementa um
 requisito identificado (RF-nn, RN-nn, RD-nn, QRY-nn). Cite o ID no
-docstring e na mensagem de commit.
+docstring e na mensagem de commit. `docs/API.md` documenta as duas APIs
+(portal e tela) e o JSON espelho; atualize-o junto com qualquer mudanca de
+endpoint, campo ou codigo de aviso.
 
 Se a especificacao nao cobre o que preciso decidir, PARE e pergunte.
 Nao invente regra de negocio. Itens GAP-nn da secao 16 estao abertos e
@@ -38,6 +40,12 @@ adaptador de API. Nunca chame o driver de dentro do dominio.
   id_controle_envio_portal (RNF-05). A unica escrita implementada e
   `registrar_link` (RD-20a): chave RD-01 completa, exatamente 1 linha.
 - Credenciais AWS e a chave da API (RN-30) so no `.env`/ambiente (SEC-01).
+- Tela e API do portal compartilham emissao, template, JSON e publicacao
+  (`publicar_emitido`); nunca duplicar logica num canal so (RF-11, RNF-08).
+- PLANO: tipo_categoria R -> RES, outro -> COM, nulo -> INC (RN-23). Faz Tudo
+  Lar derivado por mondial 1003 OU ruptura > 0 (RN-18/RN-18a).
+- `certgen web`/`certgen api` nao recarregam codigo: reiniciar apos alterar;
+  estaticos com ?v=hash e a emissao exige `versao_tela` igual a do servidor (409).
 
 ## Conexao Firebird
 
@@ -70,6 +78,7 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
   (`--upload-aws` publica cada PDF no S3 e grava o link — RF-21; a tela tem o checkbox Upload AWS)
 - CLI: `python -m certgen.cli --help`
+- Documentacao das APIs: `docs/API.md`; teste manual: `docs/TESTE-API-POSTMAN.md`
 
 ## Menu de modulos (ADR-07)
 
