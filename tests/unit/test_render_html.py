@@ -45,6 +45,10 @@ def test_adr_06_valores_da_referencia_13008_no_html(html):
 def test_rn_18_bloco_faz_tudo_lar_presente_quando_mondial_1003(html):
     assert "Assistência Faz Tudo Lar" in html
     assert "KIT FIXAÇÃO" in html
+    # RD-34 (15/09/2026): ultima linha do bloco aponta para o site da assistencia
+    bloco = html.split("Assistência Faz Tudo Lar", 1)[1].split("Clube de Vantagens", 1)[0]
+    assert "Consulte todas as informações em https://assistencia.grupofedcorp.com.br/" in bloco
+    assert bloco.index("2 SERVIÇOS / ANO") < bloco.index("Consulte todas as informações")
 
 
 def test_adr_06_bloco_faz_tudo_lar_opcional(repo):

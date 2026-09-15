@@ -68,6 +68,7 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
   devolve `existe` + as 3 vigencias mais recentes com nome, endereco, chaves e produto (RF-20, RD-30, RN-35a;
   RN-35: qualquer linha nao cancelada) para o login do segurado no portal. A API sempre reemite (RN-33).
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`
+  (`--upload-aws` publica cada PDF no S3 e grava o link — RF-21; a tela tem o checkbox Upload AWS)
 - CLI: `python -m certgen.cli --help`
 
 ## Menu de modulos (ADR-07)

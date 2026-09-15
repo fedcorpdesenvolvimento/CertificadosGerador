@@ -132,6 +132,7 @@ body {
 .bloco-texto .sub { font-style: italic; color: var(--cinza-claro); margin-bottom: 0.3mm; }
 .bloco-texto .rot { font-weight: bold; margin-top: 0.8mm; }
 .bloco-texto .limite { margin-top: 3mm; font-size: 7pt; color: var(--azul-escuro); }
+.bloco-texto .consulte { margin-top: 1.5mm; font-size: 7pt; color: var(--azul-escuro); }  /* RD-34 */
 .bloco-texto ul { margin: 0 0 0.8mm; padding-left: 3.5mm; }
 .bloco-texto ul.circ { list-style: circle; }
 .bloco-texto li { margin: 0 0 0.3mm; }

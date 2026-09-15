@@ -26,6 +26,7 @@ CENTRAL_ATENDIMENTO = "0800 770 4362"
 CENTRAL_FEDCORP = "0800 251 6001"
 EMAIL_SAC = "sac@grupofedcorp.com.br"
 LINK_CONDICOES = "http://fedcorp.com.br/suporte/condicao-doc/condicao_geral_fedcorp.pdf"
+SITE_ASSISTENCIA = "https://assistencia.grupofedcorp.com.br/"  # RD-34 — fim do bloco Faz Tudo Lar
 
 PASTA_LOGOS_SEGURADORAS = PASTA_IMAGENS / "seguradoras"  # RN-28 — arquivos de seguradoras.toml
 
@@ -103,4 +104,5 @@ def renderizar_html(cert: Certificado, dados: DadosRender) -> str:
         central_fedcorp=CENTRAL_FEDCORP,
         email_sac=EMAIL_SAC,
         link_condicoes=LINK_CONDICOES,
+        site_assistencia=SITE_ASSISTENCIA,
     )

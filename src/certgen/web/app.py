@@ -14,6 +14,7 @@ permite usar a API sincrona do Playwright e do fdb sem bloquear o loop.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -31,7 +32,7 @@ from certgen.application.emitir_certificados import (
     validar_pasta_destino,
 )
 from certgen.application.listar_cascata import Cascata, rotulo_apolice
-from certgen.application.ports import RepositorioCertificados
+from certgen.application.ports import PublicadorArquivos, RegistroLinks, RepositorioCertificados
 from certgen.config.settings import Config
 from certgen.domain.certificado import ChaveCertificado, ChaveLote
 from certgen.domain.nomes_arquivo import NomeArquivoInvalido
@@ -82,6 +83,29 @@ def get_repositorio() -> RepositorioCertificados:
 
 def get_config() -> Config:
     return _config()
+
+
+FabricaPublicacao = Callable[[], tuple[PublicadorArquivos, RegistroLinks]]
+
+
+def _publicacao_real() -> tuple[PublicadorArquivos, RegistroLinks]:
+    """RF-21 — S3 (RN-29, credenciais AWS_* do .env, SEC-01) + registrar_link no Firebird
+    (RD-20a). Construido so quando o operador marca Upload AWS."""
+    from certgen.adapters.firebird.repositorio import RepositorioFirebird
+    from certgen.adapters.s3.publicador import PublicadorS3
+
+    cfg = _config()
+    if cfg.repositorio != "firebird":
+        raise HTTPException(501, "registro de links so existe no adaptador Firebird")
+    return (
+        PublicadorS3(bucket=cfg.aws_bucket, regiao=cfg.aws_region),
+        RepositorioFirebird(susep_corretora=cfg.susep_corretora),
+    )
+
+
+def get_fabrica_publicacao() -> FabricaPublicacao:
+    """Testes sobrescrevem para nao tocar S3 nem banco."""
+    return _publicacao_real
 
 
 @lru_cache(maxsize=1)
@@ -234,6 +258,7 @@ class EmissaoIn(BaseModel):
     json_unico: bool = False  # RD-26 — um JSON do lote (chave cpf|certificado), PDFs individuais
     so_xml: bool = False  # CheckBox6 'So XML de Cert.' — aqui: so JSON, sem PDF
     competencia: date | None = None  # RN-19
+    upload_aws: bool = False  # CheckBox3 — RF-21 (DEF-07 corrigido: agora tem efeito)
 
 
 @app.post("/api/incendio/emitir")
@@ -241,13 +266,22 @@ def api_emitir(
     req: EmissaoIn,
     request: Request,
     repo: RepositorioCertificados = Depends(get_repositorio),
+    fabrica_publicacao: FabricaPublicacao = Depends(get_fabrica_publicacao),
 ):
-    """UC-01/02/03/04 — o mesmo caso de uso da CLI (RF-11)."""
+    """UC-01/02/03/04 — o mesmo caso de uso da CLI (RF-11). RF-21: Upload AWS opcional."""
     pasta = Path(req.pasta)
     try:
         validar_pasta_destino(pasta)  # RF-06
     except NomeArquivoInvalido as exc:
         return _erro(exc)
+    if req.upload_aws and (req.so_xml or not req.individuais):
+        return _erro(
+            ValueError(
+                "Upload AWS exige PDF e modo Individuais: desmarque 'So XML' e marque "
+                "'Individuais' (RF-21)"
+            )
+        )
+    publicador, registro = fabrica_publicacao() if req.upload_aws else (None, None)
 
     lote = ChaveLote(req.administradora, req.apolice, req.seq, req.fatura)
     opcoes = OpcoesEmissao(
@@ -273,7 +307,14 @@ def api_emitir(
                 dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio, meta.faz_tudo_lar)
                 return render.renderizar_certificado(cert, dados, destino)
 
-            return emitir_lote(repo, lote, opcoes, renderizar_pdf=renderizar).para_dict()
+            return emitir_lote(
+                repo,
+                lote,
+                opcoes,
+                renderizar_pdf=renderizar,
+                publicador=publicador,
+                registro=registro,
+            ).para_dict()
     except ErroRenderizacao as exc:
         return _erro(exc, 503)
 

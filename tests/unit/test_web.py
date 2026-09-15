@@ -177,6 +177,51 @@ def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
     assert "nao existe" in r.json()["erro"]
 
 
+def test_rf_21_upload_aws_exige_pdf_e_individuais(cliente, tmp_path):
+    base = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+            "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
+    r1 = cliente.post("/api/incendio/emitir", json={**base, "so_xml": True})
+    r2 = cliente.post("/api/incendio/emitir", json={**base, "individuais": False})
+    assert r1.status_code == 400 and "RF-21" in r1.text
+    assert r2.status_code == 400 and "RF-21" in r2.text
+    assert not any(tmp_path.iterdir())  # RF-16: recusado antes de emitir
+
+
+def test_rf_21_upload_aws_publica_e_devolve_o_link(cliente, tmp_path):
+    from tests.unit.test_emitir_portal import PublicadorFalso, RegistroFalso
+
+    pub, reg = PublicadorFalso(), RegistroFalso()
+    webapp.app.dependency_overrides[webapp.get_fabrica_publicacao] = lambda: (lambda: (pub, reg))
+    webapp.app.dependency_overrides[webapp.get_repositorio] = lambda: RepoFalso()
+    # PDF falso: o Chromium nao entra no teste unitario
+    from certgen.render import pdf as mod_pdf
+
+    class RenderFalso:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def renderizar_certificado(self, cert, dados, destino):
+            destino.write_bytes(b"%PDF-1.4 falso\n")
+            return destino
+
+    original = mod_pdf.RenderizadorPdf
+    mod_pdf.RenderizadorPdf = RenderFalso
+    try:
+        corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+                 "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
+        r = cliente.post("/api/incendio/emitir", json=corpo)
+    finally:
+        mod_pdf.RenderizadorPdf = original
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["falhas"] == [] and len(d["emitidos"]) == 2
+    assert all(e["link"] and e["link"].endswith(".pdf") for e in d["emitidos"])
+    assert len(pub.publicados) == 2 and len(reg.registros) == 2
+
+
 def test_uc_01_emitir_so_json_todos(cliente, tmp_path):
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
              "pasta": str(tmp_path), "so_xml": True}  # fmt: skip

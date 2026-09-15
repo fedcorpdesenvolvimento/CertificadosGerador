@@ -48,6 +48,12 @@ def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
         modo_conexao="firebird-local",
     )
     repo = RepositorioFirebird(susep_corretora=cfg.susep_corretora)
+    publicador = registro = None
+    if com_pdf and getattr(args, "upload_aws", False):  # RF-21
+        from certgen.adapters.s3.publicador import PublicadorS3
+
+        publicador = PublicadorS3(bucket=cfg.aws_bucket, regiao=cfg.aws_region)
+        registro = repo  # RD-20a: o adaptador Firebird implementa RegistroLinks
 
     if not com_pdf:
         relatorio = emitir_lote(repo, lote, opcoes)
@@ -62,7 +68,14 @@ def _emitir(args: argparse.Namespace, com_pdf: bool) -> int:
                     dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio, meta.faz_tudo_lar)
                     return render.renderizar_certificado(cert, dados, destino)
 
-                relatorio = emitir_lote(repo, lote, opcoes, renderizar_pdf=renderizar)
+                relatorio = emitir_lote(
+                    repo,
+                    lote,
+                    opcoes,
+                    renderizar_pdf=renderizar,
+                    publicador=publicador,
+                    registro=registro,
+                )
         except ErroRenderizacao as exc:
             print("FALHA:", exc, file=sys.stderr)
             return 1
@@ -198,6 +211,11 @@ def construir_parser() -> argparse.ArgumentParser:
         em.add_argument(
             "--competencia", help="data ISO para a pasta {adm}/{MMYYYY}; padrao inicio_vig"
         )
+        if nome == "emitir":
+            em.add_argument(
+                "--upload-aws", action="store_true",
+                help="RF-21: publica cada PDF no S3 (RN-29) e grava o link no banco (RD-20a)",
+            )  # fmt: skip
         em.set_defaults(func=func)
 
     web = sub.add_parser("web", help="Sobe a tela web em 127.0.0.1 (menu + CERTIFICADO INCENDIO)")

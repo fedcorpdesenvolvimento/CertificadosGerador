@@ -8,10 +8,14 @@ RF-09: falha em um certificado nao interrompe o lote; entra no relatorio.
 ADR-04: produto indeterminado, RD-09 e JSON invalido abortam aquele certificado.
 RF-16/RNF-11: nada e gravado antes do passo anterior ter sucesso — o JSON so
 e escrito depois de validar.
+RF-21 (Fase 7, 15/09/2026): com `publicador` e `registro`, cada PDF individual sobe
+para o S3 (RN-29), o link e gravado no banco (RD-20a) e o JSON e regravado com
+`arquivo.link` (RD-25) — a MESMA sequencia da API do portal (`publicar_emitido`).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import shutil
 from collections.abc import Callable, Sequence
@@ -19,10 +23,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from certgen.application.ports import RepositorioCertificados
+from certgen.application.ports import (
+    ErroPublicacao,
+    LinkNaoRegistrado,
+    PublicadorArquivos,
+    RegistroLinks,
+    RepositorioCertificados,
+)
 from certgen.domain.certificado import Certificado, ChaveCertificado, ChaveLote
 from certgen.domain.nomes_arquivo import (
     NomeArquivoInvalido,
+    caminho_publicacao,
     competencia,
     nome_base_certificado,
     nome_consolidado,
@@ -41,6 +52,8 @@ from certgen.serialize.json_certificado import (
 from certgen.serialize.json_certificado import gravar_json as gravar_json_arquivo
 
 RenderizadorPdf = Callable[[Certificado, MetaEmissao, Path], Path]
+AVISO_REEMISSAO = "REEMISSAO"  # RN-33 revista: havia link gravado (RD-28); foi substituido
+FALHAS_PUBLICACAO = (ErroPublicacao, LinkNaoRegistrado, NomeArquivoInvalido, OSError)
 
 
 @dataclass(frozen=True)
@@ -50,6 +63,7 @@ class Emitido:
     pdf_path: Path | None
     avisos: tuple[str, ...]
     colisao: bool = False
+    link: str | None = None  # RF-21 / RN-29 — URL publica apos upload confirmado
 
 
 @dataclass(frozen=True)
@@ -89,6 +103,7 @@ class Relatorio:
                     "pdf": str(e.pdf_path) if e.pdf_path else None,
                     "avisos": list(e.avisos),
                     "colisao": e.colisao,
+                    "link": e.link,
                 }
                 for e in self.emitidos
             ],
@@ -116,7 +131,8 @@ class Relatorio:
             col = "  (colisao: sufixo aplicado)" if e.colisao else ""
             caminho = e.pdf_path or e.json_path
             arquivo = caminho.name if caminho else e.chave.certificado
-            linhas.append(f"  OK    {arquivo}{col}{av}")
+            link = f"  -> {e.link}" if e.link else ""
+            linhas.append(f"  OK    {arquivo}{col}{link}{av}")
         if self.json_unico:
             linhas.append(f"  JSON UNICO {self.json_unico}")
         for f in self.falhas:
@@ -172,8 +188,25 @@ def emitir_lote(
     lote: ChaveLote,
     opcoes: OpcoesEmissao,
     renderizar_pdf: RenderizadorPdf | None = None,
+    publicador: PublicadorArquivos | None = None,
+    registro: RegistroLinks | None = None,
 ) -> Relatorio:
-    """UC-01/UC-02/UC-05 — emite JSON (e PDF, quando houver renderizador) de um lote."""
+    """UC-01/UC-02/UC-05 — emite JSON (e PDF, quando houver renderizador) de um lote.
+
+    RF-21: com `publicador` + `registro`, cada PDF individual e publicado (RN-29) e o
+    link gravado (RD-20a) — exige PDF e modo Individuais; a combinacao invalida e
+    recusada ANTES de qualquer emissao (RF-16).
+    """
+    publicar = publicador is not None or registro is not None
+    if publicar:
+        if publicador is None or registro is None:
+            raise ValueError("Upload AWS exige publicador e registro de links juntos (RF-21)")
+        if renderizar_pdf is None:
+            raise ValueError("Upload AWS exige a geracao do PDF; desmarque 'So XML' (RF-21)")
+        if not opcoes.individuais:
+            raise ValueError(
+                "Upload AWS exige o modo Individuais: o S3 recebe um PDF por certificado (RF-21)"
+            )
     relatorio = Relatorio(lote=lote, pasta=opcoes.pasta_saida)
     try:
         certificados = repositorio.listar_segurados(lote)
@@ -194,9 +227,16 @@ def emitir_lote(
                 emitido, doc = emitir_um(
                     cert, opcoes, renderizar_pdf, gravar_json=not opcoes.json_unico
                 )
+                if publicar:
+                    assert publicador is not None and registro is not None
+                    emitido = publicar_emitido(cert, emitido, doc, opcoes, publicador, registro)
                 relatorio.emitidos.append(emitido)
                 docs.append(doc)
-            except (JsonInvalido, NomeArquivoInvalido, ProdutoIndeterminado, OSError) as exc:
+            except (
+                JsonInvalido,
+                ProdutoIndeterminado,
+                *FALHAS_PUBLICACAO,
+            ) as exc:
                 relatorio.falhas.append(Falha(cert.chave, str(exc), type(exc).__name__))
         if opcoes.json_unico and docs:
             relatorio.json_unico = _gravar_json_unico(docs, escolhidos[0], opcoes)
@@ -348,3 +388,40 @@ def emitir_um(
         colisao=colidiu,
     )
     return emitido, doc
+
+
+def publicar_emitido(
+    cert: Certificado,
+    emitido: Emitido,
+    doc: dict,
+    opcoes: OpcoesEmissao,
+    publicador: PublicadorArquivos,
+    registro: RegistroLinks,
+) -> Emitido:
+    """RF-16 / RF-21 / RN-29 / RD-20a / RD-25 — publica UM certificado ja emitido.
+
+    Sequencia: publicar (S3, confirmado DEF-19) -> registrar_link (Firebird, exatamente
+    1 linha) -> regravar o JSON individual com `arquivo.link` (quando ha JSON individual;
+    no JSON unico o `doc` alterado e gravado pelo lote). Falha em qualquer passo levanta
+    a excecao: nunca se devolve link sem gravacao confirmada. Se o S3 confirmou e o UPDATE
+    falhou, o objeto fica no bucket e o erro e explicito. Se havia link anterior (RD-28),
+    entra o aviso REEMISSAO. Usado pela tela/CLI (`emitir_lote`) e pela API do portal.
+    """
+    if emitido.pdf_path is None:
+        raise ErroPublicacao("emissao nao produziu PDF; nada a publicar (RF-21)")
+    destino = caminho_publicacao(  # RN-29
+        cert.chave.administradora,
+        cert.produto.codigo,
+        opcoes.data_competencia or cert.vigencia.inicio,
+        cert.chave.fatura,
+        emitido.pdf_path.name,
+    )
+    link = publicador.publicar(emitido.pdf_path, destino)  # confirmado (DEF-19)
+    registro.registrar_link(cert.chave, link, opcoes.agora())  # 1 linha (RD-20a)
+    doc["arquivo"]["link"] = link  # RD-25: JSON regravado apos upload confirmado
+    if emitido.json_path is not None:
+        emitido.json_path.write_text(serializar(doc), encoding="utf-8")
+    avisos = emitido.avisos
+    if cert.link_publicado:  # RD-28: havia link (novo ou do legado) — foi substituido
+        avisos = (*avisos, AVISO_REEMISSAO)
+    return dataclasses.replace(emitido, link=link, avisos=avisos)

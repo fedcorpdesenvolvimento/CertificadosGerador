@@ -9,6 +9,7 @@ from certgen.adapters.firebird.repositorio import RepositorioFirebird
 from certgen.application.emitir_certificados import OpcoesEmissao, emitir_lote
 from certgen.domain.certificado import ChaveLote
 from certgen.domain.produto import ProdutoIndeterminado
+from tests.unit.test_emitir_portal import PublicadorFalso, RegistroFalso, render_falso
 from tests.unit.test_repositorio_mapeamento import LINHA_13008
 
 BRT = timezone(timedelta(hours=-3))
@@ -122,3 +123,86 @@ def test_rd_23_relatorio_lista_avisos(opcoes):
     texto = rel.resumo()
     assert "1 emitidos, 0 falhas" in texto
     assert "ABREV_ADM_AUSENTE" in texto
+
+
+# ---------------------------------------------------------------- RF-21 Upload AWS
+def test_rf_21_upload_publica_registra_e_regrava_o_json_com_o_link(opcoes):
+    pub, reg = PublicadorFalso(), RegistroFalso()
+    rel = emitir_lote(
+        RepoFalso([LINHA_13008, LINHA_B]), LOTE, opcoes, render_falso, publicador=pub, registro=reg
+    )
+    assert rel.falhas == [] and len(rel.emitidos) == 2
+    for e in rel.emitidos:
+        assert e.link and e.link.startswith("https://certincendioaws.s3.us-east-2.amazonaws.com/")
+        assert e.link.endswith(e.pdf_path.name)  # RN-29: o nome do PDF fecha o caminho
+        doc = json.loads(e.json_path.read_text(encoding="utf-8"))
+        assert doc["arquivo"]["link"] == e.link  # RD-25 regravado apos upload
+    assert pub.publicados[0].startswith("0000001192/0004/072026/380819/")  # RN-29
+    assert [r[0] for r in reg.registros] == [e.chave for e in rel.emitidos]  # RD-20a
+    d = rel.para_dict()
+    assert d["emitidos"][0]["link"] == rel.emitidos[0].link
+    assert rel.emitidos[0].link in rel.resumo()
+
+
+def test_rf_21_falha_no_s3_vira_falha_do_certificado_sem_gravar_link(opcoes):
+    reg = RegistroFalso()
+    rel = emitir_lote(
+        RepoFalso([LINHA_13008]), LOTE, opcoes, render_falso,
+        publicador=PublicadorFalso(falhar=True), registro=reg,
+    )  # fmt: skip
+    assert rel.emitidos == [] and len(rel.falhas) == 1
+    assert rel.falhas[0].tipo == "ErroPublicacao"
+    assert reg.registros == []  # RF-16: nada gravado sem upload confirmado
+
+
+def test_rf_21_update_que_falha_nao_devolve_link(opcoes):
+    pub = PublicadorFalso()
+    rel = emitir_lote(
+        RepoFalso([LINHA_13008]), LOTE, opcoes, render_falso,
+        publicador=pub, registro=RegistroFalso(falhar=True),
+    )  # fmt: skip
+    assert rel.emitidos == [] and rel.falhas[0].tipo == "LinkNaoRegistrado"
+    assert len(pub.publicados) == 1  # o objeto ficou no bucket; o motivo e explicito
+
+
+def test_rf_21_reemissao_com_link_anterior_gera_aviso(opcoes):
+    linha = {**LINHA_13008, "link_certificado_aws": "https://antigo/x.pdf"}  # RD-28
+    rel = emitir_lote(
+        RepoFalso([linha]), LOTE, opcoes, render_falso,
+        publicador=PublicadorFalso(), registro=RegistroFalso(),
+    )  # fmt: skip
+    assert "REEMISSAO" in rel.emitidos[0].avisos
+
+
+def test_rf_21_json_unico_recebe_o_link_de_cada_certificado(tmp_path):
+    opcoes = OpcoesEmissao(pasta_saida=tmp_path, agora=lambda: AGORA, json_unico=True)
+    rel = emitir_lote(
+        RepoFalso([LINHA_13008, LINHA_B]), LOTE, opcoes, render_falso,
+        publicador=PublicadorFalso(), registro=RegistroFalso(),
+    )  # fmt: skip
+    doc = json.loads(rel.json_unico.read_text(encoding="utf-8"))
+    links = {v["arquivo"]["link"] for v in doc["certificados"].values()}
+    assert links == {e.link for e in rel.emitidos} and None not in links
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(renderizar_pdf=None),  # sem PDF nao ha o que publicar
+        dict(publicador=None),  # publicador e registro andam juntos
+    ],
+)
+def test_rf_21_combinacoes_invalidas_sao_recusadas_antes_de_emitir(opcoes, tmp_path, kwargs):
+    base = dict(renderizar_pdf=render_falso, publicador=PublicadorFalso(), registro=RegistroFalso())
+    with pytest.raises(ValueError, match="RF-21"):
+        emitir_lote(RepoFalso([LINHA_13008]), LOTE, opcoes, **{**base, **kwargs})
+    assert not any(tmp_path.iterdir())  # RF-16: nada foi gravado
+
+
+def test_rf_21_upload_exige_modo_individuais(tmp_path):
+    opcoes = OpcoesEmissao(pasta_saida=tmp_path, agora=lambda: AGORA, individuais=False)
+    with pytest.raises(ValueError, match="Individuais"):
+        emitir_lote(
+            RepoFalso([LINHA_13008]), LOTE, opcoes, render_falso,
+            publicador=PublicadorFalso(), registro=RegistroFalso(),
+        )  # fmt: skip

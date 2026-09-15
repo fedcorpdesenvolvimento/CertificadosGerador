@@ -71,7 +71,8 @@
     <label class="check" title="PDFs continuam um por segurado; o JSON sai em um único arquivo do lote, com os certificados indexados por CPF e número do certificado">
       <input type="checkbox" id="json_unico"> JSON único <small>(um arquivo para o lote)</small></label>
     <label class="check"><input type="checkbox" id="so_xml"> Só XML de Cert. <small>(gera só o JSON, sem PDF)</small></label>
-    <label class="check"><input type="checkbox" id="upload_aws" disabled> Upload AWS <small>(Fase 7)</small></label>
+    <label class="check" title="Publica cada PDF no S3 e grava o link no banco (RF-21); exige PDF e Individuais">
+      <input type="checkbox" id="upload_aws" checked> Upload AWS</label>
   </div>
   <div class="linha">
     <button id="imprime" class="botao primario" disabled>Imprime</button>
@@ -85,7 +86,7 @@
   <p id="relatorio-resumo"></p>
   <div id="relatorio-erro" class="erro" hidden></div>
   <table class="lista">
-    <thead><tr><th>Situação</th><th>Certificado</th><th>Arquivo</th><th>Avisos / motivo</th></tr></thead>
+    <thead><tr><th>Situação</th><th>Certificado</th><th>Arquivo</th><th>Link AWS</th><th>Avisos / motivo</th></tr></thead>
     <tbody id="relatorio"></tbody>
   </table>
 </section>

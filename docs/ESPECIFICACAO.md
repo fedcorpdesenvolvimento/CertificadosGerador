@@ -342,7 +342,7 @@ Extraído do `.dfm`. A coluna *Legenda* traz a legenda literal, que o sistema no
 | `ComboBox4` | Produto | combo | 5 itens fixos, `ItemIndex` derivado | `-1` |
 | `CheckBox1` | **Imprime Premio** | check | mostra o bloco de prêmio | `false` |
 | `CheckBox2` | **Individuais** | check | um PDF por segurado vs. pré-visualização | **`true`** |
-| `CheckBox3` | **Upload AWS** | check | **nunca lido** — `DEF-07` | `true` |
+| `CheckBox3` | **Upload AWS** | check | ~~nunca lido — `DEF-07`~~ **tem efeito desde 15/09/2026** — `RF-21` | `true` |
 | `CheckBox4` | **Faz Tudo Lar** | check | derivado de `codigo_assist_mondial` | `false` |
 | `CheckBox5` | **Locação** | check | derivado de `endossos.cod_cat` | `false` |
 | `CheckBox6` | **Só XML de Cert.** | check | pula a geração de PDF | `false` |
@@ -956,6 +956,7 @@ Estrutura confirmada nos PDFs de referência. O documento se intitula **DEMONSTR
 - **`RD-32` — Cobertura Incêndio Prédio.** Nova caixa **abaixo** de *Cobertura Incêndio*, com a **mesma largura** (colunas 1-2 da grade), rótulo *Cobertura Incêndio Prédio* e valor `segurados_inc.inc_predio` formatado por `RN-14`; **vazia** quando `inc_predio` é nulo ou zero (`RN-01`) — o campo é usado normalmente só nas apólices de locação. A caixa *Ao solicitar a Assistência 0800…* desce uma linha. A caixa fica sempre presente, como as demais coberturas.
 - **`RD-33` — Tamanho do texto do cartão do Beneficiário.** Os valores do cartão (condomínio, vigência, beneficiário, CPF/CNPJ, bairro, cidade, UF, CEP) passam de 5,5 pt para **7,5 pt** (+2 pt). **Apenas `ENDEREÇO` mantém 5,5 pt**, porque é o campo mais longo.
 - **PLANO** passa a ser impresso (`RN-23` revista, seção 16).
+- **`RD-34` — Última linha do bloco *Assistência Faz Tudo Lar*.** Após *Limite de Prestação de Serviço*, imprime-se `Consulte todas as informações em https://assistencia.grupofedcorp.com.br/` (endereço fixo em `render/html.py`, `SITE_ASSISTENCIA`).
 
 **Mapeamento de rótulos que o dicionário de dados não deixa óbvio** — três rótulos do PDF não correspondem ao nome do campo, e confundi-los troca informação regulatória:
 
@@ -1012,6 +1013,8 @@ link := 'https://certincendioaws.s3.us-east-2.amazonaws.com/' + pstfin + '/' + .
 > **`SEC-01` — Ação imediata.** As linhas 138-144 contêm um bloco `CONST` comentado com **`AccountKey` e `AccountName` da AWS em texto claro**. Estão em código-fonte versionado, num compartilhamento de rede acessível a quem tem a unidade `U:` mapeada. Mesmo comentadas, são credenciais expostas. **Recomendação:** rotacionar as chaves imediatamente, independentemente do projeto novo, e remover o bloco do fonte e do histórico do Git. O sistema novo **DEVE** obter credenciais de variável de ambiente ou IAM role (`RNF-06`), nunca do código.
 
 **`RN-29` — Caminho no S3 e URL pública** *(Fase 7/8, 10/09/2026)*. O objeto vai para `{administradora}/{produto}/{competência}/{fatura}/{nome_pdf}` no bucket `AWS_S3_BUCKET`, região `AWS_REGION` — o mesmo `pstfin` do legado, com `produto` e `competência` corrigidos (`RN-03`, `RN-19`). O link gravado e devolvido ao portal é a URL pública `https://{bucket}.s3.{região}.amazonaws.com/{caminho}` (decisão do usuário em 10/09/2026: URL pública "por enquanto"; URL assinada fica como `GAP-23`). O adaptador é `adapters/s3/publicador.py` com `boto3`; credenciais pela cadeia padrão do SDK (variáveis `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env` ou perfil/IAM), nunca em código (`SEC-01`, `RNF-06`). Após o `put_object`, o adaptador **DEVE** confirmar com `head_object` e comparar o tamanho antes de devolver o link (`DEF-19`). `Content-Type: application/pdf`.
+
+**`RF-21` — Upload AWS na emissão manual** *(Fase 7, decisão do usuário em 15/09/2026)*. O checkbox **Upload AWS** da tela (`CheckBox3`, `DEF-07` corrigido: passa a ter efeito; vem **marcado** como no legado) e a opção `--upload-aws` da CLI `emitir` fazem, para **cada PDF individual** emitido, a **mesma sequência da API do portal** (`UC-12`, `RF-16`): `publicar` no S3 em `RN-29` (bucket, região e credenciais `AWS_*` do `.env`, `SEC-01`) com confirmação `DEF-19` → `registrar_link` (`RD-20a`, exatamente 1 linha) → regravar o JSON com `arquivo.link` (`RD-25`; no *JSON único* o link entra no documento de cada certificado). A implementação é única: `publicar_emitido` em `application/emitir_certificados.py`, usada por `emitir_lote` (tela/CLI) e por `emitir_portal`. Falha no upload ou no `UPDATE` faz **aquele** certificado sair como falha no relatório, com o tipo e o motivo (`RF-09`); se o S3 confirmou e o `UPDATE` falhou, o objeto fica no bucket e o motivo é explícito — nunca se mostra link sem gravação confirmada. Se a linha já tinha `link_certificado_aws` (`RD-28`), o certificado ganha o aviso `REEMISSAO`. Restrições, recusadas **antes** de emitir qualquer arquivo (`RF-16`): exige PDF (incompatível com *Só XML de Cert.*) e exige *Individuais* (o S3 recebe um PDF por certificado; o consolidado não é publicado). A tela desabilita o checkbox nessas combinações e a API responde `400`. O relatório e a resposta ganham a coluna/campo `link`.
 
 ### 8.2 Gravação em `segurados_inc`
 
@@ -1646,7 +1649,7 @@ Um sistema em produção há anos tem comportamentos que ninguém pretendeu. Cad
 | `DEF-04` | Emissão exige `codigo_pedido_port = :portal AND > 0`, listagem oferece `coalesce(...,0)`; efeitos colaterais fora do `if not Eof` | `.dfm` SQLQuery3; linhas 278-362 | **Crítico.** Grava link do certificado anterior no registro de outro segurado | **Corrigir** — `RD-21`, `RF-09`, `RF-16` |
 | `DEF-05` | `inc_conteudo + inc_predio` sem `COALESCE`: `NULL` zera o total de incêndio impresso | `.dfm`, 5 cópias | **Crítico.** Certificado declara cobertura de incêndio vazia | **Corrigir** — `RN-02` |
 | `DEF-06` | `final_vig` nula impressa como `30/12/1899` | PDF `15008` | Alto — vigência inválida em documento entregue | **Corrigir** — exibir `—` + aviso |
-| `DEF-07` | Checkbox *Upload AWS* declarado, inicializado e **nunca lido**: upload sempre ocorre | 32, 609 | Médio — controle enganoso | **Corrigir** — passa a ter efeito |
+| `DEF-07` | Checkbox *Upload AWS* declarado, inicializado e **nunca lido**: upload sempre ocorre | 32, 609 | Médio — controle enganoso | **Corrigido em 15/09/2026** (`RF-21`) — o checkbox decide se publica |
 | `DEF-08` | Templates formatam o mesmo dado diferente: CPF com/sem máscara, CEP `24.120-191` inválido, SUSEP em dois formatos | PDFs de referência | Médio — inconsistência visível ao cliente | **Corrigir** — `RN-14`, `ADR-05` |
 | `DEF-09` | Mapa apólice→produto incompleto no fluxo manual; `case` sem `else` deixa produto vazio ou herdado | 191-198, 1221-1233 | **Crítico.** Produto errado ou ausente no nome do arquivo, no S3 e no template | **Corrigir** — `RN-03.2`, `RN-03.3` |
 | `DEF-10` | Chave reconstruída por parsing de rótulo com delimitadores `[ ] \|` | 258-263 | Alto — certificado com esses caracteres emite errado | **Corrigir** — `RN-17` |
@@ -1714,7 +1717,9 @@ FastAPI com os endpoints da cascata; página única com a máquina de estados de
 `boto3` no lugar do `fedcorp.jar`; `registrar_link` com `RF-16`; XML de envio; e-mail configurável.
 **Aceitação:** nenhum link é gravado sem upload confirmado.
 
-> **Estado em 10/09/2026:** entregue **em parte**, puxado pela Fase 8: `adapters/s3/publicador.py` (`RN-29`, confirmação `DEF-19`) e `registrar_link` no adaptador Firebird (`RD-20a`). Ficam para depois: XML de envio à Porto (`RF-17`), e-mail (`DEF-21`) e o botão *Upload AWS* da tela (`DEF-07`). `SEC-01`: o sistema novo só lê credenciais do ambiente; a rotação das chaves expostas no Delphi continua sendo ação do usuário e **não** foi verificada por este projeto.
+> **Estado em 10/09/2026:** entregue **em parte**, puxado pela Fase 8: `adapters/s3/publicador.py` (`RN-29`, confirmação `DEF-19`) e `registrar_link` no adaptador Firebird (`RD-20a`). Ficam para depois: XML de envio à Porto (`RF-17`), e-mail (`DEF-21`) e o botão *Upload AWS* da tela (`DEF-07`).
+
+> **Estado em 15/09/2026:** *Upload AWS* da tela e `--upload-aws` da CLI entregues (`RF-21`), reutilizando `publicar_emitido` da API do portal. Restam `RF-17` (XML Porto) e `DEF-21` (e-mail). `SEC-01`: o sistema novo só lê credenciais do ambiente; a rotação das chaves expostas no Delphi continua sendo ação do usuário e **não** foi verificada por este projeto.
 
 ### Fase 8 — API de emissão para o portal *(pré-requisito: Fase 7 parcial; decisões de 10/09/2026)*
 `web/api_portal.py` (aplicação FastAPI própria), `application/emitir_portal.py` (`UC-12`), `QRY-13`, `certgen api`. Contrato em `11.1`.
@@ -1915,6 +1920,7 @@ Regras derivadas das decisões de 03/09/2026:
 | Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
 | Pedido do usuário (11/09/2026) — verificação de segurado + JSON na emissão | `UC-13`, `QRY-14`, `RN-35`, `RF-20`, `RD-29`, `GAP-25`, `GAP-26` |
 | Pedido do usuário (15/09/2026) — PLANO, Incêndio Prédio, Faz Tudo Lar por ruptura, cartão +2 pt | `RN-23` revista, `RN-18a`, `RD-32`, `RD-33` |
+| Pedido do usuário (15/09/2026) — site da assistência no Faz Tudo Lar; Upload AWS na emissão manual | `RD-34`, `RF-21`, `DEF-07` corrigido |
 | Pedido do usuário (14/09/2026) — verificação com dados para alimentar a emissão | `RD-30`, `RN-35a`, `RD-31`, `RF-20` e `RF-18` revistos, `RN-33` revista |
 
 **`RD-22`** — Os dois PDFs `..._15008_381066` compartilham fatura e apólice, têm CPFs e certificados distintos e residem na mesma unidade condominial. Confirma que **`certificado` não é único por fatura** e que a chave de emissão precisa de `cpf_cnpj` para desambiguar (`RD-01`, `RD-21`).
@@ -2214,6 +2220,8 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `RN-18a` | *Faz Tudo Lar* também pré-marcado quando a Cobertura Ruptura de Encanamento > 0 (mesmo sinal de `RN-27`); `codigo_assist_mondial = '1003'` continua valendo. O `codigo_assist_mondial` já vem do `JOIN endossos` da consulta canônica, por fatura escolhida. |
 | `RD-32` | Caixa *Cobertura Incêndio Prédio* (`inc_predio`) abaixo de *Cobertura Incêndio*, mesma largura; vazia quando não contratada; *Assistência 0800* desce uma linha. |
 | `RD-33` | Valores do cartão do Beneficiário +2 pt (5,5 → 7,5 pt); `ENDEREÇO` mantém 5,5 pt. |
+| `RD-34` | Última linha do bloco *Assistência Faz Tudo Lar*: `Consulte todas as informações em https://assistencia.grupofedcorp.com.br/`. |
+| `RF-21` / `DEF-07` | Fase 7 na emissão manual: checkbox *Upload AWS* (marcado por padrão) e `certgen emitir --upload-aws` publicam cada PDF no S3 (`RN-29`), gravam o link (`RD-20a`) e regravam o JSON (`RD-25`), pela mesma função da API do portal (`publicar_emitido`). Exige PDF e *Individuais*; falha vira falha do certificado; `REEMISSAO` quando havia link. |
 
 ### Lacunas abertas em 04/09/2026
 

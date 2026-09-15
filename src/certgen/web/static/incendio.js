@@ -11,7 +11,8 @@
     listaPainel: $("lista-painel"), todos: $("todos"), contador: $("contador"),
     segurados: $("segurados"), erroLista: $("erro-lista"),
     emissaoPainel: $("emissao-painel"), pasta: $("pasta"), procurar: $("procurar"), imprimePremio: $("imprime_premio"),
-    individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), imprime: $("imprime"), progresso: $("progresso"),
+    individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), uploadAws: $("upload_aws"),
+    imprime: $("imprime"), progresso: $("progresso"),
     relPainel: $("relatorio-painel"), relResumo: $("relatorio-resumo"), rel: $("relatorio"), relErro: $("relatorio-erro"),
   };
   let segurados = [];
@@ -169,6 +170,7 @@
         imprime_premio: el.imprimePremio.checked, individuais: el.individuais.checked, so_xml: el.soXml.checked,
         json_unico: el.jsonUnico.checked,  // RD-26
         faz_tudo_lar: el.fazTudo.checked,  // ADR-06: escolha do operador (pre-marcada pela RN-18)
+        upload_aws: el.uploadAws.checked && !el.uploadAws.disabled,  // RF-21
       };
       const r = await api("/api/incendio/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       el.relResumo.textContent = `${r.emitidos.length} emitidos, ${r.falhas.length} falhas — pasta ${r.pasta}` +
@@ -177,12 +179,13 @@
       for (const e of r.emitidos) {
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
+          <td>${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">${esc(e.link)}</a>` : ""}</td>
           <td>${e.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.rel.appendChild(tr);
       }
       for (const f of r.falhas) {
         const tr = document.createElement("tr"); tr.className = "falha";
-        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
+        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
         el.rel.appendChild(tr);
       }
     } catch (e) {
@@ -207,6 +210,11 @@
   el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
+  // RF-21: Upload AWS so com PDF (nao 'So XML') e Individuais
+  const ajustarUpload = () => { el.uploadAws.disabled = el.soXml.checked || !el.individuais.checked; };
+  el.soXml.addEventListener("change", ajustarUpload);
+  el.individuais.addEventListener("change", ajustarUpload);
+  ajustarUpload();
   el.procurar?.addEventListener("click", async () => {
     el.procurar.disabled = true;
     try {

@@ -28,9 +28,11 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from certgen.application.emitir_certificados import (
+    AVISO_REEMISSAO,
     OpcoesEmissao,
     RenderizadorPdf,
     emitir_um,
+    publicar_emitido,
 )
 from certgen.application.ports import (
     ErroPublicacao,
@@ -40,14 +42,14 @@ from certgen.application.ports import (
     RepositorioCertificados,
 )
 from certgen.domain.certificado import Certificado, ChaveCertificado
-from certgen.domain.nomes_arquivo import NomeArquivoInvalido, caminho_publicacao
+from certgen.domain.nomes_arquivo import NomeArquivoInvalido
 from certgen.domain.portal import VigenciaPortal, ultimas_vigencias
 from certgen.domain.produto import ProdutoIndeterminado
-from certgen.serialize.json_certificado import JsonInvalido, serializar
+from certgen.serialize.json_certificado import JsonInvalido
 
 _NAO_DIGITO = re.compile(r"\D")
 _TAM_ADMINISTRADORA = 10  # pessoas.pessoa CHAR(10), secao 4.2 da especificacao
-AVISO_REEMISSAO = "REEMISSAO"  # RN-33 revista: havia link gravado; foi substituido
+__all__ = ["AVISO_REEMISSAO"]  # re-exportado: o aviso e definido em emitir_certificados
 
 
 class PedidoInvalido(ValueError):
@@ -235,24 +237,16 @@ def _tratar_um(
         emitido, doc = emitir_um(cert, opcoes, renderizar_pdf, sobrescrever=True)
         if emitido.pdf_path is None or emitido.json_path is None:
             raise ErroPublicacao("emissao nao produziu PDF e JSON")
-        destino = caminho_publicacao(  # RN-29
-            cert.chave.administradora,
-            cert.produto.codigo,
-            opcoes.data_competencia or cert.vigencia.inicio,
-            cert.chave.fatura,
-            emitido.pdf_path.name,
-        )
-        link = publicador.publicar(emitido.pdf_path, destino)  # confirmado (DEF-19)
-        registro.registrar_link(cert.chave, link, opcoes.agora())  # 1 linha (RD-20a)
-        doc["arquivo"]["link"] = link  # RD-25: JSON regravado apos upload confirmado
-        texto = serializar(doc)
-        emitido.json_path.write_text(texto, encoding="utf-8")
-        avisos = emitido.avisos
-        if cert.link_publicado:  # RD-28: havia link (novo ou do legado) — foi substituido
-            avisos = (*avisos, AVISO_REEMISSAO)
+        # RF-21: o MESMO passo da tela/CLI — publicar, registrar link, regravar JSON
+        publicado = publicar_emitido(cert, emitido, doc, opcoes, publicador, registro)
         # RD-29: o documento da resposta e EXATAMENTE o que foi gravado (RNF-08)
+        texto = emitido.json_path.read_text(encoding="utf-8")
         return ItemPortal(
-            cert.chave, "publicado", link=link, documento=json.loads(texto), avisos=avisos
+            cert.chave,
+            "publicado",
+            link=publicado.link,
+            documento=json.loads(texto),
+            avisos=publicado.avisos,
         )
     except (
         JsonInvalido,
