@@ -2221,6 +2221,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `RD-32` | Caixa *Cobertura Incêndio Prédio* (`inc_predio`) abaixo de *Cobertura Incêndio*, mesma largura; vazia quando não contratada; *Assistência 0800* desce uma linha. |
 | `RD-33` | Valores do cartão do Beneficiário +2 pt (5,5 → 7,5 pt); `ENDEREÇO` mantém 5,5 pt. |
 | `RD-34` | Última linha do bloco *Assistência Faz Tudo Lar*: `Consulte todas as informações em https://assistencia.grupofedcorp.com.br/`. |
+| Tela | O painel de emissão (pasta de destino, opções e botão *Imprime*) passa a ficar logo abaixo da busca de segurados, acima da lista; o relatório continua no fim. |
 | `RF-21` / `DEF-07` | Fase 7 na emissão manual: checkbox *Upload AWS* (marcado por padrão) e `certgen emitir --upload-aws` publicam cada PDF no S3 (`RN-29`), gravam o link (`RD-20a`) e regravam o JSON (`RD-25`), pela mesma função da API do portal (`publicar_emitido`). Exige PDF; vale nos três modos (individual, JSON único, consolidado); falha vira falha do certificado; `REEMISSAO` quando havia link. |
 
 ### Lacunas abertas em 04/09/2026

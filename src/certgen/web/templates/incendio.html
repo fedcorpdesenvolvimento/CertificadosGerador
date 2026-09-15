@@ -45,18 +45,7 @@
   </div>
 </section>
 
-<section class="painel" id="lista-painel" hidden>
-  <div class="linha entre">
-    <label class="check"><input type="checkbox" id="todos" checked> marcar / desmarcar todos</label>
-    <span id="contador" class="contador">Seg.:0</span>
-  </div>
-  <div id="erro-lista" class="erro" hidden></div>
-  <table class="lista">
-    <thead><tr><th></th><th>Certificado</th><th>Portal</th><th>Documento</th><th>Nome</th><th>Endereço</th><th>Unidade</th><th>Avisos</th></tr></thead>
-    <tbody id="segurados"></tbody>
-  </table>
-</section>
-
+{# Pedido do usuario (15/09/2026): pasta, opcoes e Imprime logo abaixo da busca, acima da lista #}
 <section class="painel" id="emissao-painel" hidden>
   <div class="linha">
     <label class="cresce">Pasta de destino
@@ -79,6 +68,18 @@
     <button id="imprime_geral" class="botao" disabled title="Fluxo em massa — Fase 6">Imprime/Geral</button>
     <progress id="progresso" hidden></progress>
   </div>
+</section>
+
+<section class="painel" id="lista-painel" hidden>
+  <div class="linha entre">
+    <label class="check"><input type="checkbox" id="todos" checked> marcar / desmarcar todos</label>
+    <span id="contador" class="contador">Seg.:0</span>
+  </div>
+  <div id="erro-lista" class="erro" hidden></div>
+  <table class="lista">
+    <thead><tr><th></th><th>Certificado</th><th>Portal</th><th>Documento</th><th>Nome</th><th>Endereço</th><th>Unidade</th><th>Avisos</th></tr></thead>
+    <tbody id="segurados"></tbody>
+  </table>
 </section>
 
 <section class="painel" id="relatorio-painel" hidden>
