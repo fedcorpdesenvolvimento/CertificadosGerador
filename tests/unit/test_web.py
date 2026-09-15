@@ -167,7 +167,8 @@ def test_rf_05_rf_13_segurados_com_dados_e_derivados(cliente):
     assert s["certificado"] == "CF1DI/AP.602"
     assert s["documento"] == "330.163.307-25"
     assert s["chave"]["cpf_cnpj"] == "33016330725"
-    assert set(s) >= {"portal", "nome", "endereco", "unidade", "avisos"}
+    assert set(s) >= {"portal", "nome", "endereco", "unidade", "avisos", "vigencia", "final_vig"}
+    assert s["vigencia"] == "01/07/2026 a 31/07/2026" and s["final_vig"] == "2026-07-31"  # RF-05a
 
 
 def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):

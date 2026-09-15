@@ -423,7 +423,9 @@ O sistema novo **DEVE** rotular os campos conforme o efeito real: *Vigência* fi
 
 **`RF-14`** — Ao carregar, **todos** os segurados **DEVEM** vir marcados (linhas 1332 e 940). O caso comum é emitir a fatura inteira.
 
-**`RF-05`** — Cada item **DEVE** exibir certificado, código do portal, documento, nome, endereço e unidade. O legado codifica isso numa string com delimitadores e depois a reparseia:
+**`RF-05`** — Cada item **DEVE** exibir certificado, código do portal, documento, nome, endereço e unidade.
+
+**`RF-05a`** *(15/09/2026, pedido do usuário)* — Cada item **DEVE** exibir também a **vigência** (`inicio_vig` a `final_vig`, `dd/mm/aaaa a dd/mm/aaaa`; fim ausente sai como `—`, `DEF-06`). O relatório da emissão, a resposta da API da tela (`emitidos[].vigencia`) e o resumo da CLI trazem a mesma coluna. `final_vig` já saía no PDF (cartão *VIGÊNCIA*) e no JSON (`vigencia.fim`); faltava na tela. O legado codifica isso numa string com delimitadores e depois a reparseia:
 
 ```pascal
 linha := CERTIFICADO + ' [' + IntToStr(codigo_pedido_port) + '] '
@@ -2222,6 +2224,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `RD-33` | Valores do cartão do Beneficiário +2 pt (5,5 → 7,5 pt); `ENDEREÇO` mantém 5,5 pt. |
 | `RD-34` | Última linha do bloco *Assistência Faz Tudo Lar*: `Consulte todas as informações em https://assistencia.grupofedcorp.com.br/`. |
 | Tela | O painel de emissão (pasta de destino, opções e botão *Imprime*) passa a ficar logo abaixo da busca de segurados, acima da lista; o relatório continua no fim. |
+| `RF-05a` | Vigência (início a fim) na lista de segurados, no relatório da emissão, na resposta da API da tela e no resumo da CLI. `final_vig` já saía no PDF e no JSON. |
 | Tela — cache | **Achado:** após as alterações de 15/09 a emissão saía sem upload e sem falha, mesmo após reiniciar a máquina. Causa: o navegador reutilizava `incendio.js` do cache (servido sem `Cache-Control`, URL fixa); a página nova mostrava o checkbox, o script antigo não enviava `upload_aws`. Correção: estáticos em `/static/*?v=<hash do conteúdo>` com `Cache-Control: no-cache`; o JS envia `versao_tela` (a versão do servidor gravada na página) em cada pedido de emissão e o servidor responde `409` "Tela desatualizada, recarregue com Ctrl+F5" quando divergir ou faltar; campo desconhecido no pedido é `422`. Teste completo pela tela: fatura 381206, adm `0000000020`, upload confirmado (`head_object` 245.238 bytes), link no banco e no JSON. |
 | `RF-21` / `DEF-07` | Fase 7 na emissão manual: checkbox *Upload AWS* (marcado por padrão) e `certgen emitir --upload-aws` publicam cada PDF no S3 (`RN-29`), gravam o link (`RD-20a`) e regravam o JSON (`RD-25`), pela mesma função da API do portal (`publicar_emitido`). Exige PDF; vale nos três modos (individual, JSON único, consolidado); falha vira falha do certificado; `REEMISSAO` quando havia link. |
 

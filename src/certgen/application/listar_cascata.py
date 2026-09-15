@@ -3,7 +3,8 @@
 RF-03: a administradora e escolhida pelo codigo (value do select), nunca pelo nome.
 RF-15: administradora vazia bloqueia a listagem de apolices.
 RN-08: rotulo da apolice e f"{apolice}.{seq}"; a chave viaja estruturada (RN-17).
-RF-05: cada item da lista carrega certificado, portal, documento, nome, endereco e unidade.
+RF-05: cada item da lista carrega certificado, portal, documento, nome, endereco, unidade
+       e, desde 15/09/2026, a vigencia (inicio_vig e final_vig) — RF-05a.
 RF-13: Produto, Faz Tudo Lar e Locacao sao derivados, exibidos somente-leitura.
 """
 
@@ -13,7 +14,20 @@ from dataclasses import dataclass
 from datetime import date
 
 from certgen.application.ports import RepositorioCertificados
-from certgen.domain.certificado import Administradora, ApoliceRef, Certificado, ChaveLote
+from certgen.domain.certificado import (
+    Administradora,
+    ApoliceRef,
+    Certificado,
+    ChaveLote,
+    Vigencia,
+)
+
+
+def vigencia_br(v: Vigencia) -> str:
+    """RF-05a / RD-06 — "dd/mm/aaaa a dd/mm/aaaa" para tela e relatorio; fim ausente (DEF-06)
+    sai como travessao, nunca 30/12/1899."""
+    f = lambda d: d.strftime("%d/%m/%Y") if d else "—"  # noqa: E731
+    return f"{f(v.inicio)} a {f(v.fim)}"
 
 
 @dataclass(frozen=True)
@@ -27,6 +41,9 @@ class ItemSegurado:
     nome: str
     endereco: str
     unidade: str
+    inicio_vig: str | None  # ISO (RD-06) — RF-05a
+    final_vig: str | None  # ISO; None quando ausente (DEF-06)
+    vigencia: str  # dd/mm/aaaa a dd/mm/aaaa, pronto para a tela
     produto: str
     produto_curto: str
     faz_tudo_lar: bool
@@ -43,6 +60,9 @@ class ItemSegurado:
             nome=c.segurado_nome,
             endereco=c.local_risco.endereco or "",
             unidade=c.local_risco.unidade or "",
+            inicio_vig=c.vigencia.inicio.isoformat() if c.vigencia.inicio else None,
+            final_vig=c.vigencia.fim.isoformat() if c.vigencia.fim else None,
+            vigencia=vigencia_br(c.vigencia),
             produto=c.produto.codigo,
             produto_curto=c.produto.descricao_curta,
             faz_tudo_lar=c.faz_tudo_lar_derivado,  # RN-18 / RN-18a

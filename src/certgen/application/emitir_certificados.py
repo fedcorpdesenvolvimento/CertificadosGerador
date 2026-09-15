@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
+from certgen.application.listar_cascata import vigencia_br
 from certgen.application.ports import (
     ErroPublicacao,
     LinkNaoRegistrado,
@@ -64,6 +65,7 @@ class Emitido:
     avisos: tuple[str, ...]
     colisao: bool = False
     link: str | None = None  # RF-21 / RN-29 — URL publica apos upload confirmado
+    vigencia: str = ""  # RF-05a — "dd/mm/aaaa a dd/mm/aaaa" (final_vig visivel no relatorio)
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,7 @@ class Relatorio:
                     "avisos": list(e.avisos),
                     "colisao": e.colisao,
                     "link": e.link,
+                    "vigencia": e.vigencia,
                 }
                 for e in self.emitidos
             ],
@@ -136,7 +139,8 @@ class Relatorio:
             caminho = e.pdf_path or e.json_path
             arquivo = caminho.name if caminho else e.chave.certificado
             link = f"  -> {e.link}" if e.link else ""
-            linhas.append(f"  OK    {arquivo}{col}{link}{av}")
+            vig = f"  vig. {e.vigencia}" if e.vigencia else ""
+            linhas.append(f"  OK    {arquivo}{vig}{col}{link}{av}")
         if self.json_unico:
             linhas.append(f"  JSON UNICO {self.json_unico}")
         for f in self.falhas:
@@ -393,6 +397,7 @@ def emitir_um(
         pdf_path=pdf_path,
         avisos=tuple(a["codigo"] for a in doc["_meta"]["avisos"]),
         colisao=colidiu,
+        vigencia=vigencia_br(cert.vigencia),  # RF-05a
     )
     return emitido, doc
 

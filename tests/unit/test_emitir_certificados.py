@@ -122,6 +122,8 @@ def test_rd_23_relatorio_lista_avisos(opcoes):
     assert set(rel.emitidos[0].avisos) == {"ABREV_ADM_AUSENTE", "PORTAL_AUSENTE"}
     texto = rel.resumo()
     assert "1 emitidos, 0 falhas" in texto
+    assert "vig. 01/07/2026 a 31/07/2026" in texto  # RF-05a
+    assert rel.para_dict()["emitidos"][0]["vigencia"] == "01/07/2026 a 31/07/2026"
     assert "ABREV_ADM_AUSENTE" in texto
 
 
@@ -197,3 +199,9 @@ def test_rf_21_combinacoes_invalidas_sao_recusadas_antes_de_emitir(opcoes, tmp_p
     with pytest.raises(ValueError, match="RF-21"):
         emitir_lote(RepoFalso([LINHA_13008]), LOTE, opcoes, **{**base, **kwargs})
     assert not any(tmp_path.iterdir())  # RF-16: nada foi gravado
+
+
+def test_rf_05a_final_vig_ausente_sai_como_travessao_no_relatorio(opcoes):
+    linha = {**LINHA_13008, "final_vig": date(1899, 12, 30)}  # DEF-06
+    rel = emitir_lote(RepoFalso([linha]), LOTE, opcoes)
+    assert rel.emitidos[0].vigencia == "01/07/2026 a —"

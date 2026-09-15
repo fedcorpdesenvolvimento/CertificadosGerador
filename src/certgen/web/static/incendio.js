@@ -141,7 +141,7 @@
         const tr = document.createElement("tr");
         tr.innerHTML = `<td><input type="checkbox" class="sel" data-i="${i}" checked></td>
           <td>${esc(s.certificado)}</td><td>${s.portal ?? 0}</td><td>${esc(s.documento)}</td>
-          <td>${esc(s.nome)}</td><td>${esc(s.endereco)}</td><td>${esc(s.unidade)}</td>
+          <td>${esc(s.nome)}</td><td>${esc(s.endereco)}</td><td>${esc(s.unidade)}</td><td>${esc(s.vigencia)}</td>
           <td>${s.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.segurados.appendChild(tr);
       });
@@ -182,14 +182,14 @@
         (r.json_unico ? ` — JSON único: ${r.json_unico}` : "");
       for (const e of r.emitidos) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
+        tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.vigencia)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
           <td>${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">${esc(e.link)}</a>` : ""}</td>
           <td>${e.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.rel.appendChild(tr);
       }
       for (const f of r.falhas) {
         const tr = document.createElement("tr"); tr.className = "falha";
-        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
+        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
         el.rel.appendChild(tr);
       }
     } catch (e) {
