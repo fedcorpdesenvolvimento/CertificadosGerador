@@ -177,6 +177,13 @@ def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
     assert "nao existe" in r.json()["erro"]
 
 
+def test_campo_desconhecido_no_pedido_de_emissao_e_422(cliente, tmp_path):
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "so_xml": True, "opcao_futura": True}  # fmt: skip
+    assert cliente.post("/api/incendio/emitir", json=corpo).status_code == 422
+    assert not any(tmp_path.iterdir())
+
+
 def test_rf_21_upload_aws_exige_pdf(cliente, tmp_path):
     base = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
             "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
@@ -217,6 +224,7 @@ def test_rf_21_upload_aws_publica_e_devolve_o_link(cliente, tmp_path):
     d = r.json()
     assert d["falhas"] == [] and len(d["emitidos"]) == 2
     assert all(e["link"] and e["link"].endswith(".pdf") for e in d["emitidos"])
+    assert d["publicados"] == 2
     assert len(pub.publicados) == 2 and len(reg.registros) == 2
 
 

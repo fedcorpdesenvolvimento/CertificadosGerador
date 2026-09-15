@@ -174,6 +174,7 @@
       };
       const r = await api("/api/incendio/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       el.relResumo.textContent = `${r.emitidos.length} emitidos, ${r.falhas.length} falhas — pasta ${r.pasta}` +
+        (corpo.upload_aws ? ` — ${r.publicados ?? 0} publicados no S3` : "") +  // RF-21
         (r.consolidado_pdf ? ` — consolidado: ${r.consolidado_pdf}` : "") +
         (r.json_unico ? ` — JSON único: ${r.json_unico}` : "");
       for (const e of r.emitidos) {

@@ -23,7 +23,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from certgen import __version__
 from certgen.application.emitir_certificados import (
@@ -246,6 +246,10 @@ class ChaveIn(BaseModel):
 
 
 class EmissaoIn(BaseModel):
+    # Campo desconhecido e erro 422: um servidor antigo ainda em memoria nao pode ignorar em
+    # silencio uma opcao nova da tela (aconteceu com upload_aws em 15/09/2026).
+    model_config = ConfigDict(extra="forbid")
+
     administradora: str
     apolice: str
     seq: int

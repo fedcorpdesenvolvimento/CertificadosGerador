@@ -118,6 +118,7 @@ class Relatorio:
             "consolidado_pdf": str(self.consolidado_pdf) if self.consolidado_pdf else None,
             "consolidado_json": str(self.consolidado_json) if self.consolidado_json else None,
             "json_unico": str(self.json_unico) if self.json_unico else None,
+            "publicados": sum(1 for e in self.emitidos if e.link),  # RF-21
         }
 
     def resumo(self) -> str:
@@ -126,6 +127,9 @@ class Relatorio:
             f"fatura {self.lote.fatura}: {len(self.emitidos)} emitidos, "
             f"{len(self.falhas)} falhas, pasta {self.pasta}"
         ]
+        publicados = sum(1 for e in self.emitidos if e.link)
+        if publicados:
+            linhas[0] += f", {publicados} publicados no S3 (RF-21)"
         for e in self.emitidos:
             av = f"  avisos: {', '.join(e.avisos)}" if e.avisos else ""
             col = "  (colisao: sufixo aplicado)" if e.colisao else ""
