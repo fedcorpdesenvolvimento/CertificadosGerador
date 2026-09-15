@@ -14,6 +14,7 @@ permite usar a API sincrona do Playwright e do fdb sem bloquear o loop.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from datetime import date
 from functools import lru_cache
@@ -52,6 +53,27 @@ app = FastAPI(title="Gerador de Certificados", version=__version__)
 app.mount("/static", StaticFiles(directory=str(PASTA_WEB / "static")), name="static")
 
 
+@app.middleware("http")
+async def _sem_cache_de_estaticos(request: Request, call_next):
+    """15/09/2026: o navegador reutilizava incendio.js antigo e a tela nova nao enviava
+    upload_aws. Estaticos sempre revalidam; a URL ainda leva ?v=<hash> (cache-busting)."""
+    resposta = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        resposta.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resposta
+
+
+@lru_cache(maxsize=1)
+def versao_estatica() -> str:
+    """Hash curto do conteudo de static/: muda a URL dos arquivos a cada alteracao."""
+    h = hashlib.sha1()
+    for arq in sorted((PASTA_WEB / "static").iterdir()):
+        if arq.is_file():
+            h.update(arq.name.encode())
+            h.update(arq.read_bytes())
+    return h.hexdigest()[:10]
+
+
 @lru_cache(maxsize=1)
 def _paginas() -> Environment:
     return Environment(
@@ -61,7 +83,9 @@ def _paginas() -> Environment:
 
 
 def _pagina(nome: str, **ctx) -> HTMLResponse:
-    html = _paginas().get_template(nome).render(versao=__version__, modulos=MODULOS, **ctx)
+    html = _paginas().get_template(nome).render(
+        versao=__version__, v=versao_estatica(), modulos=MODULOS, **ctx
+    )
     return HTMLResponse(html)
 
 
@@ -263,6 +287,8 @@ class EmissaoIn(BaseModel):
     so_xml: bool = False  # CheckBox6 'So XML de Cert.' — aqui: so JSON, sem PDF
     competencia: date | None = None  # RN-19
     upload_aws: bool = False  # CheckBox3 — RF-21 (DEF-07 corrigido: agora tem efeito)
+    # Versao do JS que montou o pedido; diferente da do servidor => tela desatualizada (409)
+    versao_tela: str | None = None
 
 
 @app.post("/api/incendio/emitir")
@@ -273,6 +299,14 @@ def api_emitir(
     fabrica_publicacao: FabricaPublicacao = Depends(get_fabrica_publicacao),
 ):
     """UC-01/02/03/04 — o mesmo caso de uso da CLI (RF-11). RF-21: Upload AWS opcional."""
+    if req.versao_tela != __version__:
+        return _erro(
+            RuntimeError(
+                f"Tela desatualizada (JS {req.versao_tela or 'sem versao'}, servidor "
+                f"{__version__}): recarregue a pagina com Ctrl+F5 e repita a emissao"
+            ),
+            409,
+        )
     pasta = Path(req.pasta)
     try:
         validar_pasta_destino(pasta)  # RF-06

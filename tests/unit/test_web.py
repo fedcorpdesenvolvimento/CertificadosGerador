@@ -8,6 +8,7 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 
+from certgen import __version__
 from certgen.adapters.firebird.repositorio import RepositorioFirebird
 from certgen.application.ports import CertificadoNaoEncontrado
 from certgen.domain.certificado import Administradora, ApoliceRef, ContextoEndosso
@@ -88,7 +89,7 @@ def test_adr_06_operador_decide_faz_tudo_lar_e_json_registra(cliente, tmp_path):
     import json
 
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True, "faz_tudo_lar": False}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True, "faz_tudo_lar": False}  # fmt: skip
     d = cliente.post("/api/incendio/emitir", json=corpo).json()
     doc = json.loads(open(d["emitidos"][0]["json"], encoding="utf-8").read())
     assert doc["_meta"]["faz_tudo_lar"] is False
@@ -101,7 +102,7 @@ def test_adr_06_sem_escolha_vale_a_derivacao(cliente, tmp_path):
     import json
 
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True}  # fmt: skip
     d = cliente.post("/api/incendio/emitir", json=corpo).json()
     doc = json.loads(open(d["emitidos"][0]["json"], encoding="utf-8").read())
     assert doc["_meta"]["faz_tudo_lar"] is True  # mondial 1003
@@ -171,7 +172,7 @@ def test_rf_05_rf_13_segurados_com_dados_e_derivados(cliente):
 
 def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path / "nao-existe"), "so_xml": True}  # fmt: skip
+             "pasta": str(tmp_path / "nao-existe"), "so_xml": True, "versao_tela": __version__}  # fmt: skip
     r = cliente.post("/api/incendio/emitir", json=corpo)
     assert r.status_code == 400
     assert "nao existe" in r.json()["erro"]
@@ -179,14 +180,14 @@ def test_rf_06_pasta_inexistente_bloqueia_antes_de_emitir(cliente, tmp_path):
 
 def test_campo_desconhecido_no_pedido_de_emissao_e_422(cliente, tmp_path):
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True, "opcao_futura": True}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True, "opcao_futura": True}  # fmt: skip
     assert cliente.post("/api/incendio/emitir", json=corpo).status_code == 422
     assert not any(tmp_path.iterdir())
 
 
 def test_rf_21_upload_aws_exige_pdf(cliente, tmp_path):
     base = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-            "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
+            "pasta": str(tmp_path), "versao_tela": __version__, "upload_aws": True}  # fmt: skip
     r1 = cliente.post("/api/incendio/emitir", json={**base, "so_xml": True})
     assert r1.status_code == 400 and "RF-21" in r1.text
     assert not any(tmp_path.iterdir())  # RF-16: recusado antes de emitir
@@ -216,7 +217,7 @@ def test_rf_21_upload_aws_publica_e_devolve_o_link(cliente, tmp_path):
     mod_pdf.RenderizadorPdf = RenderFalso
     try:
         corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-                 "pasta": str(tmp_path), "upload_aws": True}  # fmt: skip
+                 "pasta": str(tmp_path), "versao_tela": __version__, "upload_aws": True}  # fmt: skip
         r = cliente.post("/api/incendio/emitir", json=corpo)
     finally:
         mod_pdf.RenderizadorPdf = original
@@ -230,7 +231,7 @@ def test_rf_21_upload_aws_publica_e_devolve_o_link(cliente, tmp_path):
 
 def test_uc_01_emitir_so_json_todos(cliente, tmp_path):
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True}  # fmt: skip
     r = cliente.post("/api/incendio/emitir", json=corpo)
     assert r.status_code == 200, r.text
     d = r.json()
@@ -242,14 +243,14 @@ def test_uc_01_emitir_so_json_todos(cliente, tmp_path):
 def test_uc_02_selecao_parcial(cliente, tmp_path):
     q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819}
     seg = cliente.get("/api/incendio/segurados", params=q).json()["segurados"][1]
-    corpo = {**q, "pasta": str(tmp_path), "so_xml": True, "selecionados": [seg["chave"]]}
+    corpo = {**q, "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True, "selecionados": [seg["chave"]]}
     d = cliente.post("/api/incendio/emitir", json=corpo).json()
     assert [e["chave"]["certificado"] for e in d["emitidos"]] == ["CF1DI/AP.701"]
 
 
 def test_rf_07_modo_consolidado_so_json(cliente, tmp_path):
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True, "individuais": False}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True, "individuais": False}  # fmt: skip
     d = cliente.post("/api/incendio/emitir", json=corpo).json()
     assert d["consolidado_json"] and d["consolidado_json"].endswith(".json")
     assert "certificados_13008_1_380819_" in d["consolidado_json"]
@@ -261,7 +262,7 @@ def test_rd_26_json_unico_pela_api(cliente, tmp_path):
     import json
 
     corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
-             "pasta": str(tmp_path), "so_xml": True, "json_unico": True}  # fmt: skip
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True, "json_unico": True}  # fmt: skip
     d = cliente.post("/api/incendio/emitir", json=corpo).json()
     assert d["json_unico"] and d["json_unico"].endswith(".json")
     assert all(e["json"] is None for e in d["emitidos"])
@@ -327,3 +328,20 @@ def test_rd_06_api_recebe_iso_e_filtra(cliente):
     assert r.status_code == 200 and len(r.json()) == 2
     r = cliente.get("/api/incendio/apolices", params={"administradora": "0000001192", "inicio_vig": "01/07/2026"})
     assert r.status_code == 422  # formato brasileiro nunca chega a API; a tela converte
+
+
+def test_tela_desatualizada_e_recusada_com_409(cliente, tmp_path):
+    base = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+            "pasta": str(tmp_path), "so_xml": True}  # fmt: skip
+    sem = cliente.post("/api/incendio/emitir", json=base)  # JS antigo: nao envia versao
+    velha = cliente.post("/api/incendio/emitir", json={**base, "versao_tela": "0.0.0"})
+    assert sem.status_code == 409 and velha.status_code == 409
+    assert "Ctrl+F5" in sem.json()["erro"]
+    assert not any(tmp_path.iterdir())
+
+
+def test_estaticos_com_versao_na_url_e_sem_cache(cliente):
+    html = cliente.get("/incendio").text
+    assert f'/static/incendio.js?v={webapp.versao_estatica()}" data-versao="{__version__}"' in html
+    r = cliente.get("/static/incendio.js")
+    assert r.headers["cache-control"].startswith("no-cache")

@@ -3,6 +3,8 @@
    RF-02: Imprime so em S4. RF-14: todos marcados ao carregar. RF-17/RN-17: a chave viaja
    como dado (data-*), o texto e apenas apresentacao. */
 (() => {
+  // versao do servidor que entregou esta pagina; vai em cada pedido de emissao (409 se divergir)
+  const VERSAO_TELA = (document.currentScript && document.currentScript.dataset.versao) || "";
   const $ = (id) => document.getElementById(id);
   const el = {
     adm: $("administradora"), vig: $("vigencia"), emissao: $("emissao"), apolice: $("apolice"), fatura: $("fatura"),
@@ -171,6 +173,7 @@
         json_unico: el.jsonUnico.checked,  // RD-26
         faz_tudo_lar: el.fazTudo.checked,  // ADR-06: escolha do operador (pre-marcada pela RN-18)
         upload_aws: el.uploadAws.checked && !el.uploadAws.disabled,  // RF-21
+        versao_tela: VERSAO_TELA,
       };
       const r = await api("/api/incendio/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       el.relResumo.textContent = `${r.emitidos.length} emitidos, ${r.falhas.length} falhas — pasta ${r.pasta}` +
