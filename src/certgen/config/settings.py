@@ -103,8 +103,13 @@ class Config:
     api_key: str = ""  # RN-30 — CERTGEN_API_KEY; exigida so por `certgen api`
     aws_region: str = "us-east-2"  # RN-29
     aws_bucket: str = "certincendioaws"  # RN-29
+    # ADR-08 — login da tela: SQLite de usuarios/sessoes e o ADMIN inicial (so semeado
+    # quando ainda nao existe nenhum ADMIN ativo; modelo ADMIN_EMAIL/ADMIN_SENHA do Sinistros)
+    usuarios_db: Path = RAIZ_PROJETO / "dados" / "usuarios.sqlite"
+    admin_email: str = ""
+    admin_senha: str = ""
 
-    def __repr__(self) -> str:  # RN-30: a chave nunca aparece em log
+    def __repr__(self) -> str:  # RN-30: a chave nunca aparece em log (nem a senha do admin)
         return (
             f"Config(repositorio={self.repositorio!r}, pasta_saida={str(self.pasta_saida)!r}, "
             f"aws_bucket={self.aws_bucket!r}, aws_region={self.aws_region!r}, "
@@ -140,4 +145,9 @@ class Config:
             api_key=os.getenv("CERTGEN_API_KEY", "").strip(),
             aws_region=os.getenv("AWS_REGION", "us-east-2").strip() or "us-east-2",
             aws_bucket=os.getenv("AWS_S3_BUCKET", "certincendioaws").strip() or "certincendioaws",
+            usuarios_db=Path(
+                os.getenv("CERTGEN_USUARIOS_DB", "") or (RAIZ_PROJETO / "dados" / "usuarios.sqlite")
+            ).expanduser(),
+            admin_email=os.getenv("CERTGEN_ADMIN_EMAIL", "").strip().lower(),
+            admin_senha=os.getenv("CERTGEN_ADMIN_SENHA", ""),
         )

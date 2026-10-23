@@ -1,7 +1,7 @@
-# Imagem da API do portal (`certgen api`) para o Render — docs/DEPLOY-RENDER.md.
+# Imagem da tela + API do portal (`certgen servidor`) para o Render — docs/DEPLOY-RENDER.md.
 # Modelo: Dockerfile do FedHub-Backend (python slim + libfbclient2 + Playwright
-# Chromium + testes no build). So a API do portal sobe aqui (RF-19, RN-30); a tela
-# (`certgen web`) nao tem autenticacao e continua na rede interna (RNF-10a).
+# Chromium + testes no build). Desde ADR-08 (23/10/2026) a tela tem login e sobe junto
+# com as rotas /v1 do portal (RN-30) no mesmo processo.
 
 FROM python:3.12-slim
 
@@ -44,7 +44,7 @@ ENV CERTGEN_PASTA_SAIDA=/app/saida
 
 EXPOSE 8010
 
-# O Render injeta PORT. `certgen api` recusa subir sem CERTGEN_API_KEY (RN-30) e
-# imprime bucket e pasta de saida; `--rede` liga em 0.0.0.0 (RNF-10b) — aqui o
-# TLS e dado pelo Render.
-CMD ["sh", "-c", "python -m certgen.cli api --rede --porta ${PORT:-8010}"]
+# O Render injeta PORT. `certgen servidor` (ADR-08) sobe a tela com login e as rotas /v1
+# do portal no mesmo processo; recusa subir sem CERTGEN_API_KEY (RN-30). `--proxy` confia
+# nos X-Forwarded-* do Render (cookie Secure, IP real); o TLS e dado pelo Render.
+CMD ["sh", "-c", "python -m certgen.cli servidor --rede --proxy --porta ${PORT:-8010}"]

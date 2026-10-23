@@ -13,12 +13,21 @@
     {% for m in modulos %}
     <a href="/{{ m.slug }}" class="{{ 'ativo' if m.ativo else 'inativo' }}">{{ m.titulo }}</a>
     {% endfor %}
+    {% if usuario and usuario.admin %}<a href="/usuarios" class="ativo">USUÁRIOS</a>{% endif %}
   </nav>
+  {% if usuario %}
+  <span class="sessao">
+    <span class="quem" title="{{ usuario.perfil_nome if usuario.perfil_nome is defined else usuario.perfil }}">{{ usuario.nome }}</span>
+    <a href="/trocar-senha" class="link-topo">Trocar senha</a>
+    <button id="logout" class="botao-topo" type="button" title="Encerra a sessão deste usuário">Sair</button>
+  </span>
+  {% endif %}
   <span class="versao">v{{ versao }}</span>
 </header>
 <main>
 {% block conteudo %}{% endblock %}
 </main>
+<script src="/static/sessao.js?v={{ v }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

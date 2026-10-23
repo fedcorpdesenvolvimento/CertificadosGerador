@@ -3,7 +3,7 @@
 {% block conteudo %}
 <div class="linha entre cabecalho-pagina">
   <h1>Escolha o tipo de certificado</h1>
-  {% if local %}<button id="sair" class="botao secundario" title="Encerra o sistema e fecha a tela">Sair</button>{% endif %}
+  {% if local %}<button id="sair" class="botao secundario" title="Encerra o sistema nesta máquina e fecha a tela">Encerrar sistema</button>{% endif %}
 </div>
 <div id="encerrado" class="aviso" hidden>
   Sistema encerrado. Pode fechar esta janela.
@@ -18,14 +18,4 @@
   {% endfor %}
 </div>
 {% endblock %}
-{% block scripts %}
-<script>
-document.getElementById("sair")?.addEventListener("click", async () => {
-  if (!confirm("Encerrar o Gerador de Certificados?")) return;
-  try { await fetch("/api/encerrar", { method: "POST" }); } catch (e) { /* servidor ja caiu */ }
-  document.getElementById("encerrado").hidden = false;
-  document.querySelector(".cartoes").hidden = true;
-  window.close();  // funciona quando a janela foi aberta pelo proprio sistema (certgen web)
-});
-</script>
-{% endblock %}
+{% block scripts %}<script src="/static/menu.js?v={{ v }}"></script>{% endblock %}

@@ -47,3 +47,38 @@ progress { width: 200px; }
 input.data { min-width: 120px; width: 130px; font-family: Consolas, monospace; letter-spacing: 1px; }
 .erro.inline { align-self: center; margin: 0; padding: 6px 10px; font-size: 12px; }
 .dica { color: #777; align-self: center; }
+
+/* ---------------------------------------------------------- ADR-08: sessao e login */
+.topo .sessao { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.topo .quem { font-weight: bold; }
+.topo .link-topo { color: #fff; opacity: .85; text-decoration: none; }
+.topo .link-topo:hover { opacity: 1; text-decoration: underline; }
+.botao-topo { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+.botao-topo:hover { background: rgba(255,255,255,.3); }
+body.login-pg { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.login-caixa { display: grid; grid-template-columns: 1fr 1fr; width: min(820px, 94vw); background: #fff; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,.08); }
+.login-lado { background: var(--azul); color: #fff; padding: 36px 32px; display: flex; flex-direction: column; gap: 14px; }
+.login-lado h1 { color: #fff; font-size: 26px; margin: 0; line-height: 1.2; }
+.login-lado h1 em { font-style: normal; color: #cfe0ff; }
+.login-lado p { margin: 0; opacity: .9; }
+.login-marca { font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-size: 12px; opacity: .85; }
+.login-rodape { margin-top: auto !important; font-size: 11px; opacity: .7; }
+.login-form { padding: 36px 32px; }
+.login-form form { display: flex; flex-direction: column; gap: 14px; }
+.login-form h2 { font-size: 18px; color: var(--azul-escuro); margin: 0; }
+.login-form label { font-size: 12px; }
+.login-form input { min-width: 0; width: 100%; }
+input[type=email], input[type=password] { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 13px; min-width: 200px; }
+.campo-senha { display: flex; gap: 4px; align-items: stretch; }
+.campo-senha input { flex: 1; }
+.olho { border: 1px solid var(--borda); background: #fff; border-radius: 4px; cursor: pointer; padding: 0 8px; }
+.formulario-estreito { max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+.formulario-estreito input { width: 100%; }
+.botao.mini { padding: 3px 8px; font-size: 11px; margin-right: 4px; }
+tr.inativo td { color: #999; }
+#senha-gerada code { font-size: 15px; background: #fff; padding: 2px 8px; border: 1px dashed #c9a94c; border-radius: 4px; margin: 0 8px; }
+dialog { border: 1px solid var(--borda); border-radius: 8px; padding: 20px 24px; min-width: 360px; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog form { display: flex; flex-direction: column; gap: 12px; }
+dialog input { width: 100%; }
+@media (max-width: 640px) { .login-caixa { grid-template-columns: 1fr; } .login-lado { display: none; } }

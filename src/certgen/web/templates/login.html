@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar — Gerador de Certificados</title>
+<link rel="stylesheet" href="/static/style.css?v={{ v }}">
+</head>
+<body class="login-pg">
+<div class="login-caixa">
+  <section class="login-lado">
+    <div class="login-marca">Grupo FedCorp</div>
+    <h1>Gerador de <em>Certificados</em></h1>
+    <p>Emissão dos certificados de seguro incêndio e conteúdo a partir da base da corretora.</p>
+    <p class="login-rodape">v{{ versao }}</p>
+  </section>
+  <section class="login-form">
+    <form id="f-login" novalidate>
+      <h2>Acessar o sistema</h2>
+      <p class="dica">Use seu e-mail e senha cadastrados.</p>
+      <label>E-mail
+        <input id="email" name="email" type="email" autocomplete="username" required autofocus>
+      </label>
+      <label>Senha
+        <span class="campo-senha">
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required minlength="8">
+          <button type="button" class="olho" data-olho="senha" aria-label="Mostrar ou ocultar a senha">👁</button>
+        </span>
+      </label>
+      <p class="erro" id="erro-login" hidden></p>
+      <button type="submit" class="botao primario">Entrar</button>
+      <p class="dica">Esqueceu a senha? Peça ao administrador do sistema uma senha temporária.</p>
+    </form>
+  </section>
+</div>
+<script src="/static/login.js?v={{ v }}"></script>
+</body>
+</html>

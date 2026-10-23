@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Trocar senha — Gerador de Certificados{% endblock %}
+{% block conteudo %}
+<h1>Trocar senha</h1>
+{% if usuario.trocar_senha %}
+<div class="aviso">Sua senha é temporária. Defina uma nova senha para continuar.</div>
+{% endif %}
+<form id="f-senha" class="painel formulario-estreito" novalidate>
+  <label>Senha atual
+    <span class="campo-senha">
+      <input id="senha_atual" type="password" autocomplete="current-password" required>
+      <button type="button" class="olho" data-olho="senha_atual" aria-label="Mostrar ou ocultar">👁</button>
+    </span>
+  </label>
+  <label>Nova senha <small>mínimo 8 caracteres, com letras e números</small>
+    <span class="campo-senha">
+      <input id="nova" type="password" autocomplete="new-password" required minlength="8">
+      <button type="button" class="olho" data-olho="nova" aria-label="Mostrar ou ocultar">👁</button>
+    </span>
+  </label>
+  <label>Confirme a nova senha
+    <input id="confirma" type="password" autocomplete="new-password" required>
+  </label>
+  <p class="erro" id="erro-senha" hidden></p>
+  <div class="linha">
+    <button type="submit" class="botao primario">Salvar nova senha</button>
+    {% if not usuario.trocar_senha %}<a href="/" class="botao secundario">Voltar</a>{% endif %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="/static/trocar_senha.js?v={{ v }}"></script>{% endblock %}

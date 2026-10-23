@@ -35,3 +35,9 @@ logs/
 
 # chaves de acesso baixadas do IAM (SEC-01): guardar fora do projeto
 *accessKeys*.csv
+
+# ADR-08: usuarios e sessoes da tela (hashes de senha) — nunca versionar
+dados/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

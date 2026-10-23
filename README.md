@@ -54,6 +54,10 @@ python -m certgen.cli api --rede          # portal chega pela rede interna (sem 
 # Referencia completa dos endpoints e respostas: docs/API.md; passo a passo no Postman: docs/TESTE-API-POSTMAN.md
 # Area de teste da API no Render (Dockerfile + render.yaml; Firebird via tunel): docs/DEPLOY-RENDER.md
 
+# Tela + API do portal no MESMO processo (ADR-08; e o que roda no Render). Exige CERTGEN_API_KEY
+# e, na primeira subida, CERTGEN_ADMIN_EMAIL/CERTGEN_ADMIN_SENHA para criar o administrador
+python -m certgen.cli servidor --rede --proxy --porta 8000
+
 # So o JSON
 python -m certgen.cli emitir-json --administradora 0000001192 --apolice 13008 --seq 1 --fatura 380819 --saida C:\certificados
 
@@ -63,6 +67,12 @@ python -m certgen.cli html --administradora 0000001192 --apolice 13008 --seq 1 -
 
 Os arquivos saem em `{saida}\{administradora}\{MMYYYY}\{portal}_{cpf}_{produto}_{apolice}_{certificado}_{fatura}.{pdf,json}`.
 O JSON é validado contra `docs/schema/certificado-1.0.schema.json` antes da gravação; o PDF só é gerado depois do JSON válido.
+
+**Login (ADR-08, 23/10/2026).** Toda página da tela exige login por e-mail e senha (modelo do
+Sistema de Sinistros FedCorp). O primeiro administrador vem de `CERTGEN_ADMIN_EMAIL` e
+`CERTGEN_ADMIN_SENHA` no `.env` (semeado só quando ainda não existe ADMIN); os demais usuários
+são criados em *USUÁRIOS* no menu, com senha temporária trocada no primeiro acesso. Os usuários
+ficam em `dados/usuarios.sqlite` (`CERTGEN_USUARIOS_DB`), fora do Firebird.
 
 **Após atualizar o código**, reinicie os processos `certgen web` e `certgen api` (não recarregam sozinhos) e, na primeira abertura da tela, use `Ctrl+F5`. A tela recusa emissão com script desatualizado (HTTP 409).
 

@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from fastapi.testclient import TestClient
 
 from certgen import __version__
 from certgen.adapters.firebird.repositorio import RepositorioFirebird
@@ -50,10 +49,10 @@ class RepoFalso:
 
 
 @pytest.fixture
-def cliente():
+def cliente(cliente_logado):
+    """Cliente autenticado como ADMIN (ADR-08) com o repositorio falso da cascata."""
     webapp.app.dependency_overrides[webapp.get_repositorio] = lambda: RepoFalso()
-    with TestClient(webapp.app) as c:
-        yield c
+    yield cliente_logado
     webapp.app.dependency_overrides.clear()
 
 

@@ -1629,10 +1629,11 @@ components:
 | `RNF-08` | Reprodutibilidade | Mesma chave + mesmo banco ⇒ saída idêntica, exceto `_meta.gerado_em` e `certificado.data_emissao` (`RN-21`) |
 | `RNF-09` | Nunca sobrescrever silenciosamente | `RN-13` |
 | `RNF-10` | Tela em `127.0.0.1` por padrão | Bind explícito |
-| `RNF-10a` | *(04/09/2026)* Para testes e validação pela equipe, `certgen web --rede` aceita conexões da **rede interna** (`0.0.0.0`). Sem autenticação (fora de escopo, `1.3`): **nunca** expor fora da LAN. Os botões *Sair* e *Procurar…* e as APIs correspondentes só respondem ao navegador da própria máquina do servidor; os demais usuários digitam o caminho de destino, que **DEVE** ser uma pasta de rede acessível a todos. | `cliente_local` + teste |
+| `RNF-10a` | *(04/09/2026; revisto em 23/10/2026 por `ADR-08`)* Para testes e validação pela equipe, `certgen web --rede` aceita conexões da **rede interna** (`0.0.0.0`). ~~Sem autenticação: nunca expor fora da LAN~~ → desde `ADR-08` toda página exige login; fora da LAN só atrás de HTTPS (`certgen servidor --proxy`, Render). Os botões *Sair* e *Procurar…* e as APIs correspondentes só respondem ao navegador da própria máquina do servidor; os demais usuários digitam o caminho de destino, que **DEVE** ser uma pasta de rede acessível a todos. | `cliente_local` + teste |
 | `RNF-11` | Nenhum efeito colateral sem sucesso confirmado da etapa anterior | `RF-16` |
 | `RNF-12` | Locale independente: nenhuma formatação global mutável | Testes com `LANG` variado |
 | `RNF-10b` | *(10/09/2026)* `certgen api` em `127.0.0.1` por padrão; `--rede` para a LAN; sem TLS próprio (`GAP-23`) | Bind explícito + teste |
+| `RNF-10c` | *(23/10/2026, `ADR-08`)* Tela com autenticação: sessão httpOnly/SameSite/Secure, bcrypt, limite de tentativas, CSRF, CSP e demais cabeçalhos; usuários em SQLite fora do Firebird; ADMIN inicial por `CERTGEN_ADMIN_EMAIL`/`CERTGEN_ADMIN_SENHA`. | `web/auth.py`, `web/usuarios.py`, `tests/unit/test_auth.py` |
 | `RNF-13` | *(10/09/2026)* Log estruturado por chamada da API, sem chave de autenticação nem nome do segurado | Revisão do log |
 
 `RNF-12` existe por causa de `DEF-01`. `RNF-11` existe por causa de `DEF-04`. `RNF-08` é o que torna a reemissão confiável e `RNF-01` estável.
@@ -1776,6 +1777,22 @@ Registrado na seção `7.3`.
 
 **Rejeitada.** Reproduzir os cinco `.fr3` — exigiria exportá-los do FastReport e triplicaria o esforço de fidelidade sem valor de negócio declarado.
 
+### `ADR-08` — Autenticação da tela: login por e-mail e senha, usuários em SQLite
+**Contexto.** Decisão do usuário em 23/10/2026: a tela (`certgen web`) passa a ser publicada na web (Render, `docs/DEPLOY-RENDER.md`) como padrão, com a API do portal rodando junto. `RNF-10a` dizia "sem autenticação, nunca expor fora da LAN"; isso deixa de valer. O usuário pediu "toda a segurança possível", um ADMIN inicial (`alberto@grupofedcorp.com.br`) com senha vinda do `.env`/ambiente e a possibilidade de cadastrar outros usuários, tomando como modelo a tela de login do **Sistema de Sinistros FedCorp** (`U:\--2021\09-Sinistros FedCorp\sinistros-fedcorp`, `src/auth.js`, `src/routes/auth.js`, `db/schema.sql`).
+**Decisão.** Traduzir o modelo do Sinistros para FastAPI, em `web/auth.py` e `web/usuarios.py`, sem tocar o domínio (`ADR-01`):
+- **Usuários** em SQLite (`CERTGEN_USUARIOS_DB`, padrão `dados/usuarios.sqlite`), tabela `usuarios` (nome, e-mail único, hash **bcrypt** custo 12, perfil `ADMIN`|`OPERADOR`, `ativo`, `trocar_senha`, `ultimo_login`). **Não** no Firebird: `RNF-05` limita a escrita no `FATURA.GDB` a três colunas.
+- **ADMIN inicial** semeado na subida a partir de `CERTGEN_ADMIN_EMAIL`/`CERTGEN_ADMIN_SENHA` **apenas** quando não existe nenhum ADMIN ativo (modelo `ADMIN_EMAIL`/`ADMIN_SENHA` do Sinistros). Depois as variáveis não alteram a senha. Senha fraca no ambiente derruba a subida (`ADR-04`).
+- **Senha**: mínimo 8 caracteres, letras e números, máximo 72 (bcrypt), não um único caractere repetido. Usuário criado pelo ADMIN recebe senha temporária de 12 caracteres (sem `0/O/1/l/I`), mostrada **uma vez** ao administrador — não há envio de e-mail neste sistema — e é obrigado a trocá-la no primeiro acesso (`trocar_senha`).
+- **Login** (`POST /api/auth/login`): 10 falhas por e-mail+IP em 15 min bloqueiam (`429` + `Retry-After`; só falhas contam), mais 30 por IP; comparação contra um hash falso quando o e-mail não existe (tempo de resposta igual); mensagem única *E-mail ou senha inválidos*; sessão nova a cada login.
+- **Sessão** do lado do servidor (tabela `sessoes`): cookie `certgen_sessao` httpOnly, `SameSite=Lax`, `Secure` quando a página chega por HTTPS, 8 horas; só o token aleatório (256 bits) viaja, o banco guarda o SHA-256. Desativar o usuário, resetar ou trocar a senha apaga as sessões na hora.
+- **CSRF**: toda chamada `POST/PUT/PATCH/DELETE` fora de `/v1` exige `X-Requested-With: fetch` e, quando o navegador envia `Origin`, ele tem de ser o próprio host.
+- **Cabeçalhos** em toda resposta: `Content-Security-Policy` só `'self'` (nenhum script inline; o do menu virou `static/menu.js`), `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS em HTTPS, `Cache-Control: no-store` em `/api/*`. A tela não publica o próprio OpenAPI.
+- **Autorização**: toda página e toda rota `/api/*` exigem sessão (página sem sessão → `302 /login?next=`; API → `401`). Cadastro de usuários (`/usuarios`, `/api/usuarios*`) só para `ADMIN`: criar, editar, desativar/reativar (cancelar = desativar), nova senha temporária. Proteções: ninguém desativa a si mesmo; o único ADMIN ativo não é rebaixado nem desativado; a própria senha só por *Trocar senha*.
+- **Modo combinado** (`certgen servidor`, `web/combinado.py`): tela + rotas `/v1` no mesmo processo e porta, para o Render; as rotas `/v1` continuam autenticadas **só** pela chave `RN-30` (mesmo `APIRouter` do `certgen api`, `RF-11`/`RNF-08`) e ficam fora da sessão. `--proxy` confia nos `X-Forwarded-*` (cookie `Secure` e IP real no limite de tentativas).
+- **Auditoria**: um registro JSON por evento (login, falha, bloqueio, usuário criado/alterado/desativado, senha trocada/resetada) sem senha, hash ou token (`RNF-13` aplicado à tela).
+**Consequências.** `RNF-10a` passa a ser "sem autenticação **não**; com login, pode sair da LAN atrás de HTTPS". *Encerrar sistema* e *Procurar…* continuam só para o navegador da máquina do servidor; o botão *Sair* do cabeçalho encerra a **sessão**. Sem disco persistente no Render, o SQLite é recriado a cada deploy e o ADMIN é semeado de novo (usuários criados pela tela se perdem): `render.yaml` monta um disco em `/data`. Recuperação de senha por e-mail do Sinistros **não** foi trazida (sem SMTP aqui): o ADMIN gera senha temporária. Testes: `tests/unit/test_auth.py`; os testes da tela passam a logar na fixture.
+**Rejeitadas.** Usuários no Firebird (`RNF-05`); cookie assinado sem estado (não permite derrubar sessão ao desativar); autenticação HTTP básica (sem troca de senha nem perfis); publicar a tela sem login (pedido explícito do usuário de "toda a segurança possível").
+
 ---
 
 ## 16. Lacunas abertas
@@ -1846,10 +1863,10 @@ Verificações empíricas que alteram requisitos:
 
 | ID | Lacuna | Bloqueia | Como fechar |
 |---|---|---|---|
-| `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
+| `GAP-23` | API do portal sem TLS próprio e link do S3 como URL **pública** com dados pessoais. Aceito pelo usuário "por enquanto" (roda local). *23/10/2026:* no Render o TLS é do proxy (`certgen servidor --proxy`); a URL pública do S3 continua aberta. | Exposição fora da LAN | Proxy HTTPS na frente do `certgen api`; trocar `RN-29` para URL assinada com prazo quando o portal suportar. |
 | `GAP-24` | Chave única (`RN-30`): rotação implica janela sem serviço; sem chave por administradora. | — | Decidir se o portal terá várias chaves ou chave por administradora; então `RN-30` passa a lista. |
 | `GAP-25` *(11/09/2026)* | ~~`RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` nunca autenticam.~~ **Fechado em 14/09/2026:** `RN-35` deixou de filtrar vigência; `final_vig` não influi na verificação. (Eram 4.332 linhas iniciadas com `final_vig` ausente, num total de 35.232 vigentes.) | — | — |
-| `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. **Agravado em 14/09/2026:** a resposta passou a devolver nome e endereço do segurado (`RD-30`), então CPF + chave dão acesso a dados pessoais. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`; TLS obrigatório antes de sair da LAN. |
+| `GAP-26` *(11/09/2026)* | `RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. **Agravado em 14/09/2026:** a resposta passou a devolver nome e endereço do segurado (`RD-30`), então CPF + chave dão acesso a dados pessoais. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`; TLS obrigatório antes de sair da LAN. *23/10/2026:* a tela ganhou limite de tentativas (`ADR-08`); `/v1` continua sem. |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
 
@@ -1921,6 +1938,7 @@ Regras derivadas das decisões de 03/09/2026:
 | Faseamento local → API | `ADR-01`, `RD-16`, `RD-18`, `RN-15`, seção 11 |
 | Pedido do usuário (10/09/2026) — API para o portal | `UC-12`, `QRY-13`, `RD-27`, `RD-28`, `RD-20a`, `RN-29`..`RN-34`, `RF-18`, `RF-19`, `RNF-10b`, `RNF-13`, `GAP-23`, `GAP-24`, seção `11.1` |
 | Pedido do usuário (11/09/2026) — verificação de segurado + JSON na emissão | `UC-13`, `QRY-14`, `RN-35`, `RF-20`, `RD-29`, `GAP-25`, `GAP-26` |
+| Pedido do usuário (23/10/2026) — tela na web com login; usuários; Render | `ADR-08`, `RNF-10c`, `RNF-10a` revisto, `docs/DEPLOY-RENDER.md` |
 | Pedido do usuário (15/09/2026) — PLANO, Incêndio Prédio, Faz Tudo Lar por ruptura, cartão +2 pt | `RN-23` revista, `RN-18a`, `RD-32`, `RD-33` |
 | Pedido do usuário (15/09/2026) — site da assistência no Faz Tudo Lar; Upload AWS na emissão manual | `RD-34`, `RF-21`, `DEF-07` corrigido |
 | Pedido do usuário (14/09/2026) — verificação com dados para alimentar a emissão | `RD-30`, `RN-35a`, `RD-31`, `RF-20` e `RF-18` revistos, `RN-33` revista |
@@ -2232,6 +2250,13 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 ### Lacunas abertas em 04/09/2026
 
 `GAP-10` (rc × resp_civil), `GAP-11` (portal zero), `GAP-12` (possui_portal no fluxo em massa), `GAP-14` (produtos 0003/0005), `GAP-19` (erros de digitação nos textos legais), `GAP-21`/`GAP-22` (módulos Prestamista e Vida). Nenhuma bloqueia a Fase 5, 6 ou 7.
+
+### 23/10/2026
+
+| Item | Decisão / entrega |
+|---|---|
+| `docs/DEPLOY-RENDER.md` | Área de teste no Render: `Dockerfile` (modelo FedHub-Backend), `.dockerignore`, `render.yaml`. O FedHub roda na LAN (Docker + ngrok), não na web; o Render só alcança o Firebird por túnel TCP (`ngrok tcp 192.168.0.6:3050`) ou port-forward. |
+| `ADR-08` / `RNF-10c` | Tela com login (modelo do Sistema de Sinistros FedCorp): bcrypt, sessão em SQLite, limite de tentativas, CSRF, CSP; ADMIN inicial por `CERTGEN_ADMIN_EMAIL`/`CERTGEN_ADMIN_SENHA`; cadastro de usuários (`/usuarios`) só para ADMIN; `certgen servidor` = tela + `/v1` num processo (Render). `RNF-10a` revisto. |
 
 ---
 

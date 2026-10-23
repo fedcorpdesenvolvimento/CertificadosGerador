@@ -263,15 +263,42 @@ Anomalias que **não** impedem a emissão. Cada item tem `codigo` e `detalhe`.
 
 ## 3. API da tela — `certgen web`
 
-Backend da página `/incendio`. Sem autenticação: destina-se à rede interna (RNF-10, RNF-10a).
-Usa a mesma emissão e o mesmo JSON da API do portal; a diferença é o fluxo em cascata do
-operador (seção 5.2 da especificação) e o upload opcional.
+Backend da página `/incendio`. Desde 23/10/2026 (ADR-08) **toda página e toda rota `/api/*`
+exigem sessão** (login por e-mail e senha, seção 3.0). Usa a mesma emissão e o mesmo JSON da
+API do portal; a diferença é o fluxo em cascata do operador (seção 5.2 da especificação) e o
+upload opcional.
 
 ```powershell
 python -m certgen.cli web                      # 127.0.0.1:8000, abre o navegador
 python -m certgen.cli web --rede --sem-navegador   # equipe pela LAN (liberar a porta 8000)
 python -m certgen.cli web --reload             # desenvolvimento
+python -m certgen.cli servidor --rede --proxy --porta 8000   # tela + /v1 no mesmo processo (Render)
 ```
+
+### 3.0 Autenticação da tela (ADR-08)
+
+Modelo do Sistema de Sinistros FedCorp. Cookie de sessão `certgen_sessao` (httpOnly,
+SameSite=Lax, Secure em HTTPS, 8 h). Toda chamada que altera dados (`POST`/`PUT`/`PATCH`/
+`DELETE`) precisa do header `X-Requested-With: fetch` (CSRF), senão `403`. Sem sessão: página
+→ `302 /login?next=...`; `/api/*` → `401 {"erro": ...}`. Com senha temporária pendente só
+`/trocar-senha` responde (API: `403`).
+
+| Rota | Corpo / resposta |
+|---|---|
+| `GET /login` | página de login (redireciona para `/` se já logado) |
+| `POST /api/auth/login` | `{"email","senha"}` → `200` usuário (`id, nome, email, perfil, perfil_nome, trocar_senha, ...`) + cookie; `400` campos vazios; `401` *E-mail ou senha inválidos* (mensagem única); `403` desativado; `429` após 10 falhas do mesmo e-mail+IP em 15 min (`Retry-After`) |
+| `POST /api/auth/logout` | `{"ok": true}`; apaga a sessão e o cookie |
+| `GET /api/auth/me` | usuário da sessão |
+| `POST /api/auth/trocar-senha` | `{"senha_atual","nova_senha"}` → `{"ok": true}`; `400` senha atual errada, política (mín. 8, letras e números, máx. 72) ou igual à atual. Mantém a sessão atual e encerra as outras |
+| `GET /trocar-senha` | página; obrigatória no primeiro acesso com senha temporária |
+
+ADMIN inicial: `CERTGEN_ADMIN_EMAIL` + `CERTGEN_ADMIN_SENHA`, semeado na subida só quando não há
+ADMIN ativo. Usuários em `CERTGEN_USUARIOS_DB` (SQLite; padrão `dados/usuarios.sqlite`).
+
+Cabeçalhos em toda resposta: `Content-Security-Policy` (`default-src 'self'`, sem script inline),
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`,
+`Permissions-Policy`, HSTS em HTTPS, `Cache-Control: no-store` em `/api/*`. A tela não expõe
+`/docs` nem `/openapi.json`.
 
 ### 3.1 Páginas
 
@@ -280,6 +307,7 @@ python -m certgen.cli web --reload             # desenvolvimento
 | `GET /` | menu com os três módulos (ADR-07): Incêndio ativo; Prestamista/Alug e Vida em preparação (GAP-21/22) |
 | `GET /incendio` | tela do Incêndio |
 | `GET /prestamista`, `GET /vida` | "em preparação" |
+| `GET /usuarios` | cadastro de usuários (só ADMIN; seção 3.6) |
 | `GET /static/*` | CSS e JS, sempre com `?v=<hash do conteúdo>` e `Cache-Control: no-cache` (ver 3.5) |
 
 ### 3.2 Cascata (só leitura)
@@ -405,7 +433,7 @@ em `{pasta}\{administradora}\{MMAAAA}\`; consolidado e JSON único:
 |---|---|
 | `GET /api/saude` | `{"ok": true, "versao": "..."}` |
 | `POST /api/escolher-pasta` `{"inicial": "C:\\..."}` | abre o diálogo nativo de pastas **na máquina do servidor**; `403` se o navegador não for local; `501` sem sessão gráfica |
-| `POST /api/encerrar` | botão *Sair* do menu; encerra o servidor. `403` se não for local |
+| `POST /api/encerrar` | botão *Encerrar sistema* do menu; encerra o servidor. `403` se não for local |
 
 "Local" = navegador em loopback ou em qualquer IP da própria máquina do servidor (RNF-10a).
 
@@ -422,6 +450,23 @@ upload e sem erro. Proteções em vigor:
 
 Após atualizar o código: reinicie o processo (`certgen web` e `certgen api` não recarregam
 sozinhos) e, na primeira abertura, `Ctrl+F5`.
+
+### 3.6 Usuários (só perfil ADMIN; ADR-08)
+
+Perfis: `ADMIN` (Administrador do Sistema: tudo + cadastro de usuários) e `OPERADOR`
+(módulos de certificado). Não há envio de e-mail: a senha temporária é devolvida **uma vez**
+na resposta e o administrador a entrega por canal seguro; o usuário é obrigado a trocá-la no
+primeiro acesso.
+
+| Rota | Corpo / resposta |
+|---|---|
+| `GET /api/usuarios` | lista (`id, nome, email, perfil, perfil_nome, ativo, trocar_senha, ultimo_login, criado_em`); nunca o hash |
+| `POST /api/usuarios` | `{"nome","email","perfil"}` → `201` usuário + `senha_temporaria`; `400` nome/e-mail/perfil inválidos; `409` e-mail já cadastrado; `422` campo desconhecido ou nome curto |
+| `PUT /api/usuarios/{id}` | `{"nome","email","perfil"}` → usuário; `400` se rebaixaria o único ADMIN ativo; `404`; `409`. Mudar o perfil encerra as sessões do usuário |
+| `POST /api/usuarios/{id}/ativo` | `{"ativo": bool}` → usuário. Desativar derruba as sessões na hora. `400` ao desativar a si mesmo ou o único ADMIN ativo |
+| `POST /api/usuarios/{id}/resetar-senha` | → `{"ok": true, "senha_temporaria"}`; sessões encerradas; `400` para o próprio usuário (use trocar-senha) |
+
+Todas respondem `401` sem sessão e `403` para `OPERADOR`.
 
 ---
 

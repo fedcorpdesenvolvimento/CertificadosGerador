@@ -1,4 +1,4 @@
-# Blueprint do Render para a area de TESTE da API do portal — docs/DEPLOY-RENDER.md.
+# Blueprint do Render para a area de TESTE: tela com login + API do portal — docs/DEPLOY-RENDER.md.
 # Importar em render.com > New > Blueprint apontando para este repositorio.
 # Os valores marcados sync: false sao preenchidos no painel do Render (nunca aqui — SEC-01).
 services:
@@ -11,9 +11,15 @@ services:
     # Starter (512 MB) costuma bastar para um Chromium por chamada; se aparecer
     # "Out of memory" no log da emissao, subir para standard.
     plan: starter
-    # Rota sem autenticacao ja existente no FastAPI; /v1/saude exige X-API-Key (RN-30).
-    healthCheckPath: /openapi.json
+    # Rota publica da tela (ADR-08); /v1/saude exige X-API-Key (RN-30).
+    healthCheckPath: /api/saude
     autoDeploy: true
+    # ADR-08: usuarios e sessoes em SQLite. Sem disco o arquivo some a cada deploy (o ADMIN e
+    # semeado de novo, mas os usuarios criados pela tela se perdem).
+    disk:
+      name: dados
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: CERTGEN_REPOSITORIO
         value: firebird
@@ -51,3 +57,10 @@ services:
         sync: false
       - key: CERTGEN_PASTA_SAIDA
         value: /app/saida
+      # ADR-08 — login da tela
+      - key: CERTGEN_ADMIN_EMAIL
+        value: alberto@grupofedcorp.com.br
+      - key: CERTGEN_ADMIN_SENHA
+        sync: false
+      - key: CERTGEN_USUARIOS_DB
+        value: /data/usuarios.sqlite

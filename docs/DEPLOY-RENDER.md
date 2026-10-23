@@ -1,11 +1,31 @@
-# Deploy de teste no Render — API do portal
+# Deploy de teste no Render — tela com login + API do portal
 
-Data: 2026-10-23. Escopo: subir **só a API do portal** (`certgen api`, secao 11.1 da
-especificacao: RF-19, RF-20, RN-30) no Render, ligada ao Firebird da rede local, para
-o portal testar `POST /v1/segurados/verificar` e `POST /v1/certificados/emitir`.
+Data: 2026-10-23. Escopo: subir no Render, ligado ao Firebird da rede local, **a tela com
+login** (ADR-08) e, no mesmo processo, a **API do portal** (`/v1/segurados/verificar` e
+`/v1/certificados/emitir`, RN-30). O processo e `certgen servidor --rede --proxy` (CMD do
+`Dockerfile`).
 
-A tela (`certgen web`) **nao** vai para o Render: nao tem autenticacao (RNF-10a) e
-escolhe pasta no disco de quem a usa.
+Decisao do usuario (23/10/2026): a tela e o padrao no Render e a API roda junto. Antes
+disso so a API subia; a tela nao tinha autenticacao (RNF-10a, revisto).
+
+## 0. Login e usuarios (ADR-08)
+
+- Endereco: `https://<servico>.onrender.com/` abre a tela de login; `/v1/...` continua
+  respondendo ao portal com `X-API-Key`, sem sessao.
+- O primeiro administrador vem de `CERTGEN_ADMIN_EMAIL` e `CERTGEN_ADMIN_SENHA`
+  (preenchidos no painel), criado so quando nao existe nenhum ADMIN. Depois, troque a senha
+  pela tela; as variaveis nao a alteram mais.
+- Novos usuarios: menu *USUARIOS* (so ADMIN). A senha temporaria aparece uma vez; o
+  usuario e obrigado a troca-la no primeiro acesso.
+- Os usuarios ficam em `CERTGEN_USUARIOS_DB=/data/usuarios.sqlite`, no **disco persistente**
+  do `render.yaml` (1 GB). Sem o disco, o arquivo e recriado a cada deploy: o ADMIN volta,
+  mas os usuarios criados pela tela se perdem. O disco limita o servico a 1 instancia e
+  faz o deploy ter uma breve interrupcao.
+- Health check do Render: `/api/saude` (publico). `/docs` nao existe na tela; a referencia
+  dos endpoints e `docs/API.md`.
+- A pasta de saida da emissao pela tela e `/app/saida` (efemera); o que persiste e o PDF
+  no S3 (marque *Upload AWS*) e o link no Firebird. *Encerrar sistema* e *Procurar...*
+  nao aparecem (o navegador nao esta na maquina do servidor).
 
 ## 1. Como o FedHub chega ao banco (e por que isso nao se copia)
 

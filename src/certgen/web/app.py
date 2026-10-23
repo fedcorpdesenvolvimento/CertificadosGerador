@@ -6,6 +6,8 @@ Menu com tres modulos (decisao do usuario, 03/09/2026 — ADR-07):
   /vida          CERTIFICADO VIDA              -> sem especificacao ainda (GAP-22)
 
 RNF-10: servir apenas em 127.0.0.1 (ver `certgen web`).
+ADR-08 (23/10/2026): toda pagina e toda rota /api/* exigem sessao (login por e-mail e
+senha; modelo do Sistema de Sinistros FedCorp). Ver web/auth.py e web/usuarios.py.
 RF-06: pasta de destino validada antes da emissao.
 RF-09: a resposta traz emitidos e falhas com motivo.
 Os endpoints sao `def` (sincronos): rodam no threadpool do Starlette, o que
@@ -15,13 +17,15 @@ permite usar a API sincrona do Playwright e do fdb sem bloquear o loop.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+import logging
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,11 +38,14 @@ from certgen.application.emitir_certificados import (
 )
 from certgen.application.listar_cascata import Cascata, rotulo_apolice
 from certgen.application.ports import PublicadorArquivos, RegistroLinks, RepositorioCertificados
-from certgen.config.settings import Config
+from certgen.config.settings import Config, ConfiguracaoAusente
 from certgen.domain.certificado import ChaveCertificado, ChaveLote
 from certgen.domain.nomes_arquivo import NomeArquivoInvalido
 from certgen.domain.produto import ProdutoIndeterminado
+from certgen.web import auth
+from certgen.web.usuarios import PERFIS, RepositorioUsuarios, Usuario, UsuarioInvalido
 
+log = logging.getLogger("certgen.web")
 PASTA_WEB = Path(__file__).parent
 MODULOS = [
     {"slug": "incendio", "titulo": "CERTIFICADO INCENDIO", "ativo": True,
@@ -49,8 +56,48 @@ MODULOS = [
      "descricao": "Em preparacao. Sem especificacao ainda (GAP-22)."},
 ]  # fmt: skip
 
-app = FastAPI(title="Gerador de Certificados", version=__version__)
+def semear_admin(repo: RepositorioUsuarios, cfg: Config) -> None:
+    """ADR-08 — cria o ADMIN inicial a partir de CERTGEN_ADMIN_EMAIL/CERTGEN_ADMIN_SENHA
+    apenas quando nao existe nenhum ADMIN ativo (modelo `migrate.js` do Sinistros).
+    Depois disso as variaveis nao alteram a senha: troque pela tela."""
+    if repo.existe_admin():
+        return
+    if not (cfg.admin_email and cfg.admin_senha):
+        log.warning(
+            "nenhum usuario ADMIN cadastrado e CERTGEN_ADMIN_EMAIL/CERTGEN_ADMIN_SENHA ausentes: "
+            "ninguem consegue entrar na tela"
+        )
+        return
+    if not auth.EMAIL_RE.match(cfg.admin_email):
+        raise ConfiguracaoAusente("CERTGEN_ADMIN_EMAIL nao e um e-mail valido")
+    motivo = auth.validar_senha(cfg.admin_senha)
+    if motivo:
+        raise ConfiguracaoAusente(f"CERTGEN_ADMIN_SENHA recusada: {motivo}")
+    repo.criar(
+        "Administrador do Sistema", cfg.admin_email, auth.gerar_hash(cfg.admin_senha), "ADMIN",
+        trocar_senha=False,
+    )  # fmt: skip
+    auth.registrar_evento("admin_inicial_criado", email=cfg.admin_email)
+
+
+@asynccontextmanager
+async def _ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
+    """Abre o SQLite de usuarios na subida (testes injetam `app.state.usuarios` antes)."""
+    if getattr(app.state, "usuarios", None) is None:
+        cfg = _config()
+        app.state.usuarios = RepositorioUsuarios(cfg.usuarios_db)
+        semear_admin(app.state.usuarios, cfg)
+    yield
+
+
+# docs_url=None: a tela nao publica o seu OpenAPI (ADR-08); a API do portal tem o dela.
+app = FastAPI(
+    title="Gerador de Certificados", version=__version__, lifespan=_ciclo_de_vida,
+    docs_url=None, redoc_url=None, openapi_url=None,
+)  # fmt: skip
+app.state.usuarios = None
 app.mount("/static", StaticFiles(directory=str(PASTA_WEB / "static")), name="static")
+app.middleware("http")(auth.middleware_sessao)
 
 
 @app.middleware("http")
@@ -82,9 +129,9 @@ def _paginas() -> Environment:
     )
 
 
-def _pagina(nome: str, **ctx) -> HTMLResponse:
+def _pagina(nome: str, usuario: Usuario | None = None, **ctx) -> HTMLResponse:
     html = _paginas().get_template(nome).render(
-        versao=__version__, v=versao_estatica(), modulos=MODULOS, **ctx
+        versao=__version__, v=versao_estatica(), modulos=MODULOS, usuario=usuario, **ctx
     )
     return HTMLResponse(html)
 
@@ -162,27 +209,258 @@ def cliente_local(request: Request) -> bool:
 
 # ------------------------------------------------------------------- paginas
 @app.get("/", response_class=HTMLResponse)
-def menu(local: bool = Depends(cliente_local)) -> HTMLResponse:
-    return _pagina("menu.html", local=local)
+def menu(
+    local: bool = Depends(cliente_local), usuario: Usuario = Depends(auth.usuario_atual)
+) -> HTMLResponse:
+    return _pagina("menu.html", usuario, local=local)
 
 
 @app.get("/incendio", response_class=HTMLResponse)
 def pagina_incendio(
-    cfg: Config = Depends(get_config), local: bool = Depends(cliente_local)
+    cfg: Config = Depends(get_config),
+    local: bool = Depends(cliente_local),
+    usuario: Usuario = Depends(auth.usuario_atual),
 ) -> HTMLResponse:
     return _pagina(
-        "incendio.html", pasta_padrao=str(cfg.pasta_saida), modulo=MODULOS[0], local=local
-    )
+        "incendio.html", usuario, pasta_padrao=str(cfg.pasta_saida), modulo=MODULOS[0],
+        local=local,
+    )  # fmt: skip
 
 
 @app.get("/prestamista", response_class=HTMLResponse)
-def pagina_prestamista() -> HTMLResponse:
-    return _pagina("em_construcao.html", modulo=MODULOS[1])
+def pagina_prestamista(usuario: Usuario = Depends(auth.usuario_atual)) -> HTMLResponse:
+    return _pagina("em_construcao.html", usuario, modulo=MODULOS[1])
 
 
 @app.get("/vida", response_class=HTMLResponse)
-def pagina_vida() -> HTMLResponse:
-    return _pagina("em_construcao.html", modulo=MODULOS[2])
+def pagina_vida(usuario: Usuario = Depends(auth.usuario_atual)) -> HTMLResponse:
+    return _pagina("em_construcao.html", usuario, modulo=MODULOS[2])
+
+
+# ------------------------------------------------------- ADR-08: autenticacao
+@app.get("/login", response_class=HTMLResponse)
+def pagina_login(request: Request) -> Response:
+    if getattr(request.state, "usuario", None) is not None:
+        return RedirectResponse("/", status_code=302)
+    return _pagina("login.html")
+
+
+@app.get("/trocar-senha", response_class=HTMLResponse)
+def pagina_trocar_senha(usuario: Usuario = Depends(auth.usuario_atual)) -> HTMLResponse:
+    return _pagina("trocar_senha.html", usuario)
+
+
+@app.get("/usuarios", response_class=HTMLResponse)
+def pagina_usuarios(usuario: Usuario = Depends(auth.exigir_admin)) -> HTMLResponse:
+    return _pagina("usuarios.html", usuario, perfis=PERFIS)
+
+
+class LoginIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str
+    senha: str
+
+
+@app.post("/api/auth/login")
+def api_login(
+    req: LoginIn, request: Request, repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios)
+):
+    """Login por e-mail e senha (Sinistros `POST /api/auth/login`): limite de 10 falhas por
+    e-mail+IP em 15 min, comparacao contra hash falso quando o e-mail nao existe, mensagem
+    unica, sessao nova a cada login."""
+    email = req.email.strip().lower()
+    ip = auth.ip_de(request)
+    chave = f"{ip}|{email}"
+    if not auth.EMAIL_RE.match(email) or not req.senha:
+        return _erro(ValueError("Informe e-mail e senha."), 400)
+    espera = auth.limite_login.bloqueado(chave) or auth.limite_login_ip.bloqueado(ip)
+    if espera:
+        resposta = JSONResponse(
+            {"erro": "Muitas tentativas. Aguarde 15 minutos e tente novamente."}, status_code=429
+        )
+        resposta.headers["Retry-After"] = str(espera)
+        auth.registrar_evento("login_bloqueado", ip=ip, email=email)
+        return resposta
+    usuario = repo.obter_por_email(email)
+    ok = auth.conferir_senha(req.senha, repo.hash_da_senha(usuario.id) if usuario else None)
+    if usuario is None or not ok:
+        auth.limite_login.registrar_falha(chave)
+        auth.limite_login_ip.registrar_falha(ip)
+        auth.registrar_evento("login_falhou", ip=ip, email=email)
+        return _erro(ValueError("E-mail ou senha invalidos."), 401)
+    if not usuario.ativo:
+        auth.registrar_evento("login_desativado", ip=ip, usuario_id=usuario.id)
+        return _erro(PermissionError("Usuario desativado. Procure o administrador."), 403)
+    auth.limite_login.limpar(chave)
+    token = repo.criar_sessao(usuario.id, auth.HORAS_SESSAO)
+    repo.registrar_login(usuario.id)
+    resposta = JSONResponse(usuario.publico())
+    auth.gravar_cookie(resposta, request, token)
+    auth.registrar_evento("login", ip=ip, usuario_id=usuario.id, perfil=usuario.perfil)
+    return resposta
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request, repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios)):
+    repo.encerrar_sessao(request.cookies.get(auth.COOKIE_SESSAO))
+    resposta = JSONResponse({"ok": True})
+    auth.apagar_cookie(resposta, request)
+    return resposta
+
+
+@app.get("/api/auth/me")
+def api_me(usuario: Usuario = Depends(auth.usuario_atual)):
+    return usuario.publico()
+
+
+class TrocaSenhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    senha_atual: str
+    nova_senha: str
+
+
+@app.post("/api/auth/trocar-senha")
+def api_trocar_senha(
+    req: TrocaSenhaIn,
+    request: Request,
+    usuario: Usuario = Depends(auth.usuario_atual),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    """Troca pela propria pessoa; obrigatoria quando a senha e temporaria. Encerra as outras
+    sessoes do usuario e mantem a atual."""
+    if not auth.conferir_senha(req.senha_atual, repo.hash_da_senha(usuario.id)):
+        return _erro(ValueError("Senha atual incorreta."), 400)
+    motivo = auth.validar_senha(req.nova_senha)
+    if motivo:
+        return _erro(ValueError(motivo), 400)
+    if req.nova_senha == req.senha_atual:
+        return _erro(ValueError("A nova senha deve ser diferente da atual."), 400)
+    repo.definir_senha(
+        usuario.id, auth.gerar_hash(req.nova_senha), trocar_senha=False,
+        manter_token=request.cookies.get(auth.COOKIE_SESSAO),
+    )  # fmt: skip
+    auth.registrar_evento("senha_trocada", usuario_id=usuario.id)
+    return {"ok": True}
+
+
+# ------------------------------------------------ ADR-08: cadastro de usuarios
+class UsuarioIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nome: str = Field(..., min_length=2, max_length=120)
+    email: str = Field(..., max_length=160)
+    perfil: str
+
+
+def _validar_usuario_in(req: UsuarioIn) -> str | None:
+    if not req.nome.strip():
+        return "Informe o nome."
+    if not auth.EMAIL_RE.match(req.email.strip().lower()):
+        return "E-mail invalido."
+    if req.perfil not in PERFIS:
+        return f"Perfil invalido: use {', '.join(PERFIS)}."
+    return None
+
+
+@app.get("/api/usuarios")
+def api_listar_usuarios(
+    _: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    return [u.publico() for u in repo.listar()]
+
+
+@app.post("/api/usuarios", status_code=201)
+def api_criar_usuario(
+    req: UsuarioIn,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    """Cria com senha temporaria, mostrada UMA vez ao administrador (nao ha e-mail neste
+    sistema); o usuario e obrigado a troca-la no primeiro acesso."""
+    motivo = _validar_usuario_in(req)
+    if motivo:
+        return _erro(ValueError(motivo))
+    temporaria = auth.senha_temporaria()
+    try:
+        novo = repo.criar(
+            req.nome, req.email, auth.gerar_hash(temporaria), req.perfil, trocar_senha=True
+        )
+    except UsuarioInvalido as exc:
+        return _erro(exc, 409)
+    auth.registrar_evento("usuario_criado", por=admin.id, usuario_id=novo.id, perfil=novo.perfil)
+    return JSONResponse({**novo.publico(), "senha_temporaria": temporaria}, status_code=201)
+
+
+@app.put("/api/usuarios/{usuario_id}")
+def api_atualizar_usuario(
+    usuario_id: int,
+    req: UsuarioIn,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    motivo = _validar_usuario_in(req)
+    if motivo:
+        return _erro(ValueError(motivo))
+    atual = repo.obter(usuario_id)
+    if atual is None:
+        return _erro(LookupError("Usuario nao encontrado."), 404)
+    if (
+        atual.perfil == "ADMIN" and req.perfil != "ADMIN" and atual.ativo
+        and repo.quantidade_admins_ativos() <= 1
+    ):  # fmt: skip
+        return _erro(ValueError("Nao e possivel rebaixar o unico administrador ativo."))
+    try:
+        novo = repo.atualizar(usuario_id, req.nome, req.email, req.perfil)
+    except UsuarioInvalido as exc:
+        return _erro(exc, 409)
+    if atual.perfil != novo.perfil:
+        repo.encerrar_sessoes_do_usuario(usuario_id)  # perfil novo vale no proximo login
+    auth.registrar_evento("usuario_atualizado", por=admin.id, usuario_id=usuario_id)
+    return novo.publico()
+
+
+class AtivoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ativo: bool
+
+
+@app.post("/api/usuarios/{usuario_id}/ativo")
+def api_ativar_usuario(
+    usuario_id: int,
+    req: AtivoIn,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    """Cancelar = desativar (Sinistros); derruba as sessoes na hora."""
+    alvo = repo.obter(usuario_id)
+    if alvo is None:
+        return _erro(LookupError("Usuario nao encontrado."), 404)
+    if not req.ativo:
+        if alvo.id == admin.id:
+            return _erro(ValueError("Voce nao pode desativar o proprio usuario."))
+        if alvo.admin and alvo.ativo and repo.quantidade_admins_ativos() <= 1:
+            return _erro(ValueError("Nao e possivel desativar o unico administrador ativo."))
+    repo.definir_ativo(usuario_id, req.ativo)
+    auth.registrar_evento("usuario_ativo", por=admin.id, usuario_id=usuario_id, ativo=req.ativo)
+    return repo.obter(usuario_id).publico()  # type: ignore[union-attr]
+
+
+@app.post("/api/usuarios/{usuario_id}/resetar-senha")
+def api_resetar_senha(
+    usuario_id: int,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioUsuarios = Depends(auth.repositorio_usuarios),
+):
+    """Senha temporaria nova, mostrada uma vez; sessoes do usuario encerradas."""
+    alvo = repo.obter(usuario_id)
+    if alvo is None:
+        return _erro(LookupError("Usuario nao encontrado."), 404)
+    if alvo.id == admin.id:
+        return _erro(ValueError("Para a propria senha use 'Trocar senha'."))
+    temporaria = auth.senha_temporaria()
+    repo.definir_senha(usuario_id, auth.gerar_hash(temporaria), trocar_senha=True)
+    auth.registrar_evento("senha_resetada", por=admin.id, usuario_id=usuario_id)
+    return {"ok": True, "senha_temporaria": temporaria}
 
 
 # ---------------------------------------------------------------- API cascata

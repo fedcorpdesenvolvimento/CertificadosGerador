@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Usuários — Gerador de Certificados{% endblock %}
+{% block conteudo %}
+<h1>Usuários do sistema</h1>
+<div class="painel">
+  <h2>Novo usuário</h2>
+  <form id="f-novo" class="linha" novalidate>
+    <label class="cresce">Nome <input id="novo_nome" type="text" required maxlength="120"></label>
+    <label class="cresce">E-mail <input id="novo_email" type="email" required maxlength="160"></label>
+    <label>Perfil
+      <select id="novo_perfil">
+        {% for codigo, nome in perfis.items() %}<option value="{{ codigo }}" {{ 'selected' if codigo == 'OPERADOR' else '' }}>{{ nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="botao primario">Criar</button>
+  </form>
+  <p class="erro" id="erro-novo" hidden></p>
+  <div id="senha-gerada" class="aviso" hidden>
+    <strong>Senha temporária de <span id="sg-email"></span>:</strong>
+    <code id="sg-senha"></code>
+    <span class="dica">Entregue por canal seguro. Ela só aparece agora; no primeiro acesso o usuário é obrigado a trocá-la.</span>
+  </div>
+</div>
+<div class="painel">
+  <h2>Cadastrados</h2>
+  <p class="erro" id="erro-lista" hidden></p>
+  <table class="lista" id="tabela-usuarios">
+    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th>Ações</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+<dialog id="dlg-editar">
+  <form id="f-editar" method="dialog" novalidate>
+    <h2>Editar usuário</h2>
+    <label>Nome <input id="ed_nome" type="text" required maxlength="120"></label>
+    <label>E-mail <input id="ed_email" type="email" required maxlength="160"></label>
+    <label>Perfil
+      <select id="ed_perfil">
+        {% for codigo, nome in perfis.items() %}<option value="{{ codigo }}">{{ nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="erro" id="erro-editar" hidden></p>
+    <div class="linha">
+      <button type="submit" class="botao primario" value="salvar">Salvar</button>
+      <button type="button" class="botao secundario" id="ed_cancelar">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/usuarios.js?v={{ v }}" data-eu="{{ usuario.id }}"></script>{% endblock %}

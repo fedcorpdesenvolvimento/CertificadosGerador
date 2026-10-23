@@ -26,7 +26,7 @@ from contextlib import AbstractContextManager, contextmanager
 from datetime import date
 from functools import lru_cache
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -157,13 +157,18 @@ class VerificacaoIn(BaseModel):
 
 
 # ------------------------------------------------------------------ endpoints
-@app.get("/v1/saude", dependencies=[Depends(autenticar)])
+# As rotas vivem num APIRouter para que `certgen servidor` (combinado.py) as inclua na
+# tela, no mesmo processo, sem duplicar logica (RF-11, RNF-08).
+router = APIRouter()
+
+
+@router.get("/v1/saude", dependencies=[Depends(autenticar)])
 def saude() -> dict:
     """RF-18 — o portal testa a chave aqui."""
     return {"ok": True, "versao": __version__}
 
 
-@app.post(
+@router.post(
     "/v1/segurados/verificar",
     dependencies=[Depends(autenticar)],
     responses={400: {"description": "administradora vazia ou documento sem 11/14 digitos"}},
@@ -207,7 +212,7 @@ def verificar(
     return JSONResponse(resposta.para_dict(), status_code=200)
 
 
-@app.post("/v1/certificados/emitir", dependencies=[Depends(autenticar)])
+@router.post("/v1/certificados/emitir", dependencies=[Depends(autenticar)])
 def emitir(
     req: PedidoIn,
     repo: RepositorioCertificados = Depends(get_repositorio),
@@ -260,3 +265,6 @@ def _registrar_log(pedido: PedidoPortal, itens, inicio: float, http: int) -> Non
             ensure_ascii=False,
         )
     )
+
+
+app.include_router(router)

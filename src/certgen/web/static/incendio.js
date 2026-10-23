@@ -19,13 +19,8 @@
   };
   let segurados = [];
 
-  const api = async (url, opts) => {
-    const r = await fetch(url, opts);
-    const dados = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(dados.erro || `HTTP ${r.status}`);
-    if (dados && dados.erro) throw new Error(dados.erro);
-    return dados;
-  };
+  // ADR-08: sessao.js acrescenta o header CSRF e manda para /login quando a sessao caiu
+  const api = (url, opts) => window.certgen.api(url, opts);
   const opcoes = (select, itens, rotulo, valor, vazio) => {
     select.innerHTML = "";
     const o = document.createElement("option"); o.value = ""; o.textContent = vazio; select.appendChild(o);

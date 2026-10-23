@@ -177,6 +177,39 @@ def _cmd_api(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_servidor(args: argparse.Namespace) -> int:
+    """ADR-08 / Render — tela (com login) e API do portal no MESMO processo e porta.
+
+    `--rede` liga em 0.0.0.0; `--proxy` confia nos X-Forwarded-* do proxy da hospedagem
+    (necessario no Render para o cookie Secure e para o IP real no limite de tentativas).
+    RN-30: exige CERTGEN_API_KEY, pois as rotas /v1 sobem junto.
+    """
+    import logging
+
+    import uvicorn
+
+    try:
+        cfg = Config.do_ambiente()
+        cfg.exigir_api_key()
+    except ConfiguracaoAusente as exc:
+        print("FALHA:", exc, file=sys.stderr)
+        return 1
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    host = "0.0.0.0" if args.rede else "127.0.0.1"
+    print(f"Tela + API do portal em http://{host}:{args.porta}/  (login em /login; /v1 com chave)")
+    print(f"Usuarios em {cfg.usuarios_db}; bucket {cfg.aws_bucket}; saida em {cfg.pasta_saida}")
+    if not cfg.admin_email:
+        print("AVISO: CERTGEN_ADMIN_EMAIL/CERTGEN_ADMIN_SENHA ausentes; sem ADMIN ninguem entra.")
+    uvicorn.run(
+        "certgen.web.combinado:app",
+        host=host,
+        port=args.porta,
+        proxy_headers=args.proxy,
+        forwarded_allow_ips="*" if args.proxy else None,
+    )
+    return 0
+
+
 def _args_lote(p: argparse.ArgumentParser) -> None:
     p.add_argument("--administradora", required=True, help="codigo pessoas.pessoa, ex. 0000001192")
     p.add_argument("--apolice", required=True, help="ex. 13008")
@@ -236,6 +269,17 @@ def construir_parser() -> argparse.ArgumentParser:
         help="RNF-10b: aceita conexoes da rede interna (0.0.0.0); sem TLS, so na LAN",
     )  # fmt: skip
     api.set_defaults(func=_cmd_api)
+
+    srv = sub.add_parser(
+        "servidor", help="Tela com login + API do portal num so processo (ADR-08; Render)"
+    )
+    srv.add_argument("--porta", type=int, default=8000)
+    srv.add_argument("--rede", action="store_true", help="aceita conexoes externas (0.0.0.0)")
+    srv.add_argument(
+        "--proxy", action="store_true",
+        help="confia nos cabecalhos X-Forwarded-* do proxy da hospedagem (Render)",
+    )  # fmt: skip
+    srv.set_defaults(func=_cmd_servidor)
 
     ht = sub.add_parser("html", help="Grava o HTML de um certificado para ajuste de layout")
     _args_lote(ht)

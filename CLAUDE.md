@@ -44,6 +44,10 @@ adaptador de API. Nunca chame o driver de dentro do dominio.
   (`publicar_emitido`); nunca duplicar logica num canal so (RF-11, RNF-08).
 - PLANO: tipo_categoria R -> RES, outro -> COM, nulo -> INC (RN-23). Faz Tudo
   Lar derivado por mondial 1003 OU ruptura > 0 (RN-18/RN-18a).
+- Tela com login (ADR-08, 23/10/2026): toda pagina e toda rota /api/* exigem sessao; usuarios em
+  SQLite (`web/usuarios.py`), nunca no Firebird (RNF-05); politica, CSRF e cabecalhos em `web/auth.py`;
+  ADMIN inicial por CERTGEN_ADMIN_EMAIL/CERTGEN_ADMIN_SENHA (semeado so sem ADMIN). Rotas /v1 ficam
+  fora da sessao (chave RN-30). `certgen servidor` = tela + /v1 num processo (Render).
 - `certgen web`/`certgen api` nao recarregam codigo: reiniciar apos alterar;
   estaticos com ?v=hash e a emissao exige `versao_tela` igual a do servidor (409).
 
@@ -79,6 +83,7 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
   (`--upload-aws` publica cada PDF no S3 e grava o link — RF-21; a tela tem o checkbox Upload AWS)
 - CLI: `python -m certgen.cli --help`
 - Documentacao das APIs: `docs/API.md`; teste manual: `docs/TESTE-API-POSTMAN.md`
+- Tela + API num processo (Render): `python -m certgen.cli servidor --rede --proxy --porta 8000`
 - Area de teste da API no Render (`Dockerfile`, `render.yaml`): `docs/DEPLOY-RENDER.md`. O FedHub
   roda na LAN (Docker + ngrok), nao na web; o Render so alcanca o Firebird por tunel/port-forward.
 

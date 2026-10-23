@@ -20,6 +20,7 @@ dependencies = [
     "jsonschema>=4.23",
     "pypdf>=4.3",
     "boto3>=1.35",
+    "bcrypt>=4.2",  # ADR-08: hash de senha da tela
 ]
 
 [project.optional-dependencies]
