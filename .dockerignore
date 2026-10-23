@@ -1,0 +1,31 @@
+# O que NAO entra na imagem do Render (docs/DEPLOY-RENDER.md).
+# Credenciais (RNF-06, SEC-01)
+.env
+.env.*
+*accessKeys*.csv
+
+# Ambiente local e caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.git/
+.vscode/
+.claude/
+
+# Legado (68 MB) e saida com dado pessoal
+Delphi/
+saida/
+certificados/
+logs/
+
+# Documentacao fica no repositorio; a imagem leva so os PDFs de referencia dos testes
+docs/*
+!docs/legado/
+docs/legado/*
+!docs/legado/referencia/
+scripts/

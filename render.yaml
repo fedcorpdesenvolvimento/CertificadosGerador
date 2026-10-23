@@ -1,0 +1,53 @@
+# Blueprint do Render para a area de TESTE da API do portal — docs/DEPLOY-RENDER.md.
+# Importar em render.com > New > Blueprint apontando para este repositorio.
+# Os valores marcados sync: false sao preenchidos no painel do Render (nunca aqui — SEC-01).
+services:
+  - type: web
+    name: certgen-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Mesma regiao do bucket (AWS us-east-2); o Render nao tem regiao no Brasil.
+    region: ohio
+    # Starter (512 MB) costuma bastar para um Chromium por chamada; se aparecer
+    # "Out of memory" no log da emissao, subir para standard.
+    plan: starter
+    # Rota sem autenticacao ja existente no FastAPI; /v1/saude exige X-API-Key (RN-30).
+    healthCheckPath: /openapi.json
+    autoDeploy: true
+    envVars:
+      - key: CERTGEN_REPOSITORIO
+        value: firebird
+      # Firebird 2.5 — alcancado pelo tunel/encaminhamento descrito em docs/DEPLOY-RENDER.md
+      - key: FB_HOST
+        sync: false
+      - key: FB_PORT
+        sync: false
+      - key: FB_DATABASE
+        sync: false
+      - key: FB_USER
+        sync: false
+      - key: FB_PASSWORD
+        sync: false
+      - key: FB_CHARSET
+        value: WIN1252
+      - key: FB_POOL_SIZE
+        value: "5"
+      # RN-30 — chave da API do portal (header X-API-Key)
+      - key: CERTGEN_API_KEY
+        sync: false
+      # RN-25 e RN-22
+      - key: CERTGEN_SUSEP_CORRETORA
+        value: "00000202049583"
+      - key: CERTGEN_APOLICES_MASSA
+        value: "4008,5008,10008,13008,14008,15008"
+      # RN-29 / RF-21 — publicacao no S3
+      - key: AWS_REGION
+        value: us-east-2
+      - key: AWS_S3_BUCKET
+        value: certincendioaws
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: CERTGEN_PASTA_SAIDA
+        value: /app/saida
