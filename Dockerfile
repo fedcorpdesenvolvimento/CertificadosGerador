@@ -22,7 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Dependencias primeiro, para a camada ser reaproveitada entre builds.
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install .[dev]
+# Editavel (-e): o codigo resolve a raiz do projeto a partir do proprio arquivo
+# (settings.RAIZ_PROJETO -> docs/schema, RD-15); instalado em site-packages a
+# raiz apontaria para fora de /app.
+RUN pip install -e .[dev]
 
 # Chromium do Playwright com as bibliotecas de sistema (ADR-02).
 RUN python -m playwright install --with-deps chromium
@@ -30,6 +33,7 @@ RUN python -m playwright install --with-deps chromium
 # Testes unitarios e de contrato no build, como no FedHub: se falhar, o deploy
 # para aqui. Integracao (Firebird) e pdf (Chromium) ficam de fora do build.
 COPY tests ./tests
+COPY docs/schema ./docs/schema
 COPY docs/legado/referencia ./docs/legado/referencia
 RUN python -m pytest -q -m "not integration and not pdf" -p no:cacheprovider
 

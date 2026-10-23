@@ -23,8 +23,10 @@ saida/
 certificados/
 logs/
 
-# Documentacao fica no repositorio; a imagem leva so os PDFs de referencia dos testes
+# Documentacao fica no repositorio; a imagem leva o schema do JSON (RD-15, lido
+# em tempo de execucao) e os PDFs de referencia dos testes
 docs/*
+!docs/schema/
 !docs/legado/
 docs/legado/*
 !docs/legado/referencia/
