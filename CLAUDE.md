@@ -83,6 +83,7 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
   (`--upload-aws` publica cada PDF no S3 e grava o link — RF-21; a tela tem o checkbox Upload AWS)
 - CLI: `python -m certgen.cli --help`
 - Documentacao das APIs: `docs/API.md`; teste manual: `docs/TESTE-API-POSTMAN.md`
+- Guia entregue ao integrador do portal: `docs/GUIA-INTEGRACAO-PORTAL.md`
 - Tela + API num processo (Render): `python -m certgen.cli servidor --rede --proxy --porta 8000`
 - Area de teste da API no Render (`Dockerfile`, `render.yaml`): `docs/DEPLOY-RENDER.md`. O FedHub
   roda na LAN (Docker + ngrok), nao na web; o Render so alcanca o Firebird por tunel/port-forward.

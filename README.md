@@ -52,6 +52,7 @@ python -m certgen.cli api --rede          # portal chega pela rede interna (sem 
 # Emissao (link + JSON espelho): curl -X POST http://127.0.0.1:8010/v1/certificados/emitir -H "X-API-Key: <chave>" -H "Content-Type: application/json" -d "{\"administradora\":\"0000001192\",\"cpf_cnpj\":\"33016330725\",\"vigencia\":\"2026-07-01\"}"
 # Verificacao para o login do portal (existe + 3 vigencias mais recentes com fatura/certificado/produto): curl -X POST http://127.0.0.1:8010/v1/segurados/verificar -H "X-API-Key: <chave>" -H "Content-Type: application/json" -d "{\"administradora\":\"0000001192\",\"cpf_cnpj\":\"33016330725\"}"
 # Referencia completa dos endpoints e respostas: docs/API.md; passo a passo no Postman: docs/TESTE-API-POSTMAN.md
+# Guia para o terceiro que integra o portal (fluxo, exemplos, codigos, roteiro de aceitacao): docs/GUIA-INTEGRACAO-PORTAL.md
 # Area de teste da API no Render (Dockerfile + render.yaml; Firebird via tunel): docs/DEPLOY-RENDER.md
 
 # Tela + API do portal no MESMO processo (ADR-08; e o que roda no Render). Exige CERTGEN_API_KEY
