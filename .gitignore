@@ -41,3 +41,6 @@ dados/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# entregas para clientes (chave da API no PDF e no environment) — nunca versionar
+entregas/
