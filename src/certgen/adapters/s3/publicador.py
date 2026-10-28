@@ -67,9 +67,13 @@ class PublicadorS3:
                 raise ErroPublicacao("Pacote boto3 nao instalado: pip install -e .") from exc
             from botocore.config import Config as ConfigBoto
 
-            # SigV4 explicito: exigido pelas regioes novas e pelas URLs assinadas (ADR-09)
+            # SigV4 explicito e endpoint regional virtual-hosted: a URL assinada sai no mesmo
+            # host do link permanente, {bucket}.s3.{regiao}.amazonaws.com (ADR-09)
             self._cliente = boto3.client(
-                "s3", region_name=self._regiao, config=ConfigBoto(signature_version="s3v4")
+                "s3",
+                region_name=self._regiao,
+                endpoint_url=f"https://s3.{self._regiao}.amazonaws.com",
+                config=ConfigBoto(signature_version="s3v4", s3={"addressing_style": "virtual"}),
             )
         return self._cliente
 
