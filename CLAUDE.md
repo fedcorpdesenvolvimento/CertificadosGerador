@@ -39,7 +39,14 @@ adaptador de API. Nunca chame o driver de dentro do dominio.
 - O banco recebe UPDATE apenas em link_certificado_aws, dt_cria_link e
   id_controle_envio_portal (RNF-05). A unica escrita implementada e
   `registrar_link` (RD-20a): chave RD-01 completa, exatamente 1 linha.
-- Credenciais AWS e a chave da API (RN-30) so no `.env`/ambiente (SEC-01).
+- Credenciais AWS so no `.env`/ambiente (SEC-01). Chaves da API do portal (RN-30 revista, ADR-09, 28/10/2026):
+  uma por cliente integrador, cadastradas pelo ADMIN na tela (`/chaves`, `web/chaves_api.py`, SQLite), com
+  escopo de administradoras (403 fora), IPs opcionais e revogacao imediata; so o SHA-256 e guardado.
+  `CERTGEN_API_KEY` e opcional e de transicao. `/v1` responde erros SEMPRE no envelope
+  `{codigo, mensagem, request_id, detalhes}` (instalar_portal), com `X-Request-Id` e limite 60/min por chave.
+- Bucket S3 privado (ADR-09): o link permanente (RN-29) vai para o banco e o JSON; quem entrega o PDF
+  usa `PublicadorArquivos.link_temporario` (URL assinada, `CERTGEN_LINK_VALIDADE_SEG`). Nunca devolver
+  o link permanente ao portal como se abrisse.
 - Tela e API do portal compartilham emissao, template, JSON e publicacao
   (`publicar_emitido`); nunca duplicar logica num canal so (RF-11, RNF-08).
 - PLANO: tipo_categoria R -> RES, outro -> COM, nulo -> INC (RN-23). Faz Tudo
@@ -75,8 +82,9 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Verificar Firebird: `python -m certgen.cli check-conexao`
 - Tela web: `python -m certgen.cli web` (127.0.0.1:8000; `--reload` em desenvolvimento)
 - APIs do portal (Fase 8, secao 11.1): `python -m certgen.cli api` (127.0.0.1:8010; `--rede` para a LAN;
-  exige `CERTGEN_API_KEY` no `.env`; header `X-API-Key`). `POST /v1/certificados/emitir` devolve
-  link + JSON espelho (RD-29) e aceita `fatura`/`certificado` opcionais (RD-31); `POST /v1/segurados/verificar`
+  header `X-API-Key` com chave cadastrada na tela). `POST /v1/certificados/emitir` devolve
+  link assinado + JSON espelho (RD-29) e aceita `fatura`/`certificado` opcionais (RD-31); `POST /v1/certificados/link`
+  assina de novo sem reemitir; `GET /v1/administradoras` lista o escopo da chave; `POST /v1/segurados/verificar`
   devolve `existe` + as 3 vigencias mais recentes com nome, endereco, chaves e produto (RF-20, RD-30, RN-35a;
   RN-35: qualquer linha nao cancelada) para o login do segurado no portal. A API sempre reemite (RN-33).
 - Emissao por linha de comando: `python -m certgen.cli emitir --administradora ... --apolice ... --seq ... --fatura ...`

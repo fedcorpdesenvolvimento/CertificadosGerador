@@ -8,7 +8,10 @@ from fastapi.testclient import TestClient
 
 from certgen.config.settings import Config, ConfiguracaoAusente
 from certgen.web import app as webapp
-from certgen.web import auth
+from certgen.web import (
+    auth,
+    combinado,  # noqa: F401 — ADR-09: /v1 e tratadores entram antes da app subir
+)
 from certgen.web.usuarios import RepositorioUsuarios, UsuarioInvalido
 from tests.unit.conftest import ADMIN_EMAIL, ADMIN_SENHA, HEADER_CSRF
 
@@ -222,15 +225,21 @@ def test_admin_inicial_semeado_uma_vez_a_partir_do_ambiente(tmp_path, monkeypatc
 
 # ------------------------------------------------------------- combinado
 def test_modo_combinado_serve_v1_sem_sessao_mas_com_chave(cliente_anonimo, monkeypatch):
-    from certgen.web import api_portal, combinado
+    from certgen.web import api_portal
 
     assert combinado.app is webapp.app
     chave = "a" * 32
     webapp.app.dependency_overrides[api_portal.get_api_key] = lambda: chave
     try:
-        assert cliente_anonimo.get("/v1/saude").status_code == 401  # chave RN-30, nao sessao
+        r = cliente_anonimo.get("/v1/saude")  # chave RN-30, nao sessao; envelope ADR-09
+        assert r.status_code == 401 and r.json()["codigo"] == "CHAVE_INVALIDA"
         r = cliente_anonimo.get("/v1/saude", headers={"X-API-Key": chave})
         assert r.status_code == 200 and r.json()["ok"] is True
-        assert cliente_anonimo.get("/docs", follow_redirects=False).status_code == 302  # sem OpenAPI publico
+        assert cliente_anonimo.get("/docs", follow_redirects=False).status_code == 302  # tela sem OpenAPI
+        assert cliente_anonimo.get("/v1/openapi.json").status_code == 200  # ADR-09: contrato publico
+        assert cliente_anonimo.get("/v1/docs").status_code == 200
+        # erros da tela continuam no formato da tela, nao no envelope da API
+        r = cliente_anonimo.get("/api/usuarios")
+        assert r.status_code == 401 and "erro" in r.json()
     finally:
         webapp.app.dependency_overrides.clear()

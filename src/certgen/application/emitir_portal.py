@@ -225,6 +225,43 @@ def emitir_para_portal(
     return resposta
 
 
+@dataclass(frozen=True)
+class ItemLink:
+    """ADR-09 — link permanente (RD-28) de um certificado ja emitido, sem reemitir."""
+
+    chave: ChaveCertificado
+    situacao: str  # disponivel | nao_emitido
+    link: str | None = None
+
+    def para_dict(self) -> dict:
+        return {"chave": self.chave.para_dict(), "situacao": self.situacao, "link": self.link}
+
+
+def links_para_portal(repositorio: RepositorioCertificados, pedido: PedidoPortal) -> list[ItemLink]:
+    """ADR-09 / RN-29 revista — devolve o link permanente gravado (`link_certificado_aws`,
+    RD-28) de cada certificado do pedido, sem gerar nada. Quem chama assina o link
+    (bucket privado). Levanta NenhumCertificado quando QRY-13 nao encontra linha."""
+    try:
+        certificados = repositorio.localizar_por_portal(
+            pedido.administradora,
+            pedido.cpf_cnpj,
+            pedido.vigencia,
+            fatura=pedido.fatura,
+            certificado=pedido.certificado,
+        )
+    except ProdutoIndeterminado as exc:
+        raise NenhumCertificado(str(exc)) from exc
+    if not certificados:
+        raise NenhumCertificado(
+            f"nenhum certificado para administradora {pedido.administradora}, documento "
+            f"{pedido.cpf_cnpj}, vigencia {pedido.vigencia.isoformat()} (RD-27/RD-31)"
+        )
+    return [
+        ItemLink(c.chave, "disponivel" if c.link_publicado else "nao_emitido", c.link_publicado)
+        for c in certificados
+    ]
+
+
 def _tratar_um(
     cert: Certificado,
     publicador: PublicadorArquivos,

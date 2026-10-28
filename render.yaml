@@ -38,9 +38,13 @@ services:
         value: WIN1252
       - key: FB_POOL_SIZE
         value: "5"
-      # RN-30 — chave da API do portal (header X-API-Key)
+      # ADR-09 — chaves da API cadastradas na tela (CHAVES DA API). Esta variavel e opcional e
+      # de transicao (acesso a todas as administradoras); deixe em branco depois de cadastrar.
       - key: CERTGEN_API_KEY
         sync: false
+      # ADR-09 — validade da URL assinada do PDF (segundos)
+      - key: CERTGEN_LINK_VALIDADE_SEG
+        value: "900"
       # RN-25 e RN-22
       - key: CERTGEN_SUSEP_CORRETORA
         value: "00000202049583"

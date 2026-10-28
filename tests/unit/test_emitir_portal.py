@@ -82,6 +82,12 @@ class PublicadorFalso:
         self.publicados.append(destino)
         return f"https://certincendioaws.s3.us-east-2.amazonaws.com/{destino}"
 
+    def link_temporario(self, link: str, validade_segundos: int) -> str:
+        """ADR-09 — URL 'assinada' falsa, derivada do link permanente."""
+        if self.falhar:
+            raise ErroPublicacao("S3 fora")
+        return f"{link}?X-Amz-Expires={validade_segundos}&X-Amz-Signature=falsa"
+
 
 class RegistroFalso:
     def __init__(self, falhar=False):

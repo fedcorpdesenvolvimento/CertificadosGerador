@@ -62,3 +62,32 @@ def test_arquivo_ausente_ou_vazio(tmp_path):
     vazio.write_bytes(b"")
     with pytest.raises(ErroPublicacao):
         PublicadorS3("b", "r", cliente=S3Falso()).publicar(vazio, "k")
+
+
+# ------------------------------------------------------------- ADR-09: link assinado
+def test_adr_09_chave_do_link_aceita_formatos_do_bucket():
+    from certgen.adapters.s3.publicador import chave_do_link
+
+    assert chave_do_link("b", "https://b.s3.us-east-2.amazonaws.com/a/x%20y.pdf") == "a/x y.pdf"
+    assert chave_do_link("b", "https://b.s3.amazonaws.com/a/x.pdf") == "a/x.pdf"
+    assert chave_do_link("b", "https://s3.us-east-2.amazonaws.com/b/a/x.pdf") == "a/x.pdf"
+    for ruim in ("https://outro.s3.amazonaws.com/a.pdf", "http://b.s3.amazonaws.com/a.pdf",
+                 "https://b.s3.amazonaws.com/", "", "nao-url"):
+        with pytest.raises(ErroPublicacao):
+            chave_do_link("b", ruim)
+
+
+def test_adr_09_link_temporario_assina_a_chave_do_objeto():
+    class S3Assina(S3Falso):
+        def generate_presigned_url(self, operacao, Params, ExpiresIn):
+            assert operacao == "get_object" and ExpiresIn == 900
+            return f"https://assinada/{Params['Bucket']}/{Params['Key']}?X-Amz-Signature=x"
+
+    pub = PublicadorS3("certincendioaws", "us-east-2", cliente=S3Assina())
+    permanente = "https://certincendioaws.s3.us-east-2.amazonaws.com/adm/0004/x.pdf"
+    link = pub.link_temporario(permanente, 900)
+    assert link == "https://assinada/certincendioaws/adm/0004/x.pdf?X-Amz-Signature=x"
+    with pytest.raises(ErroPublicacao):
+        pub.link_temporario("https://outro.s3.amazonaws.com/x.pdf", 900)
+    with pytest.raises(ErroPublicacao):
+        pub.link_temporario("https://certincendioaws.s3.amazonaws.com/x.pdf", 0)

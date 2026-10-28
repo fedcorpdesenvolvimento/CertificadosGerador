@@ -119,7 +119,14 @@ class PublicadorArquivos(Protocol):
 
     def publicar(self, arquivo: Path, destino: str) -> str:
         """Sobe `arquivo` em `destino` (caminho relativo no bucket), confirma e devolve o
-        link publico. Levanta ErroPublicacao se nao conseguir confirmar (DEF-19)."""
+        link permanente (URL do objeto). Levanta ErroPublicacao se nao conseguir
+        confirmar (DEF-19)."""
+        ...
+
+    def link_temporario(self, link: str, validade_segundos: int) -> str:
+        """ADR-09 (RN-29 revista): URL assinada, com prazo, para o `link` permanente de um
+        objeto deste bucket. O bucket e privado; so esta URL abre o PDF. Levanta
+        ErroPublicacao se o link nao for deste bucket."""
         ...
 
 

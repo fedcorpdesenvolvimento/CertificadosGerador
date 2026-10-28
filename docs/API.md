@@ -6,64 +6,123 @@ os IDs entre parênteses apontam para os requisitos que cada comportamento imple
 
 | Aplicação | Comando | Porta padrão | Público | Autenticação |
 |---|---|---|---|---|
-| **API do portal** (`certgen.web.api_portal`) | `python -m certgen.cli api` | 8010 | portal do segurado | header `X-API-Key` (RN-30) |
-| **API da tela** (`certgen.web.app`) | `python -m certgen.cli web` | 8000 | operador de emissão, via navegador | nenhuma (LAN, RNF-10) |
+| **API do portal** (`certgen.web.api_portal`) | `python -m certgen.cli api` | 8010 | portal do segurado | header `X-API-Key`: chave por cliente, cadastrada na tela (RN-30 revista, ADR-09) |
+| **API da tela** (`certgen.web.app`) | `python -m certgen.cli web` | 8000 | operador de emissão, via navegador | sessão com login (ADR-08) |
 
 As duas usam **o mesmo caso de uso** de emissão, a mesma consulta canônica, o mesmo template de
 PDF e o mesmo serializador JSON (RF-11, RNF-08). Um ajuste no certificado vale nos dois canais
-sem trabalho adicional. Ambas expõem `/docs` (Swagger) e `/openapi.json` gerados pelo FastAPI.
+sem trabalho adicional. A API do portal expõe o contrato em `/v1/docs` e `/v1/openapi.json`;
+a tela não publica OpenAPI (ADR-08).
 
-Nenhuma das duas tem TLS próprio: só na rede interna; exposição externa exige proxy HTTPS
-(GAP-23).
+Nenhuma das duas tem TLS próprio: fora da LAN só atrás do proxy HTTPS da hospedagem
+(`certgen servidor --proxy`).
 
 ---
 
 ## 1. API do portal — `certgen api`
+
+### 1.0 Changelog do contrato `/v1`
+
+Regra de versionamento (ADR-09): mudança **compatível** (campo novo, aviso novo, código de erro
+novo) entra em `/v1` e aparece aqui; mudança **incompatível** vira `/v2` com período de
+convivência.
+
+| Data | Mudança | Compatível? |
+|---|---|---|
+| 28/10/2026 | Envelope único de erro `{codigo, mensagem, request_id, detalhes}` em todo erro de `/v1` (antes: `detail`, `erro` ou o formato do framework) | **não** (feita antes de o portal programar contra o formato antigo) |
+| 28/10/2026 | `link` passa a ser URL **assinada com prazo**; novo campo `link_expira_em`; o link permanente fica em `documento.arquivo.link` | não (quem guardava `link` deve guardar os identificadores) |
+| 28/10/2026 | Novos: `POST /v1/certificados/link`, `GET /v1/administradoras`, header `X-Request-Id`, `429` com `Retry-After`, `403` fora do escopo da chave, `cliente`/`chave`/`administradoras` em `/v1/saude`, `/v1/openapi.json` e `/v1/docs` | sim |
+| 14/09/2026 | Verificação devolve as 3 vigências com dados (RD-30); emissão aceita `fatura`/`certificado` (RD-31) | sim |
+| 10/09/2026 | Primeira versão: `/v1/saude`, `/v1/certificados/emitir` | — |
 
 ### 1.1 Subir
 
 ```powershell
 python -m certgen.cli api            # 127.0.0.1:8010
 python -m certgen.cli api --rede     # 0.0.0.0:8010 — portal chega pela LAN (RNF-10b)
+python -m certgen.cli servidor --rede --proxy --porta 8000   # tela + /v1 (Render)
 ```
 
-Exige no `.env` (SEC-01, RNF-06):
+Variáveis (SEC-01, RNF-06):
 
 | Variável | Uso |
 |---|---|
-| `CERTGEN_API_KEY` | chave de 128 bits em hex (32 caracteres). Sem ela o processo **recusa subir**. Gerar: `python -c "import secrets;print(secrets.token_hex(16))"` |
+| `CERTGEN_USUARIOS_DB` | SQLite com usuários **e chaves da API** (ADR-08/ADR-09). No Render: `/data/usuarios.sqlite` |
+| `CERTGEN_API_KEY` | **opcional, transição** (ADR-09): se presente, vale como chave com acesso a todas as administradoras. Cadastre as chaves na tela e remova |
+| `CERTGEN_LINK_VALIDADE_SEG` | validade da URL assinada do PDF, em segundos (padrão `900`, faixa 60–86400) |
 | `FB_*` | conexão Firebird (`FB_HOST`, `FB_PORT`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD`, `FB_CHARSET`, `FB_POOL_SIZE`) |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` | publicação no S3 (RN-29). Padrões: `us-east-2`, `certincendioaws` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` | publicação no S3 (RN-29) e assinatura dos links. O bucket é **privado** (Block Public Access); a credencial precisa de `s3:PutObject` e `s3:GetObject` |
 | `CERTGEN_PASTA_SAIDA` | cópia local de PDF e JSON, estrutura `{administradora}/{MMAAAA}/` (RN-34, RN-19) |
 
-Operação no servidor da rede: `scripts/iniciar_api.ps1` (reinício automático, log diário em
-`logs/api-AAAA-MM-DD.log`). Passo a passo de teste: `docs/TESTE-API-POSTMAN.md`; Collection e
-Environments prontos em `docs/postman/`.
+Operação no servidor da rede: `scripts/iniciar_api.ps1`. Teste manual: `docs/TESTE-API-POSTMAN.md`;
+Collection e Environments em `docs/postman/`. Contrato OpenAPI: `/v1/openapi.json` e `/v1/docs`.
 
-### 1.2 Autenticação
+### 1.2 Autenticação, escopo e limites (RN-30 revista, ADR-09)
 
-Todo endpoint exige o header `X-API-Key: <chave>`. Comparação em tempo constante; a chave nunca
-aparece em log, resposta ou erro (RN-30). Chave ausente ou errada:
+Todo endpoint exige o header `X-API-Key: <chave>`. As chaves são cadastradas pelo ADMIN na tela
+(`/chaves`, seção 3.7): **uma por cliente integrador**, com a lista de administradoras que ela
+pode consultar, IPs de origem opcionais e revogação imediata. O banco guarda só o SHA-256; a
+chave aparece uma única vez, ao ser criada. Comparação em tempo constante; a chave nunca
+aparece em log, resposta ou erro.
 
+| Situação | Resposta |
+|---|---|
+| chave ausente, errada ou revogada | `401 CHAVE_INVALIDA` |
+| IP de origem fora da lista da chave | `403 ORIGEM_NAO_PERMITIDA` |
+| `administradora` fora do escopo da chave | `403 ADMINISTRADORA_NAO_PERMITIDA` (antes de consultar o banco) |
+| mais de 60 chamadas por minuto com a mesma chave | `429 LIMITE_EXCEDIDO` + `Retry-After` |
+| 30 chaves erradas em 15 min do mesmo IP | `429 LIMITE_EXCEDIDO` para qualquer chave desse IP, até liberar |
+
+Rotação: criar a chave nova, entregar, revogar a antiga. As duas convivem no intervalo.
+
+**`X-Request-Id`.** O portal pode enviar o seu (`[A-Za-z0-9._:-]`, até 64); senão a API gera.
+Vai em toda resposta de `/v1` (header e, nos erros, no corpo) e no log de cada chamada, com o
+prefixo da chave e o IP de origem (RNF-13). Abrir um chamado = informar o `request_id`.
+
+**Envelope de erro.** Todo erro de `/v1` tem o mesmo formato; trate pelo `codigo`:
+
+```json
+{"codigo": "ADMINISTRADORA_NAO_PERMITIDA", "mensagem": "esta chave nao tem acesso a administradora informada",
+ "request_id": "9f1c...", "detalhes": {"administradora": "0000000019"}}
 ```
-401  {"detail": "chave de autenticacao ausente ou invalida"}
-```
 
-Há uma única chave para o portal inteiro; rotação implica janela sem serviço (GAP-24).
+| HTTP | `codigo` | `detalhes` |
+|---|---|---|
+| `400` | `PEDIDO_INVALIDO` | — |
+| `401` | `CHAVE_INVALIDA` | — |
+| `403` | `ADMINISTRADORA_NAO_PERMITIDA`, `ORIGEM_NAO_PERMITIDA` | `administradora` |
+| `404` | `CERTIFICADO_NAO_ENCONTRADO` | `pedido` normalizado |
+| `422` | `CORPO_MALFORMADO` | `campos[{campo, erro}]` |
+| `429` | `LIMITE_EXCEDIDO` | — (header `Retry-After`) |
+| `500` | `ERRO_INTERNO` | — (nenhum detalhe interno; use o `request_id`) |
+| `502` | `PUBLICACAO_FALHOU` | `pedido`, `quantidade`, `certificados[]` com `situacao: "falha"` e `motivo` |
+| `503` | `BANCO_INDISPONIVEL`, `GERADOR_INDISPONIVEL` | `pedido` (gerador) |
 
 ### 1.3 `GET /v1/saude`
 
-Valida a chave e devolve a versão do servidor (RF-18).
+Valida a chave e devolve a versão do servidor e o escopo da chave (RF-18, ADR-09).
 
 ```json
-{"ok": true, "versao": "0.1.0"}
+{"ok": true, "versao": "0.1.0", "cliente": "Portal W2BIT", "chave": "fc_Ab12c", "administradoras": "todas"}
 ```
 
-### 1.4 `POST /v1/segurados/verificar` — login do segurado (UC-13, RF-20)
+`administradoras` é `"todas"` ou a lista de códigos permitidos.
+
+### 1.3a `GET /v1/administradoras` (ADR-09)
+
+Código, nome, abreviação e `possui_portal` das administradoras que **esta chave** pode consultar
+(QRY-01, filtrado pelo escopo). Serve para o portal mapear o cadastro dele com o código FedCorp.
+
+```json
+{"quantidade": 1, "administradoras": [{"codigo": "0000001192", "nome": "IMODATA ADM", "abreviacao": null, "possui_portal": false}]}
+```
+
+### 1.4 `POST /v1/segurados/verificar` — segurado da administradora? (UC-13, RF-20)
 
 Responde se o CPF/CNPJ é segurado da administradora e devolve as vigências mais recentes, para
-o portal autenticar o segurado em tempo real e, em seguida, pedir a emissão já apontando a
-unidade. **Não grava nada.**
+o portal pedir a emissão já apontando a unidade. **Não grava nada.** Não é prova de
+identidade: o portal autentica o segurado por conta própria e chama a verificação com o
+documento do usuário logado (ADR-09; CPF não é segredo).
 
 **Corpo**
 
@@ -73,7 +132,7 @@ unidade. **Não grava nada.**
 
 | Campo | Regra |
 |---|---|
-| `administradora` | código `pessoas.pessoa`, com zeros à esquerda, até 10 caracteres |
+| `administradora` | código `pessoas.pessoa`, com zeros à esquerda, até 10 caracteres; dentro do escopo da chave |
 | `cpf_cnpj` | pontuação aceita e removida; precisa ter 11 (CPF) ou 14 (CNPJ) dígitos |
 
 **Resposta `200`**
@@ -88,10 +147,10 @@ unidade. **Não grava nada.**
       "endereco": {"logradouro": "AV LUCIO COSTA, 3300 BLOCO 2", "unidade": "AP.602",
                    "bairro": "BARRA DA TIJUCA", "cidade": "RIO DE JANEIRO", "uf": "RJ",
                    "cep": "22630010", "condominio": "DIRETORIA IMODATA"},
-      "inicio_vig": "2026-08-01",
-      "final_vig": "2026-08-31",
-      "apolice": "13008", "seq": 1, "fatura": 381201, "certificado": "CF1DI/AP.602",
-      "produto": {"codigo": "0117", "nome": "...", "descricao_fatura": "...", "descricao_master": "TOTAL CONTEÚDO"}
+      "inicio_vig": "2026-10-01",
+      "final_vig": "2026-10-31",
+      "apolice": "13008", "seq": 1, "fatura": 382196, "certificado": "CF1DI/AP.602",
+      "produto": {"codigo": "0271", "nome": "...", "descricao_fatura": "...", "descricao_master": "..."}
     }
   ]
 }
@@ -103,30 +162,27 @@ unidade. **Não grava nada.**
 - `certificados` traz as **3 vigências mais recentes** (3 valores distintos de `inicio_vig`),
   com **todas** as unidades de cada uma (RN-35a, RD-30). Ordem: `inicio_vig` decrescente,
   `fatura` decrescente, `certificado`.
-- `final_vig` nulo ou `30/12/1899` no banco sai como `null` (DEF-06).
+- `final_vig` nulo ou `30/12/1899` no banco sai como `null` (DEF-06): a vigência não tem fim
+  cadastrado. Exiba como "vigência em aberto".
 - Guarde `inicio_vig`, `fatura` e `certificado` do item escolhido: são exatamente os campos que
-  a emissão aceita (RD-31).
+  a emissão e o link aceitam (RD-31).
+- **Latência dos dados**: as vigências são mensais, uma linha por fatura, e a fatura do mês
+  entra no banco com atraso; um segurado novo aparece em torno de **30 dias** após a
+  contratação. Até lá `existe` é `false`.
 
-**Erros**
+**Erros**: `400 PEDIDO_INVALIDO`, `401`, `403`, `422`, `429`, `503 BANCO_INDISPONIVEL` (seção 1.2).
 
-| Código | Situação |
-|---|---|
-| `400` | administradora vazia ou com mais de 10 caracteres; documento sem 11 ou 14 dígitos |
-| `401` | chave ausente ou inválida |
-| `422` | corpo malformado (campo faltando, tipo errado) |
-| `503` | banco indisponível |
-
-Log (RNF-13): um registro JSON por chamada com administradora, documento, `existe`, chaves das
-vigências e duração. Sem chave, sem nome, sem endereço.
-
-Atenção: o endpoint é um oráculo de existência de CPF protegido só pela chave, sem limite de
-taxa; a resposta traz dados pessoais (GAP-26). Não expor fora da LAN sem TLS e limite de taxa.
+Log (RNF-13): um registro JSON por chamada com `request_id`, prefixo da chave, IP,
+administradora, documento, `existe`, chaves das vigências e duração. Sem chave, sem nome,
+sem endereço.
 
 ### 1.5 `POST /v1/certificados/emitir` — emissão (UC-12, RF-18)
 
-Localiza o certificado, gera JSON e PDF, publica o PDF no S3, grava o link no Firebird, regrava
-o JSON com o link e devolve link e JSON espelho na mesma resposta. Síncrono: um PDF leva alguns
-segundos (Chromium). **Sempre reemite** (RN-33): objeto no S3 e arquivos locais são sobrescritos.
+Localiza o certificado, gera JSON e PDF, publica o PDF no S3 (bucket privado), grava o link
+permanente no Firebird, regrava o JSON com o link e devolve o **link assinado** e o JSON
+espelho na mesma resposta. Síncrono: um PDF leva alguns segundos (Chromium). **Sempre
+reemite** (RN-33): objeto no S3 e arquivos locais são sobrescritos. Repetir após timeout é
+seguro: o resultado é o mesmo arquivo no mesmo endereço.
 
 **Corpo**
 
@@ -134,8 +190,8 @@ segundos (Chromium). **Sempre reemite** (RN-33): objeto no S3 e arquivos locais 
 {
   "administradora": "0000001192",
   "cpf_cnpj": "330.163.307-25",
-  "vigencia": "2026-08-01",
-  "fatura": 381201,
+  "vigencia": "2026-10-01",
+  "fatura": 382196,
   "certificado": "CF1DI/AP.602"
 }
 ```
@@ -153,24 +209,25 @@ Sem `fatura`/`certificado`, **todos** os certificados do documento naquela vigê
 
 **Sequência por certificado** (RF-16): localizar → JSON validado contra o schema → PDF →
 `publicar` no S3 com confirmação (`head_object`, DEF-19) → `registrar_link` no Firebird
-(exatamente 1 linha, RD-20a) → regravar JSON com `arquivo.link`. Falha em qualquer passo
-interrompe **aquele** certificado; os demais seguem (RF-09). Nunca se devolve link cuja
-gravação no banco não foi confirmada.
+(exatamente 1 linha, RD-20a) → regravar JSON com `arquivo.link` → assinar o link (ADR-09).
+Falha em qualquer passo interrompe **aquele** certificado; os demais seguem (RF-09). Nunca se
+devolve link cuja gravação no banco não foi confirmada.
 
 **Resposta `200`** (ao menos um item publicado)
 
 ```json
 {
-  "pedido": {"administradora": "0000001192", "cpf_cnpj": "33016330725", "vigencia": "2026-08-01",
-             "fatura": 381201, "certificado": "CF1DI/AP.602"},
+  "pedido": {"administradora": "0000001192", "cpf_cnpj": "33016330725", "vigencia": "2026-10-01",
+             "fatura": 382196, "certificado": "CF1DI/AP.602"},
   "quantidade": 1,
   "certificados": [
     {
-      "chave": {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 381201,
+      "chave": {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 382196,
                 "certificado": "CF1DI/AP.602", "cpf_cnpj": "33016330725"},
       "situacao": "publicado",
-      "link": "https://certincendioaws.s3.us-east-2.amazonaws.com/0000001192/0004/082026/381201/0_33016330725_0004_13008_CF1DI-AP602_381201.pdf",
-      "documento": { "...": "JSON espelho completo (seção 2), com arquivo.link igual ao link" },
+      "link": "https://certincendioaws.s3.us-east-2.amazonaws.com/0000001192/0004/102026/382196/0_33016330725_0004_13008_CF1DI-AP602_382196.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&...",
+      "link_expira_em": "2026-10-28T13:35:00+00:00",
+      "documento": { "...": "JSON espelho completo (seção 2); arquivo.link = link permanente, sem assinatura" },
       "avisos": ["REEMISSAO"],
       "motivo": null
     }
@@ -181,24 +238,49 @@ gravação no banco não foi confirmada.
 | Campo do item | Significado |
 |---|---|
 | `situacao` | `publicado` ou `falha` |
-| `link` | URL pública do PDF no S3 (RN-29): `https://{bucket}.s3.{região}.amazonaws.com/{administradora}/{produto}/{MMAAAA}/{fatura}/{nome_pdf}` |
-| `documento` | o JSON espelho **exatamente** como gravado em disco (RD-29, RNF-08) |
+| `link` | URL **assinada** do PDF, válida até `link_expira_em` (padrão 15 min). Entregue ao segurado na hora; não guarde: peça outra em `/v1/certificados/link` |
+| `link_expira_em` | ISO 8601 com fuso |
+| `documento` | o JSON espelho **exatamente** como gravado em disco (RD-29, RNF-08); `arquivo.link` é o link permanente (não abre sem assinatura) |
 | `avisos` | códigos de `_meta.avisos` (seção 2.3) mais `REEMISSAO` quando a linha já tinha link (RD-28) |
 | `motivo` | em `falha`: `[TipoDaExcecao] mensagem` |
 
-**Erros**
-
-| Código | Situação |
-|---|---|
-| `400` | pedido inválido (mesmas regras da verificação; `vigencia` não ISO; `fatura` não positiva) |
-| `401` | chave ausente ou inválida |
-| `404` | nenhum certificado para administradora + documento + vigência (+ fatura/certificado), ou apólice sem produto mapeado (RN-03.3). Corpo: `{"erro", "pedido"}` |
-| `422` | corpo malformado |
-| `502` | **todos** os certificados falharam (S3 fora, credencial AWS ausente, `UPDATE` não afetou 1 linha…). Cada item traz `situacao: "falha"` e `motivo` |
-| `503` | Chromium/Playwright indisponível |
+**Erros**: `400`, `401`, `403`, `404 CERTIFICADO_NAO_ENCONTRADO` (nenhum certificado para
+administradora + documento + vigência (+ fatura/certificado), ou apólice sem produto mapeado,
+RN-03.3), `422`, `429`, `502 PUBLICACAO_FALHOU` (**todos** os certificados falharam; cada item em
+`detalhes.certificados` traz `motivo`), `503 GERADOR_INDISPONIVEL` / `BANCO_INDISPONIVEL`.
 
 Se o S3 confirmou e o `UPDATE` falhou, o objeto fica no bucket e o item sai `falha` com motivo
 explícito.
+
+### 1.6 `POST /v1/certificados/link` — link assinado sem reemitir (ADR-09)
+
+Mesmo corpo da emissão. Devolve um link assinado novo para cada certificado **já emitido**
+(linha com `link_certificado_aws`, RD-28), sem gerar nada. É o que o portal chama quando o
+segurado clica para abrir o PDF de novo depois que o link anterior expirou.
+
+```json
+{
+  "pedido": {"...": "..."},
+  "quantidade": 1,
+  "certificados": [
+    {"chave": {"...": "..."}, "situacao": "disponivel",
+     "link": "https://...pdf?X-Amz-...", "link_expira_em": "2026-10-28T13:35:00+00:00"}
+  ]
+}
+```
+
+| `situacao` | Significado |
+|---|---|
+| `disponivel` | link assinado em `link` |
+| `nao_emitido` | a linha existe mas nunca recebeu link: chame a emissão |
+| `falha` | o link gravado não pertence ao bucket ou a assinatura falhou; `motivo` explica |
+
+Erros: `404 CERTIFICADO_NAO_ENCONTRADO` quando o conjunto não existe; demais como na emissão.
+
+**Reemissão e mudança de cadastro.** O PDF reflete o cadastro no momento da emissão. Se o
+cadastro muda (correção, endosso), o PDF só muda quando alguém reemite. Não há data de última
+alteração em `segurados_inc`; o portal deve reemitir por ação explícita do segurado ou da
+administradora.
 
 ---
 
@@ -468,6 +550,24 @@ primeiro acesso.
 
 Todas respondem `401` sem sessão e `403` para `OPERADOR`.
 
+### 3.7 Chaves da API do portal (só perfil ADMIN; ADR-09)
+
+Página `/chaves`. Uma chave por cliente integrador, com escopo de administradoras (ou "todas"),
+IPs de origem opcionais (IP ou CIDR) e revogação imediata e irreversível. A chave é devolvida
+**uma vez** na criação; o banco guarda só o SHA-256. `GET /api/incendio/administradoras`
+alimenta a lista de seleção.
+
+| Rota | Corpo / resposta |
+|---|---|
+| `GET /api/chaves` | lista (`id, nome, prefixo, administradoras, todas, ips, ativa, criada_em, criada_por, revogada_em, ultimo_uso, ultimo_ip`); nunca a chave nem o hash |
+| `POST /api/chaves` | `{"nome", "administradoras": [...], "todas": bool, "ips": [...]}` → `201` registro + `chave` (texto, só agora); `400` sem escopo, código ou IP inválido; `422` campo desconhecido ou nome curto |
+| `PUT /api/chaves/{id}` | mesmo corpo → registro (a chave em si não muda); `400`; `404` |
+| `POST /api/chaves/{id}/revogar` | → registro com `ativa: false`; a API responde `401` para essa chave na hora; `404` |
+
+Todas respondem `401` sem sessão e `403` para `OPERADOR`. A tela também recebe, no relatório
+de emissão com Upload AWS, `link_temporario` em cada item emitido (URL assinada; `link`
+continua o permanente).
+
 ---
 
 ## 4. Referências
@@ -476,4 +576,6 @@ Todas respondem `401` sem sessão e `403` para `OPERADOR`.
   banco), 9 (JSON), 16 (lacunas abertas).
 - `docs/schema/certificado-1.0.schema.json` — schema do JSON espelho.
 - `docs/TESTE-API-POSTMAN.md` e `docs/postman/` — teste manual e operação da API na rede.
-- `/docs` em cada aplicação — Swagger gerado pelo FastAPI, sempre atualizado com o código.
+- `/v1/docs` e `/v1/openapi.json` — contrato OpenAPI da API do portal (também no modo combinado);
+  a tela não publica o seu (ADR-08).
+- `docs/GUIA-INTEGRACAO-PORTAL.md` — guia entregue ao integrador; PDF e Postman em `entregas/`.

@@ -94,8 +94,15 @@ desenvolvimento). **Este projeto ignora essas variaveis**: aqui so existe um ban
 que estiver nos nomes `FB_*` sem sufixo e lido.
 
 Lista completa com o que preencher no painel: `render.yaml` (os itens `sync: false`).
-A chave `CERTGEN_API_KEY` pode ser a mesma da LAN ou uma nova:
-`python -c "import secrets;print(secrets.token_hex(16))"`.
+`CERTGEN_API_KEY` e opcional desde ADR-09 (28/10/2026): as chaves do portal sao criadas na
+tela, em **CHAVES DA API** (so ADMIN), com as administradoras que cada cliente pode consultar.
+Se a variavel estiver preenchida ela vale como chave de transicao com acesso total; deixe em
+branco depois de cadastrar as chaves.
+
+**Bucket privado (ADR-09).** No console da AWS, em S3 > `certincendioaws` > Permissions, ligue
+*Block all public access* e remova qualquer bucket policy ou ACL de leitura publica. A API
+devolve URLs assinadas (validade `CERTGEN_LINK_VALIDADE_SEG`, padrao 15 min); a credencial
+`AWS_ACCESS_KEY_ID` precisa de `s3:PutObject` e `s3:GetObject` no bucket.
 
 ## 4. Subir
 
@@ -120,7 +127,8 @@ Depois a emissao, como em `docs/TESTE-API-POSTMAN.md` (trocar a base URL da cole
 | Sintoma | Causa provavel | Onde olhar |
 |---|---|---|
 | Build para em `pytest` | teste quebrado no commit | log do build |
-| Deploy sobe e cai com `CERTGEN_API_KEY ausente` | variavel nao preenchida | Environment do servico |
+| `/v1` responde `401` para qualquer chave | nenhuma chave cadastrada e `CERTGEN_API_KEY` vazia | criar a chave em CHAVES DA API (log de subida avisa) |
+| PDF abre `AccessDenied` pelo link permanente | bucket privado (esperado) | abrir pelo `link` assinado da resposta ou por `POST /v1/certificados/link` |
 | `502` com "Nao foi possivel conectar em host/porta:..." | tunel fechado, porta errada ou firewall | `ngrok` / roteador; `FB_HOST`/`FB_PORT` |
 | Emissao demora > 30 s ou `Out of memory` | Chromium no plano Starter | subir para `standard` |
 | `502` na emissao com credencial AWS | `AWS_*` ausentes (SEC-01) | `docs/TESTE-API-POSTMAN.md`, diagnostico do 502 |

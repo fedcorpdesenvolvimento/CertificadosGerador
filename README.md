@@ -46,7 +46,8 @@ python -m certgen.cli emitir --administradora 0000001192 --apolice 13008 --seq 1
 # Compartilhar na rede interna para a equipe testar (RNF-10a; liberar a porta 8000 no firewall)
 python -m certgen.cli web --rede --sem-navegador
 
-# APIs para o portal (Fase 8, secao 11.1 da spec): exige CERTGEN_API_KEY no .env
+# APIs para o portal (Fase 8, secao 11.1 da spec). Chaves cadastradas na tela (CHAVES DA API, ADR-09);
+# CERTGEN_API_KEY no .env e opcional (transicao)
 python -m certgen.cli api                 # http://127.0.0.1:8010/docs
 python -m certgen.cli api --rede          # portal chega pela rede interna (sem TLS: so na LAN)
 # Emissao (link + JSON espelho): curl -X POST http://127.0.0.1:8010/v1/certificados/emitir -H "X-API-Key: <chave>" -H "Content-Type: application/json" -d "{\"administradora\":\"0000001192\",\"cpf_cnpj\":\"33016330725\",\"vigencia\":\"2026-07-01\"}"
@@ -91,4 +92,4 @@ ficam em `dados/usuarios.sqlite` (`CERTGEN_USUARIOS_DB`), fora do Firebird.
 | 5 | Adaptador de API (origem de dados) | pendente |
 | 6 | Emissão em massa | pendente |
 | 7 | Publicação S3 (`adapters/s3`, RN-29), `registrar_link` (RD-20a) e **Upload AWS na emissão manual** (checkbox da tela e `--upload-aws`, RF-21; link no banco e no JSON em todos os modos) | S3 e link feitos em 10/09; upload manual em 15/09/2026 com teste real; XML Porto e e-mail pendentes; rotação das chaves AWS do legado (SEC-01) é ação do usuário |
-| 8 | APIs para o portal (`api`, seção 11.1, [docs/API.md](docs/API.md)): emissão (`X-API-Key`, administradora + CPF + vigência [+ fatura/certificado] → link no S3 + JSON espelho, RD-29/RD-31) e verificação para o login (`/v1/segurados/verificar`: existe + 3 vigências mais recentes, RF-20/RN-35/RN-35a) | feitas em 10–14/09/2026, testadas com Postman contra Firebird e S3 reais; integração com o portal em andamento |
+| 8 | APIs para o portal (`api`, seção 11.1, [docs/API.md](docs/API.md)): emissão (`X-API-Key`, administradora + CPF + vigência [+ fatura/certificado] → link no S3 + JSON espelho, RD-29/RD-31) e verificação para o login (`/v1/segurados/verificar`: existe + 3 vigências mais recentes, RF-20/RN-35/RN-35a) | feitas em 10–14/09/2026; **28/10/2026 (ADR-09)**: chaves por cliente com escopo (tela `/chaves`), bucket privado + link assinado, `/v1/certificados/link`, `/v1/administradoras`, envelope de erro, `X-Request-Id`, limite de taxa, OpenAPI em `/v1/docs`; validado de ponta a ponta no Render |

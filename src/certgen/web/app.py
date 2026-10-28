@@ -43,6 +43,7 @@ from certgen.domain.certificado import ChaveCertificado, ChaveLote
 from certgen.domain.nomes_arquivo import NomeArquivoInvalido
 from certgen.domain.produto import ProdutoIndeterminado
 from certgen.web import auth
+from certgen.web.chaves_api import ChaveInvalida, RepositorioChaves
 from certgen.web.usuarios import PERFIS, RepositorioUsuarios, Usuario, UsuarioInvalido
 
 log = logging.getLogger("certgen.web")
@@ -87,6 +88,8 @@ async def _ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
         cfg = _config()
         app.state.usuarios = RepositorioUsuarios(cfg.usuarios_db)
         semear_admin(app.state.usuarios, cfg)
+    if getattr(app.state, "chaves", None) is None:  # ADR-09
+        app.state.chaves = RepositorioChaves(_config().usuarios_db)
     yield
 
 
@@ -96,6 +99,7 @@ app = FastAPI(
     docs_url=None, redoc_url=None, openapi_url=None,
 )  # fmt: skip
 app.state.usuarios = None
+app.state.chaves = None  # ADR-09
 app.mount("/static", StaticFiles(directory=str(PASTA_WEB / "static")), name="static")
 app.middleware("http")(auth.middleware_sessao)
 
@@ -253,6 +257,12 @@ def pagina_trocar_senha(usuario: Usuario = Depends(auth.usuario_atual)) -> HTMLR
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(usuario: Usuario = Depends(auth.exigir_admin)) -> HTMLResponse:
     return _pagina("usuarios.html", usuario, perfis=PERFIS)
+
+
+@app.get("/chaves", response_class=HTMLResponse)
+def pagina_chaves(usuario: Usuario = Depends(auth.exigir_admin)) -> HTMLResponse:
+    """ADR-09 — chaves da API do portal (so ADMIN)."""
+    return _pagina("chaves.html", usuario)
 
 
 class LoginIn(BaseModel):
@@ -463,6 +473,74 @@ def api_resetar_senha(
     return {"ok": True, "senha_temporaria": temporaria}
 
 
+# ------------------------------------------------ ADR-09: chaves da API do portal
+class ChaveApiIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nome: str = Field(..., min_length=2, max_length=120)
+    administradoras: list[str] = Field(default_factory=list)
+    todas: bool = False
+    ips: list[str] = Field(default_factory=list)
+
+
+@app.get("/api/chaves")
+def api_listar_chaves(
+    _: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioChaves = Depends(auth.repositorio_chaves),
+):
+    return [c.publico() for c in repo.listar()]
+
+
+@app.post("/api/chaves", status_code=201)
+def api_criar_chave(
+    req: ChaveApiIn,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioChaves = Depends(auth.repositorio_chaves),
+):
+    """Cria a chave e mostra o texto UMA vez ao administrador; o banco guarda so o hash."""
+    try:
+        nova, texto = repo.criar(
+            req.nome, req.administradoras, todas=req.todas, ips=req.ips, criada_por=admin.id
+        )
+    except ChaveInvalida as exc:
+        return _erro(exc)
+    auth.registrar_evento("chave_api_criada", por=admin.id, chave_id=nova.id, prefixo=nova.prefixo)
+    return JSONResponse({**nova.publico(), "chave": texto}, status_code=201)
+
+
+@app.put("/api/chaves/{chave_id}")
+def api_atualizar_chave(
+    chave_id: int,
+    req: ChaveApiIn,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioChaves = Depends(auth.repositorio_chaves),
+):
+    if repo.obter(chave_id) is None:
+        return _erro(LookupError("Chave nao encontrada."), 404)
+    try:
+        nova = repo.atualizar(chave_id, req.nome, req.administradoras, todas=req.todas, ips=req.ips)
+    except ChaveInvalida as exc:
+        return _erro(exc)
+    auth.registrar_evento("chave_api_atualizada", por=admin.id, chave_id=chave_id)
+    return nova.publico()
+
+
+@app.post("/api/chaves/{chave_id}/revogar")
+def api_revogar_chave(
+    chave_id: int,
+    admin: Usuario = Depends(auth.exigir_admin),
+    repo: RepositorioChaves = Depends(auth.repositorio_chaves),
+):
+    """Irreversivel: a chave deixa de autenticar na hora (GAP-24 fechado)."""
+    alvo = repo.obter(chave_id)
+    if alvo is None:
+        return _erro(LookupError("Chave nao encontrada."), 404)
+    repo.revogar(chave_id)
+    auth.registrar_evento(
+        "chave_api_revogada", por=admin.id, chave_id=chave_id, prefixo=alvo.prefixo
+    )
+    return repo.obter(chave_id).publico()  # type: ignore[union-attr]
+
+
 # ---------------------------------------------------------------- API cascata
 def _erro(exc: Exception, status: int = 400) -> JSONResponse:
     return JSONResponse({"erro": str(exc), "tipo": type(exc).__name__}, status_code=status)
@@ -607,6 +685,7 @@ def api_emitir(
     )
     if req.so_xml:
         return emitir_lote(repo, lote, opcoes).para_dict()
+    cfg = _config()
 
     from certgen.render.html import DadosRender
     from certgen.render.pdf import ErroRenderizacao, RenderizadorPdf
@@ -618,7 +697,7 @@ def api_emitir(
                 dados = DadosRender(meta.gerado_em.date(), meta.exibe_premio, meta.faz_tudo_lar)
                 return render.renderizar_certificado(cert, dados, destino)
 
-            return emitir_lote(
+            resultado = emitir_lote(
                 repo,
                 lote,
                 opcoes,
@@ -628,6 +707,20 @@ def api_emitir(
             ).para_dict()
     except ErroRenderizacao as exc:
         return _erro(exc, 503)
+    if publicador is not None:  # ADR-09: bucket privado; o operador abre pelo link assinado
+        for item in resultado["emitidos"]:
+            item["link_temporario"] = _link_temporario(publicador, item.get("link"), cfg)
+    return resultado
+
+
+def _link_temporario(publicador: PublicadorArquivos, link: str | None, cfg: Config) -> str | None:
+    if not link:
+        return None
+    try:
+        return publicador.link_temporario(link, cfg.link_validade_seg)
+    except Exception as exc:  # o relatorio nao falha por causa do link assinado
+        log.warning("link assinado indisponivel para %s: %s", link, exc)
+        return None
 
 
 # ------------------------------------------------------------ escolha de pasta

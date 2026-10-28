@@ -144,8 +144,39 @@ class LimiteTentativas:
             self._falhas.clear()
 
 
+class LimiteTaxa:
+    """Janela deslizante em memoria que conta TODAS as chamadas (nao so falhas):
+    `maximo` por chave em `janela_seg` segundos. ADR-09: limite por chave da API
+    (GAP-26). Mesmo desenho de LimiteTentativas."""
+
+    def __init__(self, maximo: int = 60, janela_seg: int = 60) -> None:
+        self.maximo, self.janela = maximo, janela_seg
+        self._chamadas: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def consumir(self, chave: str) -> int:
+        """Registra uma chamada. 0 se dentro do limite; senao, segundos ate liberar
+        (a chamada excedente NAO e contada, para o bloqueio nao se renovar sozinho)."""
+        with self._lock:
+            agora = time.monotonic()
+            fila = self._chamadas[chave]
+            while fila and fila[0] <= agora - self.janela:
+                fila.popleft()
+            if len(fila) >= self.maximo:
+                return max(1, int(fila[0] + self.janela - agora))
+            fila.append(agora)
+            return 0
+
+    def limpar_tudo(self) -> None:
+        with self._lock:
+            self._chamadas.clear()
+
+
 limite_login = LimiteTentativas(maximo=10, janela_seg=15 * 60)  # por e-mail + IP
 limite_login_ip = LimiteTentativas(maximo=30, janela_seg=15 * 60)  # por IP, qualquer e-mail
+# ADR-09 — API do portal: 60 chamadas/min por chave; 30 chaves erradas/15 min por IP
+limite_api_chave = LimiteTaxa(maximo=60, janela_seg=60)
+limite_api_chave_errada = LimiteTentativas(maximo=30, janela_seg=15 * 60)
 
 
 def ip_de(request: Request) -> str:
@@ -157,6 +188,14 @@ def repositorio_usuarios(request: Request) -> RepositorioUsuarios:
     repo = getattr(request.app.state, "usuarios", None)
     if repo is None:
         raise HTTPException(503, "cadastro de usuarios indisponivel")
+    return repo
+
+
+def repositorio_chaves(request: Request):
+    """ADR-09 — cadastro de chaves da API (mesmo SQLite dos usuarios)."""
+    repo = getattr(request.app.state, "chaves", None)
+    if repo is None:
+        raise HTTPException(503, "cadastro de chaves indisponivel")
     return repo
 
 

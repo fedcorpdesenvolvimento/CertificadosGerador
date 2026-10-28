@@ -178,7 +178,7 @@
       for (const e of r.emitidos) {
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.vigencia)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
-          <td>${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">${esc(e.link)}</a>` : ""}</td>
+          <td>${e.link ? `<a href="${esc(e.link_temporario || e.link)}" target="_blank" rel="noopener" title="${e.link_temporario ? "Link assinado, válido por 15 minutos (ADR-09)" : ""}">${esc(e.link)}</a>` : ""}</td>
           <td>${e.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.rel.appendChild(tr);
       }

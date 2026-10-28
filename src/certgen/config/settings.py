@@ -91,6 +91,20 @@ class ConfigFirebird:
         )
 
 
+def _inteiro(texto: str, padrao: int, minimo: int, maximo: int) -> int:
+    """Le um inteiro do ambiente com padrao e faixa; valor fora da faixa e recusado."""
+    texto = (texto or "").strip()
+    if not texto:
+        return padrao
+    try:
+        valor = int(texto)
+    except ValueError as exc:
+        raise ConfiguracaoAusente(f"valor inteiro invalido no ambiente: {texto!r}") from exc
+    if not minimo <= valor <= maximo:
+        raise ConfiguracaoAusente(f"valor fora da faixa [{minimo}, {maximo}]: {valor}")
+    return valor
+
+
 @dataclass(frozen=True)
 class Config:
     repositorio: str
@@ -100,7 +114,11 @@ class Config:
     pasta_saida: Path
     apolices_massa: tuple[str, ...] = field(default_factory=tuple)
     susep_corretora: str = "00000202049583"  # RN-25 — fixo nesta fase
-    api_key: str = ""  # RN-30 — CERTGEN_API_KEY; exigida so por `certgen api`
+    # RN-30 revisto por ADR-09: chaves da API vivem no SQLite (web/chaves_api.py). A variavel
+    # CERTGEN_API_KEY e opcional e de TRANSICAO: se presente, vale como chave com acesso a
+    # todas as administradoras. Remover do ambiente assim que as chaves forem cadastradas.
+    api_key: str = ""
+    link_validade_seg: int = 900  # ADR-09 — validade da URL assinada do PDF (15 min)
     aws_region: str = "us-east-2"  # RN-29
     aws_bucket: str = "certincendioaws"  # RN-29
     # ADR-08 — login da tela: SQLite de usuarios/sessoes e o ADMIN inicial (so semeado
@@ -117,7 +135,9 @@ class Config:
         )
 
     def exigir_api_key(self) -> str:
-        """RN-30 — o processo da API recusa subir sem chave."""
+        """RN-30 (original) — chave de transicao em CERTGEN_API_KEY. Desde ADR-09 o
+        processo sobe sem ela (chaves no SQLite); este metodo so e usado por quem
+        precisa da variavel explicitamente."""
         if not self.api_key:
             raise ConfiguracaoAusente(
                 "CERTGEN_API_KEY ausente no .env. Gere com "
@@ -143,6 +163,7 @@ class Config:
             apolices_massa=apolices,
             susep_corretora=os.getenv("CERTGEN_SUSEP_CORRETORA", "00000202049583").strip(),
             api_key=os.getenv("CERTGEN_API_KEY", "").strip(),
+            link_validade_seg=_inteiro(os.getenv("CERTGEN_LINK_VALIDADE_SEG", ""), 900, 60, 86400),
             aws_region=os.getenv("AWS_REGION", "us-east-2").strip() or "us-east-2",
             aws_bucket=os.getenv("AWS_S3_BUCKET", "certincendioaws").strip() or "certincendioaws",
             usuarios_db=Path(

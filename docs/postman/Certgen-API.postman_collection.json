@@ -1,8 +1,7 @@
 {
   "info": {
-    "_postman_id": "1a71362d-76dc-4ea6-a811-00d888ec5bee",
-    "name": "Certgen API (portal)",
-    "description": "APIs do Gerador de Certificados para o portal (spec, secao 11.1).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (RN-30).\n1. Saude -> 2. Verificar segurado (so leitura; preenche vigencia/fatura/certificado) -> 3. Emitir por vigencia ou 3b. Emitir apontando fatura + certificado (GRAVA no S3 e no banco) -> 4. Repetir emissao (reemite; aviso REEMISSAO).\nPasta 'Erros esperados' cobre 401/400/422/404.\n\nPasso a passo: docs/TESTE-API-POSTMAN.md\n\nSe 'Emitir' devolver 502 com motivo 'Unable to locate credentials': faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor (o .env herdado do EnvioPorto nao tem a secao AWS). Preencher e reiniciar a API (Ctrl+C no iniciar_api.ps1 e rodar de novo). Ver guia, secoes 1 e 4.",
+    "name": "FedCorp - API de Certificados",
+    "description": "API de emissao de certificados de seguro incendio da FedCorp (contrato de 28/10/2026).\n\nAutenticacao: header X-API-Key com a variavel {{api_key}} do environment (preencha com a chave recebida).\nFluxo: 1. Saude -> 1b. Administradoras -> 2. Verificar segurado (so leitura; preenche vigencia/fatura/certificado) -> 3. Emitir (GRAVA: gera o PDF e devolve o link assinado) -> 4. Repetir emissao (aviso REEMISSAO) -> 5. Link assinado sem reemitir.\nPasta 'Erros esperados' cobre o envelope unico {codigo, mensagem, request_id, detalhes}.\n\nPreencha cpf_cnpj no environment com o documento de teste enviado pela FedCorp.\nDocumentacao completa: FedCorp-Certificados-API-Documentacao.pdf; contrato OpenAPI em {{base_url}}/v1/docs.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -41,7 +40,7 @@
   "variable": [],
   "item": [
     {
-      "name": "1. Saude (testa a chave)",
+      "name": "1. Saude (testa a chave e mostra o escopo)",
       "request": {
         "method": "GET",
         "header": [],
@@ -55,7 +54,7 @@
             "saude"
           ]
         },
-        "description": "RF-18. 200 = chave, firewall e rota de rede funcionando."
+        "description": "200 = chave aceita. A resposta traz cliente, prefixo da chave e as administradoras permitidas ('todas' ou lista)."
       },
       "response": [],
       "event": [
@@ -65,17 +64,59 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('200', () => pm.response.to.have.status(200));",
-              "pm.test('ok true', () => pm.expect(pm.response.json().ok).to.be.true);",
+              "const v = pm.response.json();",
+              "pm.test('ok, versao, cliente, chave, administradoras', () =>",
+              "  pm.expect(Object.keys(v).sort()).to.eql(['administradoras', 'chave', 'cliente', 'ok', 'versao']));",
+              "pm.test('ok true', () => pm.expect(v.ok).to.be.true);",
               "pm.test('sem a chave na resposta', () => {",
-              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-              "});"
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+              "});",
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "2. Verificar segurado (login do portal)",
+      "name": "1b. Administradoras da chave",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/v1/administradoras",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "administradoras"
+          ]
+        },
+        "description": "Codigo (10 caracteres), nome, abreviacao e possui_portal das administradoras que esta chave pode consultar. Use para mapear o cadastro do portal."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const v = pm.response.json();",
+              "pm.test('quantidade bate com a lista', () => pm.expect(v.quantidade).to.eql(v.administradoras.length));",
+              "pm.test('cada item tem codigo, nome, abreviacao, possui_portal', () => v.administradoras.forEach(a =>",
+              "  ['codigo','nome','abreviacao','possui_portal'].forEach(k => pm.expect(a).to.have.property(k))));",
+              "pm.test('sem a chave na resposta', () => {",
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+              "});",
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Verificar segurado",
       "request": {
         "method": "POST",
         "header": [
@@ -95,7 +136,7 @@
             "verificar"
           ]
         },
-        "description": "RF-20 / RN-35 / RD-30 / RN-35a (14/09/2026). existe=true se o CPF/CNPJ tem alguma linha nao cancelada na administradora (sem olhar vigencia); certificados = as 3 vigencias mais recentes com nome, endereco, apolice, seq, fatura, certificado e produto. O script de teste copia inicio_vig/fatura/certificado do primeiro item para as variaveis vigencia/fatura/certificado, usadas pela request 3b. Nao grava nada.",
+        "description": "existe=true se o CPF/CNPJ tem certificado nao cancelado na administradora (sem olhar vigencia); certificados = as 3 vigencias mais recentes com nome, endereco, apolice, seq, fatura, certificado e produto. O script copia inicio_vig/fatura/certificado do primeiro item para o environment, usados pelas requests 3, 4 e 5. Nao grava nada. Nao e prova de identidade: o portal autentica o segurado por conta propria.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\"\n}",
@@ -117,24 +158,12 @@
               "const v = pm.response.json();",
               "pm.test('campos existe, quantidade, certificados', () =>",
               "  pm.expect(Object.keys(v).sort()).to.eql(['certificados', 'existe', 'quantidade']));",
-              "pm.test('existe e boolean', () => pm.expect(v.existe).to.be.a('boolean'));",
               "pm.test('quantidade bate com a lista', () => pm.expect(v.quantidade).to.eql(v.certificados.length));",
-              "pm.test('existe=false vem vazio', () => { if (!v.existe) pm.expect(v.certificados).to.be.empty; });",
-              "pm.test('no maximo 3 vigencias distintas (RN-35a)', () => {",
-              "  const meses = new Set(v.certificados.map(c => c.inicio_vig));",
-              "  pm.expect(meses.size).to.be.at.most(3);",
-              "});",
-              "pm.test('cada item tem os campos RD-30', () => {",
-              "  v.certificados.forEach(c => {",
-              "    ['nome','endereco','inicio_vig','final_vig','apolice','seq','fatura','certificado','produto']",
-              "      .forEach(k => pm.expect(c, k).to.have.property(k));",
-              "    ['logradouro','unidade','bairro','cidade','uf','cep','condominio']",
-              "      .forEach(k => pm.expect(c.endereco, 'endereco.' + k).to.have.property(k));",
-              "    ['codigo','nome','descricao_fatura','descricao_master']",
-              "      .forEach(k => pm.expect(c.produto, 'produto.' + k).to.have.property(k));",
-              "  });",
-              "});",
-              "// Alimenta a emissao (RD-31) com a vigencia mais recente devolvida",
+              "pm.test('no maximo 3 vigencias distintas', () => pm.expect(new Set(v.certificados.map(c => c.inicio_vig)).size).to.be.at.most(3));",
+              "pm.test('cada item tem os campos esperados', () => v.certificados.forEach(c => {",
+              "  ['nome','endereco','inicio_vig','final_vig','apolice','seq','fatura','certificado','produto'].forEach(k => pm.expect(c, k).to.have.property(k));",
+              "  ['logradouro','unidade','bairro','cidade','uf','cep','condominio'].forEach(k => pm.expect(c.endereco, 'endereco.' + k).to.have.property(k));",
+              "}));",
               "if (v.existe && v.certificados.length) {",
               "  const c = v.certificados[0];",
               "  pm.environment.set('vigencia', c.inicio_vig);",
@@ -143,85 +172,16 @@
               "  console.log('emissao apontada para', c.inicio_vig, c.fatura, c.certificado);",
               "}",
               "pm.test('sem a chave na resposta', () => {",
-              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-              "});"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "3. Emitir certificado (GRAVA S3 + banco)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{base_url}}/v1/certificados/emitir",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "v1",
-            "certificados",
-            "emitir"
-          ]
-        },
-        "description": "UC-12 / RF-18 / RD-29. ATENCAO: emissao real - gera PDF e JSON na pasta de saida, publica no S3 e grava link_certificado_aws no Firebird. vigencia = inicio_vig exato (RN-31). Pode levar alguns segundos (Chromium). Se vier 502 com motivo 'Unable to locate credentials', faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor: preencher e reiniciar a API (demora ~90 s ate o erro porque o boto3 procura perfil e metadados EC2).",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        }
-      },
-      "response": [],
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "if (pm.response.code === 502) {",
-              "  const txt = pm.response.text();",
-              "  if (txt.includes('Unable to locate credentials')) {",
-              "    console.warn('502: credenciais AWS ausentes no servidor. Preencher AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env e reiniciar a API (guia, secao 1 passo 3).');",
-              "  } else if (txt.includes('ErroPublicacao')) {",
-              "    console.warn('502: falha ao publicar no S3 (credencial invalida, sem permissao no bucket ou rede). Ver motivo no corpo.');",
-              "  }",
-              "}",
-              "pm.test('200', () => pm.response.to.have.status(200));",
-              "const r = pm.response.json();",
-              "pm.test('cpf so digitos', () => pm.expect(r.pedido.cpf_cnpj).to.match(/^\\d+$/));",
-              "pm.test('tem certificados', () => pm.expect(r.quantidade).to.be.above(0));",
-              "pm.test('todo item tem link+documento ou motivo', () => {",
-              "  r.certificados.forEach(c => {",
-              "    if (c.situacao === 'falha') { pm.expect(c.motivo).to.be.a('string'); return; }",
-              "    pm.expect(c.link).to.match(/^https:\\/\\/.+\\.pdf$/);",
-              "    pm.expect(c.documento).to.be.an('object');",
-              "    pm.expect(c.documento.arquivo.link).to.eql(c.link);",
-              "  });",
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
               "});",
-              "if (r.certificados[0] && r.certificados[0].link) {",
-              "  pm.environment.set('ultimo_link', r.certificados[0].link);",
-              "}",
-              "pm.test('sem a chave na resposta', () => {",
-              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-              "});"
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "3b. Emitir apontando fatura + certificado (RD-31; GRAVA)",
+      "name": "3. Emitir uma unidade (GRAVA)",
       "request": {
         "method": "POST",
         "header": [
@@ -241,7 +201,7 @@
             "emitir"
           ]
         },
-        "description": "RF-18 + RD-31. Usa vigencia/fatura/certificado preenchidos pela request 2 para emitir so a unidade escolhida (util quando o CPF tem mais de uma unidade no mes, RD-22). ATENCAO: emissao real (S3 + banco). Se vier 502 com motivo 'Unable to locate credentials', faltam AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env do servidor: preencher e reiniciar a API (demora ~90 s ate o erro porque o boto3 procura perfil e metadados EC2).",
+        "description": "ATENCAO: emissao real. Gera o PDF, publica no bucket privado, grava o link permanente e devolve `link` ASSINADO (expira em `link_expira_em`, 15 min) + `documento` (JSON espelho; `documento.arquivo.link` e o permanente, nao abre sem assinatura). Usa vigencia/fatura/certificado preenchidos pela request 2. Sem fatura/certificado emitiria TODAS as unidades da vigencia.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\",\n  \"fatura\": {{fatura}},\n  \"certificado\": \"{{certificado}}\"\n}",
@@ -259,38 +219,34 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "if (pm.response.code === 502) {",
-              "  const txt = pm.response.text();",
-              "  if (txt.includes('Unable to locate credentials')) {",
-              "    console.warn('502: credenciais AWS ausentes no servidor. Preencher AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env e reiniciar a API (guia, secao 1 passo 3).');",
-              "  } else if (txt.includes('ErroPublicacao')) {",
-              "    console.warn('502: falha ao publicar no S3 (credencial invalida, sem permissao no bucket ou rede). Ver motivo no corpo.');",
-              "  }",
-              "}",
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const r = pm.response.json();",
               "pm.test('pedido ecoa fatura e certificado', () => {",
               "  pm.expect(String(r.pedido.fatura)).to.eql(pm.environment.get('fatura'));",
               "  pm.expect(r.pedido.certificado).to.eql(pm.environment.get('certificado'));",
               "});",
-              "pm.test('exatamente 1 certificado', () => pm.expect(r.quantidade).to.eql(1));",
-              "pm.test('publicado com link e documento', () => {",
+              "pm.test('item publicado com link assinado, expiracao e documento', () => {",
               "  const c = r.certificados[0];",
               "  pm.expect(c.situacao).to.eql('publicado');",
-              "  pm.expect(c.link).to.match(/^https:\\/\\/.+\\.pdf$/);",
-              "  pm.expect(c.documento.arquivo.link).to.eql(c.link);",
-              "  pm.expect(c.chave.certificado).to.eql(pm.environment.get('certificado'));",
+              "  pm.expect(c.link).to.match(/^https:\\/\\/.+\\.pdf\\?.*X-Amz-/);",
+              "  pm.expect(c.link_expira_em).to.be.a('string');",
+              "  pm.expect(c.documento.arquivo.link).to.match(/^https:\\/\\/.+\\.pdf$/);",
+              "  pm.expect(c.link.startsWith(c.documento.arquivo.link)).to.be.true;",
               "});",
+              "if (r.certificados[0] && r.certificados[0].documento) {",
+              "  pm.environment.set('ultimo_link', r.certificados[0].documento.arquivo.link);",
+              "}",
               "pm.test('sem a chave na resposta', () => {",
-              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-              "});"
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+              "});",
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "4. Repetir emissao (reemite, aviso REEMISSAO)",
+      "name": "4. Repetir emissao (aviso REEMISSAO)",
       "request": {
         "method": "POST",
         "header": [
@@ -310,10 +266,10 @@
             "emitir"
           ]
         },
-        "description": "RN-33 revista (14/09/2026). Mesmo pedido de novo: a API SEMPRE reemite; sobrescreve PDF/JSON e o objeto no S3; aviso REEMISSAO.",
+        "description": "Mesmo pedido de novo: a API sempre reemite, sobrescreve o PDF no mesmo endereco permanente e devolve o aviso REEMISSAO. Repetir apos timeout e seguro.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\"\n}",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\",\n  \"fatura\": {{fatura}},\n  \"certificado\": \"{{certificado}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -330,23 +286,78 @@
             "exec": [
               "pm.test('200', () => pm.response.to.have.status(200));",
               "const r = pm.response.json();",
-              "pm.test('publicado de novo', () => pm.expect(r.certificados[0].situacao).to.eql('publicado'));",
               "pm.test('aviso REEMISSAO', () => pm.expect(r.certificados[0].avisos).to.include('REEMISSAO'));",
-              "pm.test('mesmo link da emissao anterior (mesma chave no S3)', () => {",
+              "pm.test('mesmo link permanente da emissao anterior', () => {",
               "  const anterior = pm.environment.get('ultimo_link');",
-              "  if (anterior) pm.expect(r.certificados[0].link).to.eql(anterior);",
+              "  if (anterior) pm.expect(r.certificados[0].documento.arquivo.link).to.eql(anterior);",
               "});",
-              "pm.test('documento novo', () => pm.expect(r.certificados[0].documento).to.be.an('object'));",
               "pm.test('sem a chave na resposta', () => {",
-              "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-              "});"
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+              "});",
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "Erros esperados",
+      "name": "5. Link assinado sem reemitir",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/certificados/link",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "certificados",
+            "link"
+          ]
+        },
+        "description": "Novo link assinado para certificado JA emitido, sem gerar nada. E o que o portal chama quando o segurado clica depois que o link anterior expirou. situacao: disponivel | nao_emitido | falha.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"{{vigencia}}\",\n  \"fatura\": {{fatura}},\n  \"certificado\": \"{{certificado}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('item disponivel com link assinado', () => {",
+              "  const c = r.certificados[0];",
+              "  pm.expect(c.situacao).to.eql('disponivel');",
+              "  pm.expect(c.link).to.match(/X-Amz-/);",
+              "  pm.expect(c.link_expira_em).to.be.a('string');",
+              "});",
+              "pm.test('sem a chave na resposta', () => {",
+              "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+              "});",
+              "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Erros esperados (envelope unico)",
       "item": [
         {
           "name": "401 - sem chave",
@@ -363,7 +374,7 @@
                 "saude"
               ]
             },
-            "description": "",
+            "description": "Chamada sem o header X-API-Key.",
             "auth": {
               "type": "noauth"
             }
@@ -375,10 +386,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('401 CHAVE_INVALIDA', () => pm.response.to.have.status(401));",
+                  "const e = pm.response.json();",
+                  "pm.test('envelope {codigo, mensagem, request_id, detalhes}', () =>",
+                  "  pm.expect(Object.keys(e).sort()).to.eql(['codigo', 'detalhes', 'mensagem', 'request_id']));",
+                  "pm.test('codigo CHAVE_INVALIDA', () => pm.expect(e.codigo).to.eql('CHAVE_INVALIDA'));",
+                  "pm.test('request_id bate com o header', () => pm.expect(e.request_id).to.eql(pm.response.headers.get('X-Request-Id')));",
                   "pm.test('sem a chave na resposta', () => {",
-                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-                  "});"
+                  "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+                  "});",
+                  "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
                 ]
               }
             }
@@ -405,7 +422,7 @@
                 "verificar"
               ]
             },
-            "description": "",
+            "description": "Documento sem 11 ou 14 digitos.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"123\"\n}",
@@ -423,11 +440,72 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('400', () => pm.response.to.have.status(400));",
-                  "pm.test('tem erro', () => pm.expect(pm.response.json().erro).to.be.a('string'));",
+                  "pm.test('400 PEDIDO_INVALIDO', () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test('envelope {codigo, mensagem, request_id, detalhes}', () =>",
+                  "  pm.expect(Object.keys(e).sort()).to.eql(['codigo', 'detalhes', 'mensagem', 'request_id']));",
+                  "pm.test('codigo PEDIDO_INVALIDO', () => pm.expect(e.codigo).to.eql('PEDIDO_INVALIDO'));",
+                  "pm.test('request_id bate com o header', () => pm.expect(e.request_id).to.eql(pm.response.headers.get('X-Request-Id')));",
                   "pm.test('sem a chave na resposta', () => {",
-                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-                  "});"
+                  "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+                  "});",
+                  "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 - administradora fora do escopo da chave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/segurados/verificar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "segurados",
+                "verificar"
+              ]
+            },
+            "description": "Codigo de administradora que a chave nao pode consultar. Se a chave tiver acesso a 'todas', este teste devolve 200 e deve ser ignorado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"administradora\": \"9999999999\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 403) {",
+                  "  pm.test('403 ADMINISTRADORA_NAO_PERMITIDA', () => pm.response.to.have.status(403));",
+                  "  const e = pm.response.json();",
+                  "  pm.test('envelope {codigo, mensagem, request_id, detalhes}', () =>",
+                  "    pm.expect(Object.keys(e).sort()).to.eql(['codigo', 'detalhes', 'mensagem', 'request_id']));",
+                  "  pm.test('codigo ADMINISTRADORA_NAO_PERMITIDA', () => pm.expect(e.codigo).to.eql('ADMINISTRADORA_NAO_PERMITIDA'));",
+                  "  pm.test('request_id bate com o header', () => pm.expect(e.request_id).to.eql(pm.response.headers.get('X-Request-Id')));",
+                  "  pm.test('sem a chave na resposta', () => {",
+                  "    const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+                  "  });",
+                  "  pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));",
+                  "} else { pm.test('chave com acesso a todas (200)', () => pm.response.to.have.status(200)); }"
                 ]
               }
             }
@@ -454,7 +532,7 @@
                 "emitir"
               ]
             },
-            "description": "",
+            "description": "vigencia fora do formato AAAA-MM-DD.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"01/07/2026\"\n}",
@@ -472,10 +550,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 CORPO_MALFORMADO', () => pm.response.to.have.status(422));",
+                  "const e = pm.response.json();",
+                  "pm.test('envelope {codigo, mensagem, request_id, detalhes}', () =>",
+                  "  pm.expect(Object.keys(e).sort()).to.eql(['codigo', 'detalhes', 'mensagem', 'request_id']));",
+                  "pm.test('codigo CORPO_MALFORMADO', () => pm.expect(e.codigo).to.eql('CORPO_MALFORMADO'));",
+                  "pm.test('request_id bate com o header', () => pm.expect(e.request_id).to.eql(pm.response.headers.get('X-Request-Id')));",
                   "pm.test('sem a chave na resposta', () => {",
-                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-                  "});"
+                  "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+                  "});",
+                  "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));",
+                  "pm.test('detalhes.campos aponta vigencia', () => pm.expect(pm.response.json().detalhes.campos[0].campo).to.eql('vigencia'));"
                 ]
               }
             }
@@ -502,10 +587,10 @@
                 "emitir"
               ]
             },
-            "description": "RD-27: QRY-13 sem linhas. Nada e gravado.",
+            "description": "Nenhum certificado para administradora + documento + vigencia. Nada e gravado.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"1999-01-01\"\n}",
+              "raw": "{\n  \"administradora\": \"{{administradora}}\",\n  \"cpf_cnpj\": \"{{cpf_cnpj}}\",\n  \"vigencia\": \"2020-01-01\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -520,10 +605,52 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('404 CERTIFICADO_NAO_ENCONTRADO', () => pm.response.to.have.status(404));",
+                  "const e = pm.response.json();",
+                  "pm.test('envelope {codigo, mensagem, request_id, detalhes}', () =>",
+                  "  pm.expect(Object.keys(e).sort()).to.eql(['codigo', 'detalhes', 'mensagem', 'request_id']));",
+                  "pm.test('codigo CERTIFICADO_NAO_ENCONTRADO', () => pm.expect(e.codigo).to.eql('CERTIFICADO_NAO_ENCONTRADO'));",
+                  "pm.test('request_id bate com o header', () => pm.expect(e.request_id).to.eql(pm.response.headers.get('X-Request-Id')));",
                   "pm.test('sem a chave na resposta', () => {",
-                  "  pm.expect(pm.response.text()).to.not.include(pm.environment.get('api_key'));",
-                  "});"
+                  "  const k = pm.environment.get('api_key'); if (k) pm.expect(pm.response.text()).to.not.include(k);",
+                  "});",
+                  "pm.test('X-Request-Id presente', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request id do portal e devolvido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "portal-teste-001"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/saude",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "saude"
+              ]
+            },
+            "description": "Envie X-Request-Id e a API devolve o mesmo valor (ou gera um quando ausente/invalido)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('mesmo X-Request-Id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.eql('portal-teste-001'));"
                 ]
               }
             }

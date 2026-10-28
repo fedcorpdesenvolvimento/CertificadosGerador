@@ -13,7 +13,7 @@
     {% for m in modulos %}
     <a href="/{{ m.slug }}" class="{{ 'ativo' if m.ativo else 'inativo' }}">{{ m.titulo }}</a>
     {% endfor %}
-    {% if usuario and usuario.admin %}<a href="/usuarios" class="ativo">USUÁRIOS</a>{% endif %}
+    {% if usuario and usuario.admin %}<a href="/usuarios" class="ativo">USUÁRIOS</a><a href="/chaves" class="ativo">CHAVES DA API</a>{% endif %}
   </nav>
   {% if usuario %}
   <span class="sessao">

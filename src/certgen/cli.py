@@ -152,8 +152,8 @@ def _cmd_web(args: argparse.Namespace) -> int:
 def _cmd_api(args: argparse.Namespace) -> int:
     """Fase 8 / RF-19 — API de emissao para o portal, processo separado da tela.
 
-    RNF-10b: 127.0.0.1 por padrao; `--rede` liga em 0.0.0.0. RN-30: recusa subir sem
-    CERTGEN_API_KEY (a chave nunca e impressa).
+    RNF-10b: 127.0.0.1 por padrao; `--rede` liga em 0.0.0.0. ADR-09: as chaves vivem no
+    SQLite (cadastro na tela); CERTGEN_API_KEY e opcional (transicao) e nunca e impressa.
     """
     import logging
 
@@ -161,13 +161,13 @@ def _cmd_api(args: argparse.Namespace) -> int:
 
     try:
         cfg = Config.do_ambiente()
-        cfg.exigir_api_key()
     except ConfiguracaoAusente as exc:
         print("FALHA:", exc, file=sys.stderr)
         return 1
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    _avisar_chaves(cfg)
     host = "0.0.0.0" if args.rede else "127.0.0.1"
-    print(f"API do portal em http://{host}:{args.porta}/v1  (docs em /docs; Ctrl+C encerra)")
+    print(f"API do portal em http://{host}:{args.porta}/v1  (docs em /v1/docs; Ctrl+C encerra)")
     print(f"Bucket {cfg.aws_bucket} ({cfg.aws_region}); saida local em {cfg.pasta_saida}")
     if args.rede:
         print("Aceitando conexoes da rede interna (RNF-10b). Sem TLS: nao expor fora da LAN.")
@@ -177,12 +177,29 @@ def _cmd_api(args: argparse.Namespace) -> int:
     return 0
 
 
+def _avisar_chaves(cfg: Config) -> None:
+    """ADR-09 — sem chave cadastrada e sem CERTGEN_API_KEY, a API nao autentica ninguem."""
+    from certgen.web.chaves_api import RepositorioChaves
+
+    repo = RepositorioChaves(cfg.usuarios_db)
+    try:
+        ativas = repo.quantidade_ativas()
+    finally:
+        repo.fechar()
+    print(f"Chaves da API ativas: {ativas} (cadastro em {cfg.usuarios_db})")
+    if cfg.api_key:
+        print("AVISO: CERTGEN_API_KEY definida: chave de TRANSICAO com acesso a todas as "
+              "administradoras. Cadastre as chaves na tela e remova a variavel (ADR-09).")
+    elif not ativas:
+        print("AVISO: nenhuma chave da API cadastrada; /v1 responde 401 ate o ADMIN criar uma.")
+
+
 def _cmd_servidor(args: argparse.Namespace) -> int:
     """ADR-08 / Render — tela (com login) e API do portal no MESMO processo e porta.
 
     `--rede` liga em 0.0.0.0; `--proxy` confia nos X-Forwarded-* do proxy da hospedagem
     (necessario no Render para o cookie Secure e para o IP real no limite de tentativas).
-    RN-30: exige CERTGEN_API_KEY, pois as rotas /v1 sobem junto.
+    ADR-09: as rotas /v1 sobem junto, autenticadas pelas chaves cadastradas na tela.
     """
     import logging
 
@@ -190,11 +207,11 @@ def _cmd_servidor(args: argparse.Namespace) -> int:
 
     try:
         cfg = Config.do_ambiente()
-        cfg.exigir_api_key()
     except ConfiguracaoAusente as exc:
         print("FALHA:", exc, file=sys.stderr)
         return 1
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    _avisar_chaves(cfg)
     host = "0.0.0.0" if args.rede else "127.0.0.1"
     print(f"Tela + API do portal em http://{host}:{args.porta}/  (login em /login; /v1 com chave)")
     print(f"Usuarios em {cfg.usuarios_db}; bucket {cfg.aws_bucket}; saida em {cfg.pasta_saida}")

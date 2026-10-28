@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titulo %}Chaves da API — Gerador de Certificados{% endblock %}
+{% block conteudo %}
+<h1>Chaves da API do portal</h1>
+<p class="dica">Uma chave por cliente integrador, com as administradoras que ela pode consultar (ADR-09).
+A chave aparece uma única vez, ao ser criada. Revogar é imediato e irreversível.</p>
+<div class="painel">
+  <h2>Nova chave</h2>
+  <form id="f-nova" novalidate>
+    <div class="linha">
+      <label class="cresce">Cliente <input id="nova_nome" type="text" required maxlength="120" placeholder="ex.: Portal W2BIT"></label>
+      <label><input id="nova_todas" type="checkbox"> Todas as administradoras</label>
+    </div>
+    <div class="linha">
+      <label class="cresce">Administradoras permitidas
+        <select id="nova_adms" multiple size="8"></select>
+        <span class="dica">Segure Ctrl para marcar várias. Ignorado quando "Todas" está marcado.</span>
+      </label>
+      <label class="cresce">IPs de origem permitidos (opcional, um por linha; aceita CIDR)
+        <textarea id="nova_ips" rows="8" placeholder="203.0.113.10&#10;198.51.100.0/24"></textarea>
+        <span class="dica">Em branco: qualquer origem.</span>
+      </label>
+    </div>
+    <button type="submit" class="botao primario">Criar chave</button>
+  </form>
+  <p class="erro" id="erro-nova" hidden></p>
+  <div id="chave-gerada" class="aviso" hidden>
+    <strong>Chave de <span id="cg-nome"></span>:</strong>
+    <code id="cg-chave"></code>
+    <span class="dica">Entregue por canal seguro. Ela só aparece agora: o sistema guarda apenas um hash.</span>
+  </div>
+</div>
+<div class="painel">
+  <h2>Cadastradas</h2>
+  <p class="erro" id="erro-lista" hidden></p>
+  <table class="lista" id="tabela-chaves">
+    <thead><tr><th>Cliente</th><th>Prefixo</th><th>Administradoras</th><th>IPs</th><th>Situação</th><th>Último uso</th><th>Ações</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+<dialog id="dlg-editar">
+  <form id="f-editar" method="dialog" novalidate>
+    <h2>Editar chave</h2>
+    <label>Cliente <input id="ed_nome" type="text" required maxlength="120"></label>
+    <label><input id="ed_todas" type="checkbox"> Todas as administradoras</label>
+    <label>Administradoras permitidas <select id="ed_adms" multiple size="8"></select></label>
+    <label>IPs de origem (um por linha) <textarea id="ed_ips" rows="5"></textarea></label>
+    <p class="erro" id="erro-editar" hidden></p>
+    <div class="linha">
+      <button type="submit" class="botao primario" value="salvar">Salvar</button>
+      <button type="button" class="botao secundario" id="ed_cancelar">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/chaves.js?v={{ v }}"></script>{% endblock %}
