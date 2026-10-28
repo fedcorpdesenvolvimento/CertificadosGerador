@@ -88,8 +88,9 @@ async def _ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
         cfg = _config()
         app.state.usuarios = RepositorioUsuarios(cfg.usuarios_db)
         semear_admin(app.state.usuarios, cfg)
-    if getattr(app.state, "chaves", None) is None:  # ADR-09
-        app.state.chaves = RepositorioChaves(_config().usuarios_db)
+    if getattr(app.state, "chaves", None) is None:  # ADR-09: mesmo arquivo dos usuarios
+        # (sem ler o ambiente de novo: os testes injetam um SQLite temporario e nao tem .env)
+        app.state.chaves = RepositorioChaves(app.state.usuarios.caminho)
     yield
 
 

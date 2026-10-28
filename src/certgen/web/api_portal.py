@@ -191,9 +191,11 @@ def _chaves() -> RepositorioChaves:
     return RepositorioChaves(_config().usuarios_db)
 
 
-def get_repositorio_chaves() -> RepositorioChaves:
-    """ADR-09 — cadastro de chaves no SQLite da tela."""
-    return _chaves()
+def get_repositorio_chaves(request: Request) -> RepositorioChaves:
+    """ADR-09 — cadastro de chaves no SQLite da tela. No modo combinado a tela ja abriu
+    o repositorio (app.state.chaves); `certgen api` abre o seu a partir do ambiente."""
+    repo = getattr(request.app.state, "chaves", None)
+    return repo if repo is not None else _chaves()
 
 
 CHAVE_TRANSICAO = ChaveApi(
