@@ -8,6 +8,9 @@ A especificação completa está em [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.m
 Ela é a fonte da verdade: cada módulo cita os IDs (`RF`, `RN`, `RD`, `QRY`)
 que implementa.
 
+Manual do desenvolvedor (mapa do projeto, roadmap dos processos, trilha de estudo do zero ao projeto):
+[docs/MANUAL-DO-DESENVOLVEDOR.md](docs/MANUAL-DO-DESENVOLVEDOR.md).
+
 Documentação das APIs (portal e tela, com o JSON espelho e os códigos de aviso):
 [docs/API.md](docs/API.md). Teste manual da API do portal: [docs/TESTE-API-POSTMAN.md](docs/TESTE-API-POSTMAN.md).
 

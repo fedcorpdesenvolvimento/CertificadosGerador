@@ -92,6 +92,8 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - CLI: `python -m certgen.cli --help`
 - Documentacao das APIs: `docs/API.md`; teste manual: `docs/TESTE-API-POSTMAN.md`
 - Guia entregue ao integrador do portal: `docs/GUIA-INTEGRACAO-PORTAL.md`
+- Manual do desenvolvedor (mapa, roadmap, trilha de estudo): `docs/MANUAL-DO-DESENVOLVEDOR.md`; atualizar
+  quando mudar a estrutura de pastas, um processo ou um ADR
 - Tela + API num processo (Render): `python -m certgen.cli servidor --rede --proxy --porta 8000`
 - Area de teste da API no Render (`Dockerfile`, `render.yaml`): `docs/DEPLOY-RENDER.md`. O FedHub
   roda na LAN (Docker + ngrok), nao na web; o Render so alcanca o Firebird por tunel/port-forward.
