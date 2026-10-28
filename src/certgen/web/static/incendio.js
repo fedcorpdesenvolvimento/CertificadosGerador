@@ -13,7 +13,7 @@
     listaPainel: $("lista-painel"), todos: $("todos"), contador: $("contador"),
     segurados: $("segurados"), erroLista: $("erro-lista"),
     emissaoPainel: $("emissao-painel"), pasta: $("pasta"), procurar: $("procurar"), imprimePremio: $("imprime_premio"),
-    individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), uploadAws: $("upload_aws"),
+    individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), uploadAws: $("upload_aws"), baixarZip: $("baixar_zip"),
     imprime: $("imprime"), progresso: $("progresso"),
     relPainel: $("relatorio-painel"), relResumo: $("relatorio-resumo"), rel: $("relatorio"), relErro: $("relatorio-erro"),
     baixarTudo: $("baixar_tudo"),
@@ -233,6 +233,7 @@
         el.rel.appendChild(tr);
       }
       el.baixarTudo.hidden = arquivosDoRelatorio.length === 0;
+      if (el.baixarZip.checked && arquivosDoRelatorio.length) await baixarTudo();  // RF-06a: download automatico
       for (const f of r.falhas) {
         const tr = document.createElement("tr"); tr.className = "falha";
         tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;

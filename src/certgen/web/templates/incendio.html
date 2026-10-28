@@ -62,6 +62,8 @@
     <label class="check"><input type="checkbox" id="so_xml"> Só XML de Cert. <small>(gera só o JSON, sem PDF)</small></label>
     <label class="check" title="Publica o PDF de cada certificado no S3, grava o link no banco e no JSON (RF-21); exige PDF">
       <input type="checkbox" id="upload_aws" checked> Upload AWS</label>
+    <label class="check" title="Ao terminar a emissão, baixa automaticamente um .zip com todos os PDFs e JSONs gerados (RF-06a)">
+      <input type="checkbox" id="baixar_zip"> Download (.zip) ao final</label>
   </div>
   <div class="linha">
     <button id="imprime" class="botao primario" disabled>Imprime</button>

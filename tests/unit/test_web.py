@@ -429,3 +429,8 @@ def test_operador_tem_a_emissao_completa_e_nao_o_cadastro(cliente, repo_usuarios
     assert r.status_code == 200 and len(r.json()["emitidos"]) == 2
     assert cliente.get("/api/usuarios").status_code == 403
     assert cliente.get("/api/chaves").status_code == 403
+
+
+def test_rf_06a_checkbox_download_zip_desmarcado_por_padrao(cliente):
+    html = cliente.get("/incendio").text
+    assert 'id="baixar_zip"' in html and 'id="baixar_zip" checked' not in html

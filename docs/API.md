@@ -516,6 +516,8 @@ em `{pasta}\{administradora}\{MMAAAA}\`; consolidado e JSON único:
 | `GET /api/incendio/arquivo?caminho=<caminho do relatório>` | devolve o PDF ou JSON como anexo (`Content-Disposition: attachment`). Só `.pdf`/`.json` dentro de `CERTGEN_PASTA_SAIDA`; fora disso, inexistente ou `..` → `404` |
 | `POST /api/incendio/zip` | `{"arquivos": [...], "nome": "lote_x"}` → `application/zip` com os arquivos (mesma regra); `404` se algum não for permitido |
 
+O checkbox *Download (.zip) ao final* (desmarcado por padrão) chama `POST /api/incendio/zip` sozinho ao terminar a emissão.
+
 A lista de `GET /api/incendio/segurados` passou a trazer `condominio` em cada item (RF-05b).
 Os filtros da lista (RF-05c) são do navegador: a API não muda.
 
