@@ -724,6 +724,80 @@ def _link_temporario(publicador: PublicadorArquivos, link: str | None, cfg: Conf
         return None
 
 
+# ------------------------------------------------------- RF-06a: baixar arquivos
+EXTENSOES_BAIXAVEIS = frozenset({".pdf", ".json"})
+
+
+def _arquivo_permitido(caminho: str, cfg: Config) -> Path:
+    """RF-06a — so arquivos .pdf/.json dentro da pasta de saida do servidor. Qualquer
+    tentativa de sair dela (.., links, outra raiz) e recusada antes de tocar o disco."""
+    raiz = cfg.pasta_saida.resolve()
+    alvo = Path(caminho).expanduser().resolve()
+    if alvo.suffix.lower() not in EXTENSOES_BAIXAVEIS or not alvo.is_relative_to(raiz):
+        raise NomeArquivoInvalido(
+            "arquivo fora da pasta de saida do servidor ou tipo nao permitido"
+        )
+    if not alvo.is_file():
+        raise NomeArquivoInvalido("arquivo nao encontrado")
+    return alvo
+
+
+@app.get("/api/incendio/arquivo")
+def api_baixar_arquivo(
+    caminho: str = Query(..., description="caminho devolvido pelo relatorio da emissao"),
+    cfg: Config = Depends(get_config),
+    usuario: Usuario = Depends(auth.usuario_atual),
+):
+    """RF-06a (homologacao 29/10/2026) — entrega ao navegador um PDF/JSON emitido, para o
+    operador salvar na propria maquina quando a tela roda num servidor (Render)."""
+    from fastapi.responses import FileResponse
+
+    try:
+        alvo = _arquivo_permitido(caminho, cfg)
+    except NomeArquivoInvalido as exc:
+        return _erro(exc, 404)
+    auth.registrar_evento("arquivo_baixado", usuario_id=usuario.id, arquivo=alvo.name)
+    tipo = "application/pdf" if alvo.suffix.lower() == ".pdf" else "application/json"
+    return FileResponse(str(alvo), media_type=tipo, filename=alvo.name)
+
+
+class ZipIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    arquivos: list[str] = Field(..., min_length=1, max_length=2000)
+    nome: str = Field("certificados", max_length=80)
+
+
+@app.post("/api/incendio/zip")
+def api_baixar_zip(
+    req: ZipIn,
+    cfg: Config = Depends(get_config),
+    usuario: Usuario = Depends(auth.usuario_atual),
+):
+    """RF-06a — um .zip com os arquivos do relatorio (mesma regra de pasta do download
+    individual). Montado em memoria: um lote tem dezenas de PDFs de ~250 KB."""
+    import io
+    import re
+    import zipfile
+
+    from fastapi.responses import StreamingResponse
+
+    try:
+        alvos = [_arquivo_permitido(c, cfg) for c in req.arquivos]
+    except NomeArquivoInvalido as exc:
+        return _erro(exc, 404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for alvo in alvos:
+            z.write(alvo, alvo.name)
+    buf.seek(0)
+    nome = re.sub(r"[^A-Za-z0-9_.-]", "_", req.nome) or "certificados"
+    auth.registrar_evento("zip_baixado", usuario_id=usuario.id, quantidade=len(alvos))
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{nome}.zip"'},
+    )  # fmt: skip
+
+
 # ------------------------------------------------------------ escolha de pasta
 def _dialogo_pasta(inicial: str | None) -> str | None:
     """Abre a janela nativa do Windows para escolher pasta. O servidor roda na mesma

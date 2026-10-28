@@ -41,6 +41,7 @@ class ItemSegurado:
     nome: str
     endereco: str
     unidade: str
+    condominio: str  # RF-05b (homologacao 29/10/2026): nome do condominio, quando cadastrado
     inicio_vig: str | None  # ISO (RD-06) — RF-05a
     final_vig: str | None  # ISO; None quando ausente (DEF-06)
     vigencia: str  # dd/mm/aaaa a dd/mm/aaaa, pronto para a tela
@@ -60,6 +61,7 @@ class ItemSegurado:
             nome=c.segurado_nome,
             endereco=c.local_risco.endereco or "",
             unidade=c.local_risco.unidade or "",
+            condominio=c.local_risco.condominio or "",
             inicio_vig=c.vigencia.inicio.isoformat() if c.vigencia.inicio else None,
             final_vig=c.vigencia.fim.isoformat() if c.vigencia.fim else None,
             vigencia=vigencia_br(c.vigencia),

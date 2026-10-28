@@ -443,6 +443,12 @@ pos    := BuscaDireita('|', item);   cpf    := copy(item, pos2+1, pos-pos2-1) ;
 
 **`RF-06`** — A pasta de destino **DEVE** ser validada como existente e gravável **antes** de iniciar a emissão.
 
+**`RF-06a`** — *Baixar para a máquina do operador* *(homologação do portal, 29/10/2026)*. Quando a tela roda num servidor (Render), a pasta de destino é do servidor e o navegador não pode gravar no disco do operador. O relatório da emissão **DEVE** oferecer, para cada PDF e JSON emitido (e para o consolidado/JSON único), o link *Baixar* (`GET /api/incendio/arquivo?caminho=`) e o botão *Baixar tudo (.zip)* (`POST /api/incendio/zip`). O servidor só entrega arquivos `.pdf`/`.json` **dentro de `CERTGEN_PASTA_SAIDA`** (caminho resolvido; `..`, links e outras raízes dão `404`), exige sessão e registra o evento no log. Na máquina local o botão *Procurar…* continua existindo.
+
+**`RF-05b`** — *Condomínio na lista* *(29/10/2026)*. A lista de segurados **DEVE** mostrar, logo após a vigência, o nome do condomínio (`local_risco.condominio`), vazio quando não cadastrado. Campo `condominio` em `ItemSegurado`.
+
+**`RF-05c`** — *Filtros na lista* *(29/10/2026)*. Acima da lista há cinco filtros aplicados **no navegador**, sobre o lote já carregado (RD-24), combinados por E: nome do segurado, CPF, CNPJ, endereço e condomínio. Texto compara sem acento e sem diferença de caixa, por *contém* ("COPACABANA" traz todos os endereços que contêm a palavra); CPF e CNPJ têm máscara na digitação e comparam só dígitos (o banco não guarda formatação), *contém*, respeitando o tamanho (11 ou 14). Linhas filtradas ficam ocultas; *marcar/desmarcar todos*, o contador `Seg.:N` e *Imprime* consideram **só as linhas visíveis e marcadas**. O contador mostra `(x de y no filtro)` quando há filtro ativo. *Limpar filtros* restaura a lista.
+
 ---
 
 ## 6. Especificação das consultas
@@ -2274,6 +2280,15 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 |---|---|
 | `docs/DEPLOY-RENDER.md` | Área de teste no Render: `Dockerfile` (modelo FedHub-Backend), `.dockerignore`, `render.yaml`. O FedHub roda na LAN (Docker + ngrok), não na web; o Render só alcança o Firebird por túnel TCP (`ngrok tcp 192.168.0.6:3050`) ou port-forward. |
 | `ADR-08` / `RNF-10c` | Tela com login (modelo do Sistema de Sinistros FedCorp): bcrypt, sessão em SQLite, limite de tentativas, CSRF, CSP; ADMIN inicial por `CERTGEN_ADMIN_EMAIL`/`CERTGEN_ADMIN_SENHA`; cadastro de usuários (`/usuarios`) só para ADMIN; `certgen servidor` = tela + `/v1` num processo (Render). `RNF-10a` revisto. |
+
+### 29/10/2026 — homologação do portal (tela)
+
+| Item | Decisão / entrega |
+|---|---|
+| `RF-06a` | *Baixar* (PDF/JSON) e *Baixar tudo (.zip)* no relatório da emissão: o navegador salva na máquina do operador; o servidor só entrega arquivos de `CERTGEN_PASTA_SAIDA`. Pedido: "não é possível salvar em pasta local da máquina" com a tela no Render. |
+| `RF-05b` | coluna *Condomínio* após a vigência na lista de segurados. |
+| `RF-05c` | filtros no navegador: nome, CPF, CNPJ, endereço e condomínio (contém, sem acento; documentos só dígitos); seleção e contador só sobre as linhas visíveis. |
+| Perfil OPERADOR | verificado por teste: tem a emissão completa (cascata, todas as opções, Upload AWS); só *USUÁRIOS* e *CHAVES DA API* são do ADMIN. |
 
 ### 28/10/2026 — retorno do integrador do portal
 

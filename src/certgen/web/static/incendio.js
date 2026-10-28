@@ -16,8 +16,11 @@
     individuais: $("individuais"), jsonUnico: $("json_unico"), soXml: $("so_xml"), uploadAws: $("upload_aws"),
     imprime: $("imprime"), progresso: $("progresso"),
     relPainel: $("relatorio-painel"), relResumo: $("relatorio-resumo"), rel: $("relatorio"), relErro: $("relatorio-erro"),
+    baixarTudo: $("baixar_tudo"),
+    fNome: $("f_nome"), fCpf: $("f_cpf"), fCnpj: $("f_cnpj"), fEndereco: $("f_endereco"), fCondominio: $("f_condominio"), fLimpar: $("f_limpar"),
   };
   let segurados = [];
+  let arquivosDoRelatorio = [];
 
   // ADR-08: sessao.js acrescenta o header CSRF e manda para /login quando a sessao caiu
   const api = (url, opts) => window.certgen.api(url, opts);
@@ -137,10 +140,12 @@
         tr.innerHTML = `<td><input type="checkbox" class="sel" data-i="${i}" checked></td>
           <td>${esc(s.certificado)}</td><td>${s.portal ?? 0}</td><td>${esc(s.documento)}</td>
           <td>${esc(s.nome)}</td><td>${esc(s.endereco)}</td><td>${esc(s.unidade)}</td><td>${esc(s.vigencia)}</td>
+          <td>${esc(s.condominio || "")}</td>
           <td>${s.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.segurados.appendChild(tr);
       });
       el.todos.checked = true;  // RF-14
+      limparFiltros(false);
       irPara(4);
       if (!segurados.length) mostrarErro(el.erroLista, "Nenhum segurado para esta fatura.");
     } catch (e) {
@@ -148,10 +153,46 @@
     } finally { el.busca.disabled = false; }
   }
 
-  function selecionados() { return [...el.segurados.querySelectorAll(".sel:checked")].map((c) => segurados[c.dataset.i]); }
+  // RF-05c: so as linhas VISIVEIS (que passaram pelos filtros) e marcadas entram na emissao
+  function selecionados() {
+    return [...el.segurados.querySelectorAll("tr:not([hidden]) .sel:checked")].map((c) => segurados[c.dataset.i]);
+  }
+
+  // ---------------------------------------------------------------- filtros (RF-05c)
+  const semAcento = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  const digitos = (t) => String(t ?? "").replace(/\D/g, "");
+  function mascararDocumento(input, cnpj) {
+    const d = digitos(input.value).slice(0, cnpj ? 14 : 11);
+    input.value = cnpj
+      ? d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2")
+      : d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+  function aplicarFiltros() {
+    const nome = semAcento(el.fNome.value.trim());
+    const cpf = digitos(el.fCpf.value), cnpj = digitos(el.fCnpj.value);
+    const endereco = semAcento(el.fEndereco.value.trim());
+    const condominio = semAcento(el.fCondominio.value.trim());
+    const linhas = el.segurados.querySelectorAll("tr");
+    linhas.forEach((tr) => {
+      const s = segurados[tr.querySelector(".sel").dataset.i];
+      const doc = digitos(s.documento);
+      const passa = (!nome || semAcento(s.nome).includes(nome))
+        && (!cpf || (doc.length === 11 && doc.includes(cpf)))
+        && (!cnpj || (doc.length === 14 && doc.includes(cnpj)))
+        && (!endereco || semAcento(`${s.endereco} ${s.unidade}`).includes(endereco))
+        && (!condominio || semAcento(s.condominio).includes(condominio));
+      tr.hidden = !passa;
+    });
+    atualizarContador();
+  }
+  function limparFiltros(reaplicar = true) {
+    for (const i of [el.fNome, el.fCpf, el.fCnpj, el.fEndereco, el.fCondominio]) i.value = "";
+    if (reaplicar) aplicarFiltros();
+  }
   function atualizarContador() {
     const n = selecionados().length;
-    el.contador.textContent = `Seg.:${n}`;  // RF-04
+    const visiveis = el.segurados.querySelectorAll("tr:not([hidden])").length;
+    el.contador.textContent = visiveis === segurados.length ? `Seg.:${n}` : `Seg.:${n} (${visiveis} de ${segurados.length} no filtro)`;  // RF-04
     el.imprime.disabled = n === 0;  // RF-02
   }
 
@@ -160,6 +201,7 @@
     if (!sel.length) return;
     el.imprime.disabled = true; el.progresso.hidden = false; el.relPainel.hidden = false;
     el.rel.innerHTML = ""; mostrarErro(el.relErro, ""); el.relResumo.textContent = "Emitindo…";
+    arquivosDoRelatorio = []; el.baixarTudo.hidden = true;
     try {
       const corpo = {
         ...lote(), pasta: el.pasta.value,
@@ -178,13 +220,22 @@
       for (const e of r.emitidos) {
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>OK</td><td>${esc(e.chave.certificado)}</td><td>${esc(e.vigencia)}</td><td>${esc(e.pdf || e.json || "(no JSON único)")}${e.colisao ? " (sufixo)" : ""}</td>
+          <td>${linksBaixar([e.pdf, e.json])}</td>
           <td>${e.link ? `<a href="${esc(e.link_temporario || e.link)}" target="_blank" rel="noopener" title="${e.link_temporario ? "Link assinado, válido por 15 minutos (ADR-09)" : ""}">${esc(e.link)}</a>` : ""}</td>
           <td>${e.avisos.map((a) => `<span class="tag">${a}</span>`).join("")}</td>`;
         el.rel.appendChild(tr);
       }
+      for (const extra of [r.consolidado_pdf, r.consolidado_json, r.json_unico]) if (extra) arquivosDoRelatorio.push(extra);
+      if (r.consolidado_pdf || r.consolidado_json || r.json_unico) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>OK</td><td>lote</td><td></td><td>${esc([r.consolidado_pdf, r.consolidado_json, r.json_unico].filter(Boolean).join(" ; "))}</td>
+          <td>${linksBaixar([r.consolidado_pdf, r.consolidado_json, r.json_unico])}</td><td></td><td></td>`;
+        el.rel.appendChild(tr);
+      }
+      el.baixarTudo.hidden = arquivosDoRelatorio.length === 0;
       for (const f of r.falhas) {
         const tr = document.createElement("tr"); tr.className = "falha";
-        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
+        tr.innerHTML = `<td>FALHA</td><td>${esc(f.chave ? f.chave.certificado : "—")}</td><td></td><td></td><td></td><td></td><td>[${f.tipo}] ${esc(f.motivo)}</td>`;
         el.rel.appendChild(tr);
       }
     } catch (e) {
@@ -193,6 +244,32 @@
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // RF-06a: links "Baixar" (o servidor so entrega arquivos da pasta de saida dele)
+  function linksBaixar(caminhos) {
+    return caminhos.filter(Boolean).map((c) => {
+      arquivosDoRelatorio.push(c);
+      const ext = c.toLowerCase().endsWith(".pdf") ? "PDF" : "JSON";
+      return `<a href="/api/incendio/arquivo?${new URLSearchParams({ caminho: c })}" download title="Salvar na sua máquina">${ext}</a>`;
+    }).join(" ");
+  }
+  async function baixarTudo() {
+    if (!arquivosDoRelatorio.length) return;
+    el.baixarTudo.disabled = true;
+    try {
+      const l = lote();
+      const r = await fetch("/api/incendio/zip", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: JSON.stringify({ arquivos: arquivosDoRelatorio, nome: `certificados_${l.administradora}_${l.fatura}` }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.erro || `HTTP ${r.status}`); }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `certificados_${l.administradora}_${l.fatura}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) { mostrarErro(el.relErro, `Não foi possível baixar o .zip: ${e.message}`); }
+    finally { el.baixarTudo.disabled = false; }
+  }
 
   // ------------------------------------------------------------------ eventos
   const recarregar = () => carregarApolices().catch((e) => { if (!erroData.textContent) mostrarErro(el.erroLista, e.message); });
@@ -206,9 +283,15 @@
   el.apolice.addEventListener("change", () => carregarFaturas().catch((e) => mostrarErro(el.erroLista, e.message)));
   el.fatura.addEventListener("change", escolherFatura);
   el.busca.addEventListener("click", buscarSegurados);
-  el.todos.addEventListener("change", () => { el.segurados.querySelectorAll(".sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
+  el.todos.addEventListener("change", () => { el.segurados.querySelectorAll("tr:not([hidden]) .sel").forEach((c) => (c.checked = el.todos.checked)); atualizarContador(); });
   el.segurados.addEventListener("change", atualizarContador);
   el.imprime.addEventListener("click", imprimir);
+  el.baixarTudo.addEventListener("click", baixarTudo);
+  // RF-05c: filtros da lista
+  for (const i of [el.fNome, el.fEndereco, el.fCondominio]) i.addEventListener("input", aplicarFiltros);
+  el.fCpf.addEventListener("input", () => { mascararDocumento(el.fCpf, false); aplicarFiltros(); });
+  el.fCnpj.addEventListener("input", () => { mascararDocumento(el.fCnpj, true); aplicarFiltros(); });
+  el.fLimpar.addEventListener("click", () => limparFiltros());
   // RF-21: Upload AWS so com PDF (nao 'So XML'); vale em qualquer modo, inclusive consolidado
   const ajustarUpload = () => { el.uploadAws.disabled = el.soXml.checked; };
   el.soXml.addEventListener("change", ajustarUpload);

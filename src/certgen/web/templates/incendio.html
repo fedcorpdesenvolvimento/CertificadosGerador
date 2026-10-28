@@ -52,7 +52,7 @@
       <input type="text" id="pasta" value="{{ pasta_padrao }}">
     </label>
     {% if local %}<button id="procurar" class="botao" title="Abre a janela do Windows para escolher a pasta">Procurar…</button>
-    {% else %}<small class="dica">Digite um caminho de rede acessível a todos, ex.: \\192.168.0.2\Controle\Certificados</small>{% endif %}
+    {% else %}<small class="dica">Os arquivos são gerados nesta pasta do servidor. Para salvar na sua máquina, use <b>Baixar</b> no relatório (um a um ou tudo em .zip).</small>{% endif %}
   </div>
   <div class="linha">
     <label class="check"><input type="checkbox" id="imprime_premio"> Imprime Premio</label>
@@ -71,23 +71,35 @@
 </section>
 
 <section class="painel" id="lista-painel" hidden>
+  {# RF-05c (homologacao 29/10/2026): filtros na lista, aplicados no navegador sobre o lote carregado #}
+  <div class="linha filtros">
+    <label>Nome do segurado <input type="text" id="f_nome" placeholder="parte do nome" autocomplete="off"></label>
+    <label>CPF <input type="text" id="f_cpf" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off"></label>
+    <label>CNPJ <input type="text" id="f_cnpj" placeholder="00.000.000/0000-00" maxlength="18" inputmode="numeric" autocomplete="off"></label>
+    <label>Endereço <input type="text" id="f_endereco" placeholder="ex.: COPACABANA" autocomplete="off"></label>
+    <label>Condomínio <input type="text" id="f_condominio" placeholder="parte do nome" autocomplete="off"></label>
+    <button id="f_limpar" class="botao secundario" type="button">Limpar filtros</button>
+  </div>
   <div class="linha entre">
-    <label class="check"><input type="checkbox" id="todos" checked> marcar / desmarcar todos</label>
+    <label class="check"><input type="checkbox" id="todos" checked> marcar / desmarcar todos (os visíveis)</label>
     <span id="contador" class="contador">Seg.:0</span>
   </div>
   <div id="erro-lista" class="erro" hidden></div>
   <table class="lista">
-    <thead><tr><th></th><th>Certificado</th><th>Portal</th><th>Documento</th><th>Nome</th><th>Endereço</th><th>Unidade</th><th>Vigência</th><th>Avisos</th></tr></thead>
+    <thead><tr><th></th><th>Certificado</th><th>Portal</th><th>Documento</th><th>Nome</th><th>Endereço</th><th>Unidade</th><th>Vigência</th><th>Condomínio</th><th>Avisos</th></tr></thead>
     <tbody id="segurados"></tbody>
   </table>
 </section>
 
 <section class="painel" id="relatorio-painel" hidden>
-  <h2>Relatório da emissão</h2>
+  <div class="linha entre">
+    <h2>Relatório da emissão</h2>
+    <button id="baixar_tudo" class="botao" type="button" hidden title="Baixa todos os arquivos do relatório num único .zip">Baixar tudo (.zip)</button>
+  </div>
   <p id="relatorio-resumo"></p>
   <div id="relatorio-erro" class="erro" hidden></div>
   <table class="lista">
-    <thead><tr><th>Situação</th><th>Certificado</th><th>Vigência</th><th>Arquivo</th><th>Link AWS</th><th>Avisos / motivo</th></tr></thead>
+    <thead><tr><th>Situação</th><th>Certificado</th><th>Vigência</th><th>Arquivo</th><th>Baixar</th><th>Link AWS</th><th>Avisos / motivo</th></tr></thead>
     <tbody id="relatorio"></tbody>
   </table>
 </section>

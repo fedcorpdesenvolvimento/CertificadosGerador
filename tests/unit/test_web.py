@@ -276,7 +276,7 @@ def test_rnf_10a_cliente_da_rede_nao_ve_sair_nem_procurar(cliente):
     try:
         assert 'id="sair"' not in cliente.get("/").text
         pagina = cliente.get("/incendio").text
-        assert 'id="procurar"' not in pagina and "caminho de rede" in pagina
+        assert 'id="procurar"' not in pagina and "use <b>Baixar</b>" in pagina  # RF-06a
         assert cliente.post("/api/encerrar").status_code == 403
         assert cliente.post("/api/escolher-pasta", json={}).status_code == 403
     finally:
@@ -345,3 +345,87 @@ def test_estaticos_com_versao_na_url_e_sem_cache(cliente):
     assert f'/static/incendio.js?v={webapp.versao_estatica()}" data-versao="{__version__}"' in html
     r = cliente.get("/static/incendio.js")
     assert r.headers["cache-control"].startswith("no-cache")
+
+
+# ------------------------------------------------ homologacao 29/10/2026: RF-05b/05c/06a
+def test_rf_05b_lista_de_segurados_traz_condominio(cliente):
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819}
+    s = cliente.get("/api/incendio/segurados", params=q).json()["segurados"][0]
+    assert "condominio" in s and isinstance(s["condominio"], str)
+
+
+def test_rf_05c_tela_tem_filtros_e_coluna_condominio(cliente):
+    html = cliente.get("/incendio").text
+    for campo in ("f_nome", "f_cpf", "f_cnpj", "f_endereco", "f_condominio", "f_limpar", "baixar_tudo"):
+        assert f'id="{campo}"' in html, campo
+    assert "<th>Condomínio</th>" in html and "<th>Baixar</th>" in html
+
+
+@pytest.fixture
+def cliente_com_saida(cliente, tmp_path):
+    """RF-06a: a pasta de saida do servidor passa a ser tmp_path."""
+    from certgen.config.settings import Config
+
+    cfg = Config(repositorio="firebird", firebird=None, api_base_url="", api_token="",
+                 pasta_saida=tmp_path)  # fmt: skip
+    webapp.app.dependency_overrides[webapp.get_config] = lambda: cfg
+    return cliente
+
+
+def test_rf_06a_baixar_arquivo_e_zip_so_da_pasta_de_saida(cliente_com_saida, tmp_path):
+    c = cliente_com_saida
+    corpo = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819,
+             "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True}  # fmt: skip
+    d = c.post("/api/incendio/emitir", json=corpo).json()
+    arquivos = [e["json"] for e in d["emitidos"]]
+    assert len(arquivos) == 2
+    r = c.get("/api/incendio/arquivo", params={"caminho": arquivos[0]})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/json")
+    assert "attachment" in r.headers["content-disposition"]
+    # fora da pasta de saida, extensao proibida, inexistente e tentativa de subir pastas: 404
+    fora = tmp_path.parent / "fora.json"
+    fora.write_text("{}", encoding="utf-8")
+    assert c.get("/api/incendio/arquivo", params={"caminho": str(fora)}).status_code == 404
+    txt = tmp_path / "x.txt"
+    txt.write_text("x", encoding="utf-8")
+    assert c.get("/api/incendio/arquivo", params={"caminho": str(txt)}).status_code == 404
+    assert c.get("/api/incendio/arquivo", params={"caminho": str(tmp_path / "nao.json")}).status_code == 404
+    sobe = str(tmp_path / ".." / fora.name)
+    assert c.get("/api/incendio/arquivo", params={"caminho": sobe}).status_code == 404
+    # zip com os dois arquivos
+    import io
+    import zipfile
+    from pathlib import Path
+
+    r = c.post("/api/incendio/zip", json={"arquivos": arquivos, "nome": "lote 380819"})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert 'filename="lote_380819.zip"' in r.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        assert sorted(z.namelist()) == sorted(Path(a).name for a in arquivos)
+    assert c.post("/api/incendio/zip", json={"arquivos": [str(fora)]}).status_code == 404
+
+
+def test_rf_06a_download_exige_sessao(cliente_anonimo, tmp_path):
+    assert cliente_anonimo.get("/api/incendio/arquivo", params={"caminho": "x.pdf"}).status_code == 401
+    assert cliente_anonimo.post("/api/incendio/zip", json={"arquivos": ["x.pdf"]}).status_code == 401
+
+
+def test_operador_tem_a_emissao_completa_e_nao_o_cadastro(cliente, repo_usuarios, tmp_path):
+    """Homologacao 29/10/2026: perfil OPERADOR emite com todas as opcoes; so USUARIOS e
+    CHAVES DA API ficam com o ADMIN (ADR-08/ADR-09)."""
+    from certgen.web import auth
+
+    repo_usuarios.criar("Operador", "op@teste.local", auth.gerar_hash("Senha123x"), "OPERADOR",
+                        trocar_senha=False)  # fmt: skip
+    cliente.post("/api/auth/logout")
+    assert cliente.post("/api/auth/login", json={"email": "op@teste.local", "senha": "Senha123x"}).status_code == 200
+    assert cliente.get("/incendio").status_code == 200
+    q = {"administradora": "0000001192", "apolice": "13008", "seq": 1, "fatura": 380819}
+    assert cliente.get("/api/incendio/administradoras").status_code == 200
+    assert cliente.get("/api/incendio/segurados", params=q).json()["quantidade"] == 2
+    corpo = {**q, "pasta": str(tmp_path), "versao_tela": __version__, "so_xml": True,
+             "imprime_premio": True, "individuais": True, "json_unico": False, "faz_tudo_lar": False}  # fmt: skip
+    r = cliente.post("/api/incendio/emitir", json=corpo)
+    assert r.status_code == 200 and len(r.json()["emitidos"]) == 2
+    assert cliente.get("/api/usuarios").status_code == 403
+    assert cliente.get("/api/chaves").status_code == 403
