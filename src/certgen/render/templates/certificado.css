@@ -31,13 +31,13 @@ body {
 .cabecalho {
   height: 17mm;
   background: var(--azul);
+  position: relative;           /* logo ancorado a esquerda; titulo centrado na pagina (28/10/2026) */
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12mm 0 8mm;
+  justify-content: center;
 }
-.cabecalho img { height: 13mm; }
-.cabecalho .titulo { color: #fff; font-weight: bold; font-size: 20pt; letter-spacing: 0.5pt; }
+.cabecalho img { height: 13mm; position: absolute; left: 8mm; top: 2mm; }
+.cabecalho .titulo { color: #fff; font-weight: bold; font-size: 20pt; letter-spacing: 0.5pt; text-align: center; }
 
 .produto {
   text-align: center;
