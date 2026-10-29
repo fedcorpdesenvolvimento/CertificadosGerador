@@ -63,9 +63,8 @@ def test_rn_11_portal_nulo_vira_zero():
 def test_rn_11_referencias_da_secao_7_2_com_produto_resolvido(arquivos_referencia):
     """Os tres arquivos de referencia, agora com o produto que RN-03 resolve.
 
-    Os dois `15008` saiam sem produto (DEF-09). Sao da administradora 0000000019
-    (confirmado no banco em 03/09/2026), entao RN-03.1 se aplica: saem como 0001
-    RESIDENCIAL, com aviso PRODUTO_POR_EXCECAO.
+    Os dois `15008` saiam sem produto (DEF-09). Desde 29/10/2026 a 15008 e
+    0001 RESIDENCIAL para qualquer administradora (RN-03 revista), sem aviso.
     """
     catalogo = CatalogoProdutos.carregar()
     esperados = {
@@ -78,7 +77,7 @@ def test_rn_11_referencias_da_secao_7_2_com_produto_resolvido(arquivos_referenci
         produto = resolucao.produto.codigo
         nome = nome_arquivo_certificado(portal, cpf, produto, apolice, cert, fatura)
         assert nome == esperados[legado]
-        assert (resolucao.aviso is not None) == (apolice == "15008")
+        assert resolucao.aviso is None
 
 
 def test_def_09_produto_vazio_passa_a_falhar_explicitamente(arquivos_referencia):

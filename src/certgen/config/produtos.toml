@@ -4,7 +4,7 @@
 #        e 1221-1233 (fluxo manual, mapa incompleto — origem de DEF-09).
 # Este arquivo adota a UNIAO dos dois mapas: o fluxo manual do legado nao
 # conhecia 9008, 10008, 14008 nem 15008, e emitia com produto vazio ou
-# herdado da selecao anterior.
+# herdado da selecao anterior. Excecao: 15008 -> 0001 (ver abaixo).
 #
 # Catalogo autoritativo: comentario das linhas 1202-1208 do .pas.
 
@@ -90,20 +90,16 @@ produto = "0004"
 apolice = "14008"
 produto = "0004"
 
+# RN-03 revista em 29/10/2026 (decisao do usuario): a 15008 e a apolice da
+# Bradesco Seguros (cod_seguradora 0000000109) de Incendio Conteudo RESIDENCIAL
+# comum, com Assistencia 24h — NAO e RUPTURA. O fluxo em massa do legado
+# (linha 776) mapeava 0004 por engano; o banco confirma: em 10/2026, 99,98%
+# das linhas da 15008 nao tem cobertura de ruptura. A excecao RN-03.1
+# (0000000019 -> 0001) ficou absorvida pela regra geral e saiu daqui; o
+# mecanismo de regra por administradora (RN-03.2) continua disponivel.
 [[regra]]
 apolice = "15008"
-produto = "0004"
-
-# RN-03.1 — excecao real de negocio, linha 785 do .pas:
-#   if ((Edit1.Text = '0000000019') and (apol = '15008')) then
-#      ComboBox4.ItemIndex := 0 ;
-# Preservada como dado. Emissoes por esta regra DEVEM registrar o aviso
-# PRODUTO_POR_EXCECAO em _meta.avisos (RD-23).
-[[regra]]
-apolice        = "15008"
-administradora = "0000000019"
-produto        = "0001"
-motivo         = "RN-03.1 — excecao especifica desta administradora"
+produto = "0001"
 
 [[regra]]
 apolice = "6008"

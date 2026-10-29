@@ -26,7 +26,7 @@ def test_rn_03_catalogo_tem_os_sete_produtos_do_comentario_1202_1208(catalogo):
         ("5008", "0002", "COMERCIAL"),
         ("13008", "0004", "RUPTURA"),
         ("14008", "0004", "RUPTURA"),  # idem
-        ("15008", "0004", "RUPTURA"),  # idem — o DEF-09 dos arquivos de referencia
+        ("15008", "0001", "RESIDENCIAL"),  # RN-03 revista em 29/10/2026: Bradesco, nao e RUPTURA
         ("6008", "0006", "LOC-RES"),
         ("7008", "0007", "LOC-COM"),
     ],
@@ -38,21 +38,47 @@ def test_rn_03_mapa_e_a_uniao_dos_dois_fluxos(catalogo, apolice, produto, curta)
     assert r.aviso is None
 
 
-def test_rn_03_1_administradora_0000000019_na_15008_emite_residencial(catalogo):
-    r = catalogo.resolver("15008", administradora="0000000019")
+def test_rn_03_15008_e_residencial_para_qualquer_administradora_sem_aviso(catalogo):
+    """RN-03 revista em 29/10/2026: 15008 -> 0001 para todas; a excecao RN-03.1 foi absorvida."""
+    for adm in ("0000000019", "0000004691", None):
+        r = catalogo.resolver("15008", administradora=adm)
+        assert r.produto.codigo == "0001"
+        assert not r.regra.especifica
+        assert r.aviso is None
+
+
+CATALOGO_COM_EXCECAO = {
+    "produto": [
+        {"codigo": "0001", "descricao": "Residencial", "descricao_curta": "RESIDENCIAL"},
+        {"codigo": "0004", "descricao": "Ruptura", "descricao_curta": "RUPTURA"},
+    ],
+    "regra": [
+        {"apolice": "13008", "produto": "0004"},
+        {"apolice": "13008", "administradora": "0000000019", "produto": "0001", "motivo": "teste"},
+    ],
+}
+
+
+def test_rn_03_1_regra_por_administradora_vence_a_regra_geral():
+    """Mecanismo RN-03.1/RN-03.2 (regra mais especifica vence), com catalogo sintetico:
+    produtos.toml nao tem mais excecao desde 29/10/2026."""
+    cat = CatalogoProdutos.de_dict(CATALOGO_COM_EXCECAO)
+    r = cat.resolver("13008", administradora="0000000019")
     assert r.produto.codigo == "0001"
     assert r.regra.especifica
 
 
-def test_rd_23_excecao_registra_aviso_produto_por_excecao(catalogo):
-    r = catalogo.resolver("15008", administradora="0000000019")
+def test_rd_23_excecao_registra_aviso_produto_por_excecao():
+    cat = CatalogoProdutos.de_dict(CATALOGO_COM_EXCECAO)
+    r = cat.resolver("13008", administradora="0000000019")
     assert r.aviso is not None
     assert r.aviso.codigo is CodigoAviso.PRODUTO_POR_EXCECAO
     assert r.avisos == [r.aviso]
 
 
-def test_rn_03_2_outra_administradora_na_15008_cai_na_regra_geral(catalogo):
-    r = catalogo.resolver("15008", administradora="0000004691")
+def test_rn_03_2_outra_administradora_cai_na_regra_geral():
+    cat = CatalogoProdutos.de_dict(CATALOGO_COM_EXCECAO)
+    r = cat.resolver("13008", administradora="0000004691")
     assert r.produto.codigo == "0004"
     assert r.aviso is None
 

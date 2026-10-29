@@ -99,15 +99,15 @@ def test_fase_1_referencia_13008_completa(repo):
     assert CodigoAviso.PORTAL_AUSENTE in codigos
 
 
-def test_rn_03_1_referencia_15008_administradora_19(repo):
+def test_rn_03_referencia_15008_administradora_19_emite_0001(repo):
     lote = _lote_referencia(repo, "0000000019", "15008", 381066)
     pares = {c.chave.certificado: c for c in repo.listar_segurados(lote)}
     assert {"3082/01/AP 1302", "3082/01/AP 1101"} <= set(pares)
     c = pares["3082/01/AP 1302"]
     assert c.chave.cpf_cnpj == "05554363733"
-    assert c.produto.codigo == "0001"  # RN-03.1, nao 0004
+    assert c.produto.codigo == "0001"  # RN-03 revista em 29/10/2026: 15008 e RESIDENCIAL
     codigos = {a.codigo for a in c.todos_avisos()}
-    assert CodigoAviso.PRODUTO_POR_EXCECAO in codigos
+    assert CodigoAviso.PRODUTO_POR_EXCECAO not in codigos
     assert CodigoAviso.FINAL_VIG_AUSENTE in codigos  # DEF-06
     assert c.vigencia.fim is None
 

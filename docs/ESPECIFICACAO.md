@@ -4,7 +4,7 @@
 **Local do sistema novo:** `U:\--2021\05-Gerador Certificados`
 **Stack alvo:** Python 3.12 · FastAPI · Jinja2 · Playwright · Firebird
 **Documento:** v0.5 — 2026-09-11 *(v0.4 em 2026-09-10, v0.3 em 2026-09-04, v0.2 em 2026-09-03)*
-**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
+**Status:** `DRAFT` — legado analisado, banco inspecionado em 03/09/2026; 13 lacunas fechadas; abertos: `GAP-10`, `GAP-11`, `GAP-12`, `GAP-14`, `GAP-19` (erros de digitação), `GAP-21`/`GAP-22` (módulos Prestamista e Vida), `GAP-27`, `GAP-28` (regras por apólice, 29/10/2026); `RN-28` aguarda os arquivos `hdi.png` e `porto.png`
 
 ### Fontes analisados
 
@@ -771,7 +771,7 @@ Não é consulta: é tabela de decisão em código. E os dois fluxos têm mapas 
 | `5008` | `0002` COMERCIAL | ✓ | ✓ |
 | `13008` | `0004` RUPTURA | ✓ | ✓ |
 | `14008` | `0004` RUPTURA | ✗ | ✓ |
-| `15008` | `0004` RUPTURA | ✗ | ✓ |
+| `15008` | ~~`0004` RUPTURA~~ **`0001` RESIDENCIAL** *(revisto em 29/10/2026)* | ✗ | ✓ *(mapeava `0004` por engano)* |
 | `6008` | `0006` LOC-RES | ✓ | ✓ |
 | `7008` | `0007` LOC-COM | ✓ | ✓ |
 
@@ -780,7 +780,7 @@ Não é consulta: é tabela de decisão em código. E os dois fluxos têm mapas 
 if ((Edit1.Text = '0000000019') and (apol = '15008')) then
    ComboBox4.ItemIndex := 0 ;   // RESIDENCIAL, não RUPTURA
 ```
-A administradora `0000000019` na apólice `15008` emite como `0001`, não `0004`. É regra de negócio real, específica de um cliente, e **DEVE** ser preservada — porém como **dado**, não como `if` em código.
+A administradora `0000000019` na apólice `15008` emite como `0001`, não `0004`. É regra de negócio real, específica de um cliente, e **DEVE** ser preservada — porém como **dado**, não como `if` em código. *(Revisto em 29/10/2026, decisão do usuário: a `15008` é a apólice da **Bradesco Seguros** de Incêndio Conteúdo **Residencial** comum com Assistência 24h e **não é RUPTURA** para nenhuma administradora. O mapa passa a `15008 → 0001` e a exceção fica absorvida pela regra geral: sai do `produtos.toml` e não gera mais `PRODUTO_POR_EXCECAO`. O mecanismo `RN-03.2` de regra por administradora continua disponível. Perfil do banco em 29/10/2026, linhas não canceladas desde 2025: `15008` tem `cod_seguradora 0000000109` Bradesco, `tipo_categoria R`, Mondial `1000` em 679.981 linhas e `1003` em 46.036, ruptura > 0 em apenas 126.)*
 
 **`RN-03.2`** — O mapa **DEVE** ser tabela de configuração com as colunas `(apolice, administradora | NULL, produto)`, resolvida pela regra mais específica primeiro. Assim `RN-03.1` deixa de ser exceção codificada e novas apólices entram sem recompilar.
 
@@ -1196,7 +1196,7 @@ Valores retirados do PDF `0_33016330725_0004_13008_380819.pdf`.
 | `COB_INCENDIO_DIVERGENTE` | soma recalculada ≠ valor do banco (`RN-02`) |
 | `DOCUMENTO_INDEFINIDO` | `cpf_cnpj` sem 11 nem 14 dígitos (`RD-12`) |
 | `PORTAL_AUSENTE` | `codigo_pedido_port` nulo (`GAP-11`) |
-| `PRODUTO_POR_EXCECAO` | produto resolvido por `RN-03.1` |
+| `PRODUTO_POR_EXCECAO` | produto resolvido por regra apólice + administradora (`RN-03.1`/`RN-03.2`; sem ocorrência no mapa vigente desde 29/10/2026) |
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF de 2 letras (`RN-26`) |
 | `FAZ_TUDO_LAR_MANUAL` | operador marcou/desmarcou *Faz Tudo Lar* contrariando a derivação `RN-18`/`RN-18a` (`ADR-06`, `RF-13a`) |
 | `RUPTURA_INCONSISTENTE` | produto `0004` sem `rup_encanamento > 0`, ou vice-versa (`RN-27`) |
@@ -1863,7 +1863,7 @@ Verificações empíricas que alteram requisitos:
 
 - **`RD-22` confirmado em escala:** 3.061 pares `(fatura, certificado)` repetidos em `segurados_inc` não cancelados. `certificado` não é único por fatura.
 - **`RD-09` — o fan-out existe:** há 1 par `(fatura, certificado)` duplicado em `segurados_inc_cob_aux` e 1 par `(apolice, cod_seguradora)` duplicado em `apolice_seguradora`. Ver `GAP-17` e `GAP-18`.
-- **Os PDFs de referência `..._15008_381066` são da administradora `0000000019`.** Logo `RN-03.1` se aplica a eles: o produto correto é **`0001` RESIDENCIAL**, não `0004`, e a emissão registra `PRODUTO_POR_EXCECAO`. No legado o fluxo manual saiu vazio (`DEF-09`) e o fluxo em massa teria saído `0001`. Os dois registros têm `final_vig = 30/12/1899` (`DEF-06` confirmado) e `codigo_pedido_port` nulo (`GAP-11` confirmado).
+- **Os PDFs de referência `..._15008_381066` são da administradora `0000000019`.** Logo `RN-03.1` se aplicava a eles: o produto correto é **`0001` RESIDENCIAL**, não `0004`, e a emissão registrava `PRODUTO_POR_EXCECAO` *(até 29/10/2026; desde então a `15008` é `0001` para todas, sem aviso)*. No legado o fluxo manual saiu vazio (`DEF-09`) e o fluxo em massa teria saído `0001`. Os dois registros têm `final_vig = 30/12/1899` (`DEF-06` confirmado) e `codigo_pedido_port` nulo (`GAP-11` confirmado).
 - **A chave real do PDF de referência `..._13008_380819` é `administradora = '0000001192'`, `seq = 1`, `endosso = '01112380819'`, `status_seg = 'R'`.** O exemplo canônico da seção 9.1 traz `0000004691` e `seq = 0`; ambos estão errados e **DEVEM** ser corrigidos junto com o campo `endosso`. A fatura 380819 tem 5 segurados. Verificado em 03/09/2026; o adaptador Firebird reproduz o certificado a partir dessa chave (teste de integração).
 - **`endosso` ≠ `fatura`.** Nos registros acima `endosso = '01112381066'` e `fatura = 381066`. O exemplo canônico da seção 9.1 traz `"endosso": "380819"`, igual à fatura; está errado e **DEVE** ser corrigido quando o certificado real for lido.
 - `ENDOSSOS.COD_CAT` assume `1`..`7`; `RN-04` (`{3,4}`) continua válida. `CODIGO_ASSIST_MONDIAL` assume `NULL`, `''`, `0`, `1000`, `1001`, `1002`, `1003`; `RN-18` continua válida.
@@ -1889,6 +1889,7 @@ Verificações empíricas que alteram requisitos:
 | `GAP-25` *(11/09/2026)* | ~~`RN-35` exige `final_vig >= hoje`; linhas com `final_vig` nula ou `30/12/1899` nunca autenticam.~~ **Fechado em 14/09/2026:** `RN-35` deixou de filtrar vigência; `final_vig` não influi na verificação. (Eram 4.332 linhas iniciadas com `final_vig` ausente, num total de 35.232 vigentes.) | — | — |
 | `GAP-26` *(11/09/2026)* | **Fechado em 28/10/2026 (`ADR-09`):** limite de 60/min por chave, bloqueio por IP de chaves erradas, escopo por administradora e `X-Request-Id` no log. ~~`RF-20` é um oráculo de existência de CPF por administradora. Protegido só pela chave `RN-30`; sem limite de taxa nem bloqueio por tentativas. **Agravado em 14/09/2026:** a resposta passou a devolver nome e endereço do segurado (`RD-30`), então CPF + chave dão acesso a dados pessoais. | Exposição fora da LAN | Limite de taxa no proxy (`GAP-23`) ou no processo; auditoria do log `RNF-13`; TLS obrigatório antes de sair da LAN. *23/10/2026:* a tela ganhou limite de tentativas (`ADR-08`); `/v1` continua sem. |
 | `GAP-27` *(28/10/2026)* | Emissão síncrona: PDF, S3 e banco numa única chamada que o segurado espera (timeout ≥ 90 s). O integrador propôs modo assíncrono (`202` + `GET /v1/certificados/pedidos/{id}`, webhook opcional) e `Idempotency-Key`. Adiado por decisão conjunta: o portal roda a emissão em job em segundo plano; vira necessidade com volume. | Volume alto | Fila + estado por pedido; manter o endpoint síncrono. |
+| `GAP-28` *(29/10/2026)* | **Regras por apólice informadas pelo usuário × banco.** (a) `14008`: dita "residencial com ruptura e assistência completa **sem Check-up Lar**"; o template não tem bloco *Check-up Lar* (só *Assistência 24h*, sempre, e *Faz Tudo Lar*, por `RN-18`/`RN-18a`); no banco todas as 7.546 linhas não canceladas desde 2025 têm `tipo_categoria C` (PLANO `COM`, `RN-23`), Mondial `1002` em 7.536 e ruptura > 0 em só 1.424. (b) `15008` dita "comum com Assistência 24h", mas 46.036 linhas têm Mondial `1003`, que hoje pré-marca *Faz Tudo Lar* (`RN-18`). (c) `13008`: 1.441 linhas sem ruptura > 0 geram `RUPTURA_INCONSISTENTE`. Decidir: o que é Check-up Lar (é o bloco Faz Tudo Lar? um serviço dentro dele?); se o bloco Faz Tudo Lar deve ser fixo por apólice (`13008` sim, `14008`/`15008` não) em vez de derivado de Mondial/ruptura; se `14008` imprime PLANO `COM` como está no banco. | Texto do certificado | Usuário define; então `RN-18`/`RN-18a` viram tabela por apólice ou ganham coluna em `produtos.toml`. |
 
 ### Estado de `GAP-09` e `GAP-13` em 03/09/2026
 
@@ -2289,6 +2290,7 @@ Cada linha corresponde a um commit no repositório (`git log`). A especificaçã
 | `RF-05b` | coluna *Condomínio* após a vigência na lista de segurados. |
 | `RF-05c` | filtros no navegador: nome, CPF, CNPJ, endereço e condomínio (contém, sem acento; documentos só dígitos); seleção e contador só sobre as linhas visíveis. |
 | Perfil OPERADOR | verificado por teste: tem a emissão completa (cascata, todas as opções, Upload AWS); só *USUÁRIOS* e *CHAVES DA API* são do ADMIN. |
+| `RN-03` revista | regras básicas por apólice (usuário): `15008` = Bradesco, Residencial comum + Assistência 24h, **não é RUPTURA** → `15008 → 0001` para todas as administradoras; `RN-03.1` absorvida. `13008` = Residencial com ruptura + assistência completa Bradesco (já era `0004`, sem mudança). `14008` = com ruptura, assistência completa **sem Check-up Lar**: sem mudança até esclarecer o que é *Check-up Lar* no template e o `tipo_categoria C` da apólice no banco (ver `GAP-28`). |
 
 ### 28/10/2026 — retorno do integrador do portal
 

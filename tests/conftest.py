@@ -4,7 +4,8 @@ Os tres arquivos de referencia da secao 7.2 da especificacao, decompostos.
 O terceiro campo vazio nos dois `15008` e o DEF-09 fotografado.
 
 A administradora vem do banco (consulta de 03/09/2026, secao 16): os dois
-`15008` sao da `0000000019`, o que aciona RN-03.1 (produto 0001, nao 0004).
+`15008` sao da `0000000019`. Desde 29/10/2026 a 15008 e 0001 RESIDENCIAL para
+qualquer administradora (RN-03 revista); a excecao RN-03.1 ficou absorvida.
 """
 
 from __future__ import annotations

@@ -334,7 +334,7 @@ Anomalias que **não** impedem a emissão. Cada item tem `codigo` e `detalhe`.
 | `COB_INCENDIO_DIVERGENTE` | soma recalculada difere do valor do banco (RN-02) |
 | `DOCUMENTO_INDEFINIDO` | `cpf_cnpj` sem 11 nem 14 dígitos (RD-12) |
 | `PORTAL_AUSENTE` | `codigo_pedido_port` nulo (GAP-11) |
-| `PRODUTO_POR_EXCECAO` | produto resolvido por regra apólice + administradora (RN-03.1) |
+| `PRODUTO_POR_EXCECAO` | produto resolvido por regra apólice + administradora (RN-03.1/RN-03.2); sem ocorrência no mapa vigente desde 29/10/2026 (`15008` é `0001` para todas) |
 | `SUCURSAL_INVALIDA` | `apolices.sucursal` não é UF (RN-26) |
 | `FAZ_TUDO_LAR_MANUAL` | operador da tela contrariou a derivação RN-18/RN-18a |
 | `RUPTURA_INCONSISTENTE` | produto `0004` sem ruptura > 0, ou ruptura em outro produto (RN-27) |

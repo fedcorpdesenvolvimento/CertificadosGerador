@@ -97,7 +97,7 @@ def test_rn_20_cod_0800_recomposto_sem_abrev(repo):
     assert c.cod_0800_banco == "CF1DI/AP.602"  # strip do espaco que o COALESCE('') deixa
 
 
-def test_rn_03_1_referencia_15008_da_administradora_19_emite_0001_com_aviso(repo):
+def test_rn_03_referencia_15008_emite_0001_residencial_sem_aviso(repo):
     linha = {
         **LINHA_13008,
         "administradora": "0000000019",
@@ -112,7 +112,7 @@ def test_rn_03_1_referencia_15008_da_administradora_19_emite_0001_com_aviso(repo
     c = repo._montar(linha)
     assert c.produto.codigo == "0001"
     codigos = {a.codigo for a in c.todos_avisos()}
-    assert CodigoAviso.PRODUTO_POR_EXCECAO in codigos
+    assert CodigoAviso.PRODUTO_POR_EXCECAO not in codigos  # RN-03 revista em 29/10/2026
     assert CodigoAviso.FINAL_VIG_AUSENTE in codigos  # DEF-06
     assert c.vigencia.fim is None
     assert c.contexto_template(exibe_premio=False).nome == "incendio"
