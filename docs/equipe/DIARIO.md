@@ -1,7 +1,7 @@
 # Diário da equipe de agentes
 
 Histórico compartilhado entre os agentes especializados (`.claude/agents/`): dev-backend, dev-frontend,
-dba-firebird, analista-requisitos, analista-infra. Cada agente lê as últimas entradas antes de começar e
+dba-firebird, analista-requisitos, analista-infra, analista-qa. Cada agente lê as últimas entradas antes de começar e
 acrescenta a sua ao terminar. Entradas em ordem cronológica, nunca apagadas. Decisões de negócio continuam
 indo para `docs/ESPECIFICACAO.md` (Anexo B); aqui fica o "quem fez o quê, como e o que ficou pendente".
 
@@ -27,3 +27,9 @@ Formato:
   (RF-05b/05c/06a) entregue em a87755e.
 - Pendente / para quem: disco `/data` no Render ou semente de chave por ambiente (analista-infra + dev-backend)
   quando o usuário decidir; GAP-28 aguarda dados do usuário (analista-requisitos registra).
+
+## 2026-10-29 — orquestrador — analista-qa acrescentado
+- Contexto recebido: o usuário apontou que faltava um analista de QA para realizar os testes.
+- Feito: `.claude/agents/analista-qa.md`. Regra: QA prova e encontra defeitos; não corrige código de produção,
+  devolve ao dono da área com passos de reprodução. Toda entrega passa pelo QA antes de ser dada como pronta.
+- Pendente / para quem: nada.
