@@ -49,7 +49,7 @@ def test_fase_2_fatura_380819_imodata(repo, tmp_path):
     assert {a["codigo"] for a in doc["_meta"]["avisos"]} >= {"ABREV_ADM_AUSENTE", "PORTAL_AUSENTE"}
 
 
-def test_fase_2_fatura_381066_protest_excecao_rn_03_1(repo, tmp_path):
+def test_fase_2_fatura_381066_15008_emite_residencial_sem_excecao(repo, tmp_path):
     rel = emitir_lote(repo, _lote(repo, "0000000019", "15008", 381066), OpcoesEmissao(tmp_path))
     assert rel.falhas == [], rel.resumo()
     nomes = {e.json_path.name for e in rel.emitidos}
@@ -62,4 +62,5 @@ def test_fase_2_fatura_381066_protest_excecao_rn_03_1(repo, tmp_path):
     assert doc["vigencia"]["fim"] is None  # DEF-06
     assert doc["certificado"]["cod_0800"] == "3082/01/AP 1302 19PAEL"  # RN-20
     codigos = {a["codigo"] for a in doc["_meta"]["avisos"]}
-    assert {"PRODUTO_POR_EXCECAO", "FINAL_VIG_AUSENTE"} <= codigos
+    assert "FINAL_VIG_AUSENTE" in codigos
+    assert "PRODUTO_POR_EXCECAO" not in codigos  # RN-03 revista em 29/10/2026
