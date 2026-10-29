@@ -98,6 +98,15 @@ A `.venv` fica nessa pasta. Ative com `.\.venv\Scripts\Activate.ps1`.
 - Area de teste da API no Render (`Dockerfile`, `render.yaml`): `docs/DEPLOY-RENDER.md`. O FedHub
   roda na LAN (Docker + ngrok), nao na web; o Render so alcanca o Firebird por tunel/port-forward.
 
+## Equipe de agentes (decisao do usuario, 29/10/2026)
+
+Tarefas sao delegadas a agentes especializados definidos em `.claude/agents/`: `dev-backend` (Python,
+dominio, adaptadores, API, rotas), `dev-frontend` (templates, JS/CSS, layout do certificado), `dba-firebird`
+(consultas e perfis no FATURA.GDB, somente leitura; SQLite da tela), `analista-requisitos` (spec, API.md,
+guias, GAPs, entregas) e `analista-infra` (Render/Digital Ocean, Docker, AWS, ngrok, variaveis). O orquestrador
+escolhe o agente pela area da tarefa e passa o contexto; cada agente le e acrescenta `docs/equipe/DIARIO.md`,
+o historico compartilhado da equipe, para que nada se perca entre eles.
+
 ## Menu de modulos (ADR-07)
 
 A tela abre num menu com CERTIFICADO INCENDIO (implementado), CERTIFICADO
