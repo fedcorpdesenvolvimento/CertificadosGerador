@@ -33,3 +33,20 @@ Formato:
 - Feito: `.claude/agents/analista-qa.md`. Regra: QA prova e encontra defeitos; não corrige código de produção,
   devolve ao dono da área com passos de reprodução. Toda entrega passa pelo QA antes de ser dada como pronta.
 - Pendente / para quem: nada.
+
+## 2026-10-30 — dba-firebird — base de testes da API /v1 para o integrador do portal (W2BIT)
+- Contexto recebido: escolher um segurado real por apólice (4008, 5008, 9008, 10008, 13008, 14008, 15008, 6008, 7008),
+  mais um segundo caso 15008/0000000019, um CNPJ e a confirmação do caso conhecido 33016330725/0000001192/13008/380819,
+  para `POST /v1/segurados/verificar` e `POST /v1/certificados/emitir`. Chave de transição no Render aceita qualquer administradora.
+- Feito: script somente leitura no scratchpad (`base_testes_portal.py`, via `conexao.conectar()`, bind parameters, filtros
+  RD-02/RD-19). Critério: inicio_vig em 2026 (mais recente primeiro), final_vig <> 30/12/1899, nome/endereço/cidade preenchidos,
+  `pessoas.possui_portal = 'S'` preferido (QRY-01). Todas as 9 apólices têm caso com portal; 14008 e 9008 têm também
+  administradoras sem portal. Relatório em texto entregue ao orquestrador para montar o arquivo do cliente.
+- Verificado: banco (FATURA.GDB, leitura). Achados de dados sujos: 4008 tem 197 e 5008 tem 62 linhas não canceladas com
+  inicio_vig no ano 2201 (digitação; descartadas com BETWEEN 2026-01-01 e 2026-12-31); 15008 tem 4.084 e 5008 tem 248 linhas de
+  2026 com final_vig nulo ou 30/12/1899 (DEF-06 continua presente no legado). Caso conhecido confirmado: status_seg = 'R'
+  (não cancelado), 42 linhas não canceladas = 21 faturas x 2 certificados (AP.602 e CASA17L) — o /verificar devolve as 3 mais
+  recentes, portanto 2 unidades da fatura 382196 (10/2026) + 1 da 381675 (09/2026).
+- Arquivos: `docs/equipe/DIARIO.md` (esta entrada). Nada no repositório além disso; sem commit.
+- Pendente / para quem: orquestrador monta o documento para o W2BIT; QA pode usar os mesmos casos para o roteiro de
+  `docs/TESTE-API-POSTMAN.md`. Linhas com inicio_vig em 2201 merecem registro em dados sujos (analista-requisitos, seção 13).
